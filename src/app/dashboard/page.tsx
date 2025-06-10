@@ -73,9 +73,9 @@ export default function DashboardPage() {
   activeRequests.forEach(qr => {
     if (qr.status === "Snoozed") {
       snoozed.push(qr);
-    } else if ((qr.labels || []).some(id => getLabelName(id)?.toLowerCase() === "waiting for answer")) {
+    } else if ((qr.labels || []).some(id => getLabelName(id)?.toLowerCase?.() === "waiting for answer")) {
       waiting.push(qr);
-    } else if ((qr.labels || []).some(id => ["urgent", "problems"].includes(getLabelName(id)?.toLowerCase()))) {
+    } else if ((qr.labels || []).some(id => ["urgent", "problems"].includes(getLabelName(id)?.toLowerCase?.()))) {
       urgentProblems.push(qr);
     } else {
       standard.push(qr);
@@ -394,7 +394,7 @@ function QuoteRequestCard({ qr, customers, labels }: { qr: any, customers: any[]
       <div className="text-xs text-gray-400 mb-1">{qr.creatorCountry} → {qr.involvedCountry}</div>
       <div className="flex flex-wrap gap-1 mt-2">
         {(qr.labels || []).map(id => {
-          const labelName = getLabelName(id)?.toLowerCase();
+          const labelName = getLabelName(id)?.toLowerCase?.();
           let colorClass = "";
           if (labelName === "urgent") colorClass = "bg-orange-500";
           else if (labelName === "problems") colorClass = "bg-[#e40115]";
