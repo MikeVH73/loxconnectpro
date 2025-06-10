@@ -1,0 +1,111 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+body {
+  background: linear-gradient(135deg, #f8fafc 0%, #f3f4f6 100%);
+  color: var(--foreground);
+  font-family: 'Inter', 'Poppins', Arial, Helvetica, system-ui, sans-serif;
+  min-height: 100vh;
+}
+
+/* Modern card style */
+.card-modern {
+  background: #fff;
+  border-radius: 1.25rem;
+  box-shadow: 0 4px 24px 0 rgba(0,0,0,0.07), 0 1.5px 4px 0 rgba(0,0,0,0.03);
+  padding: 2rem;
+  transition: box-shadow 0.2s;
+}
+.card-modern:hover {
+  box-shadow: 0 8px 32px 0 rgba(0,0,0,0.12), 0 3px 8px 0 rgba(0,0,0,0.06);
+}
+
+/* Modern button style */
+.btn-modern {
+  border-radius: 9999px;
+  font-weight: 600;
+  padding: 0.75rem 2rem;
+  font-size: 1.1rem;
+  box-shadow: 0 2px 8px 0 rgba(228,1,21,0.08);
+  transition: background 0.2s, color 0.2s;
+}
+.btn-modern-primary {
+  background: linear-gradient(90deg, #e40115 60%, #ff5a5f 100%);
+  color: #fff;
+  border: none;
+}
+.btn-modern-primary:hover {
+  background: linear-gradient(90deg, #c90012 60%, #ff5a5f 100%);
+}
+.btn-modern-secondary {
+  background: #fff;
+  color: #e40115;
+  border: 1.5px solid #e40115;
+}
+.btn-modern-secondary:hover {
+  background: #f3f4f6;
+}
+
+/* Modern pill label */
+.pill-modern {
+  display: inline-block;
+  border-radius: 9999px;
+  padding: 0.125em 0.5em;
+  font-size: 0.75rem;
+  font-weight: 500;
+  background: linear-gradient(90deg, #e40115 60%, #ff5a5f 100%);
+  color: #fff;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+/* Modern shadow for filter bar */
+.filter-bar-modern {
+  background: #fff;
+  border-radius: 1rem;
+  box-shadow: 0 2px 8px 0 rgba(0,0,0,0.04);
+  padding: 1rem 2rem;
+  margin-bottom: 2rem;
+}
+
+/* Modern headline */
+.headline-modern {
+  font-size: 2.5rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin-bottom: 1.5rem;
+}
+
+/* Fade-in animation for new messages */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
