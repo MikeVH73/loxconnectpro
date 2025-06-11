@@ -10,8 +10,7 @@ import FileUpload from "../../components/FileUpload";
 import FileUploadSimple from "../../components/FileUploadSimple";
 import { moveFilesToQuoteRequest } from "../../utils/fileUtils";
 import StorageTest from "../../components/StorageTest";
-
-const countries = ["Netherlands", "France", "Germany", "UK"]; // Example countries
+import CountrySelect from "../../components/CountrySelect";
 const statuses = ["In Progress", "Won", "Lost", "Cancelled"];
 
 // Add state for archived status
@@ -420,17 +419,12 @@ export default function NewQuoteRequestPage() {
           </div>
           <div>
             <label className="block mb-1 font-medium">Involved Country <span className="text-red-500">*</span></label>
-            <select
-              className="w-full border rounded px-3 py-2"
+            <CountrySelect
               value={involvedCountry}
-              onChange={e => setInvolvedCountry(e.target.value)}
+              onChange={setInvolvedCountry}
               required
-            >
-              <option value="">Select country</option>
-              {countries.map(c => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
+              placeholder="Select country"
+            />
           </div>
           <div>
             <label className="block mb-1 font-medium">Customer <span className="text-red-500">*</span></label>

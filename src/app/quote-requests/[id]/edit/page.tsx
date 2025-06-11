@@ -7,8 +7,8 @@ import { useAuth } from "../../../AuthProvider";
 import FileUpload from "../../../components/FileUpload";
 import FileUploadSimple from "../../../components/FileUploadSimple";
 import ArchivedMessaging from "../../../components/ArchivedMessaging";
+import CountrySelect from "../../../components/CountrySelect";
 
-const countries = ["Netherlands", "France", "Germany", "UK"];
 const statuses = ["In Progress", "Snoozed", "Won", "Lost", "Cancelled"];
 
 export default function EditQuoteRequestPage() {
@@ -261,19 +261,13 @@ export default function EditQuoteRequestPage() {
             />
           </div>
           <div>
-            <label className="block mb-1 font-medium">Involved Country</label>
-            <select
-              className="w-full border rounded px-3 py-2"
+            <CountrySelect
+              label="Involved Country"
               value={form.involvedCountry || ""}
-              onChange={e => handleChange("involvedCountry", e.target.value)}
+              onChange={(value) => handleChange("involvedCountry", value)}
               required
               disabled={isReadOnly}
-            >
-              <option value="">Select country</option>
-              {countries.map(c => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
+            />
           </div>
           <div>
             <label className="block mb-1 font-medium">Customer</label>

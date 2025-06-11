@@ -1,0 +1,41 @@
+import { collection, addDoc, getDocs, serverTimestamp } from "firebase/firestore";
+import { db } from "../../firebaseClient";
+
+const initialCountries = [
+  "Netherlands",
+  "France", 
+  "Germany",
+  "UK",
+  "Belgium",
+  "Sweden",
+  "Switzerland"
+];
+
+export const seedCountries = async () => {
+  try {
+    // Check if countries already exist
+    const snapshot = await getDocs(collection(db, "countries"));
+    
+    if (snapshot.empty) {
+      console.log("Seeding initial countries...");
+      
+      // Add initial countries
+      for (const countryName of initialCountries) {
+        await addDoc(collection(db, "countries"), {
+          name: countryName,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        });
+      }
+      
+      console.log(`Successfully seeded ${initialCountries.length} countries`);
+    } else {
+      console.log("Countries already exist in database");
+    }
+  } catch (error) {
+    console.error("Error seeding countries:", error);
+  }
+};
+
+// Function to call from browser console if needed
+(window as any).seedCountries = seedCountries; 

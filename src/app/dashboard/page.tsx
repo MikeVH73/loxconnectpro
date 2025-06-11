@@ -47,11 +47,16 @@ export default function DashboardPage() {
 
   // Filter quoteRequests by user's countries array
   const userCountries = userProfile?.countries || [];
+  console.log("[Dashboard] User countries:", userCountries);
+  console.log("[Dashboard] All quote requests:", quoteRequests.map(qr => ({id: qr.id, creatorCountry: qr.creatorCountry, involvedCountry: qr.involvedCountry})));
+  
   const visibleQuoteRequests = userCountries.length > 0
     ? quoteRequests.filter(qr => 
         userCountries.includes(qr.creatorCountry) || userCountries.includes(qr.involvedCountry)
       )
     : quoteRequests;
+    
+  console.log("[Dashboard] Visible quote requests:", visibleQuoteRequests.length);
 
   const inProgressCount = visibleQuoteRequests.filter(qr => qr.status === "In Progress").length;
   // Special label names
