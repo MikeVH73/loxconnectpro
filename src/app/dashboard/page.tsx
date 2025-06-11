@@ -131,7 +131,17 @@ export default function DashboardPage() {
     if (qr.creatorCountry) countryCounts[qr.creatorCountry] = (countryCounts[qr.creatorCountry] || 0) + 1;
     if (qr.involvedCountry && qr.involvedCountry !== qr.creatorCountry) countryCounts[qr.involvedCountry] = (countryCounts[qr.involvedCountry] || 0) + 1;
   });
+  
+  // Filter countries to only show user's accessible countries for the dropdown
   const allCountries = Object.keys(countryCounts);
+  const userAccessibleCountries = userProfile?.role === "superAdmin" || userCountries.length === 0
+    ? allCountries // SuperAdmin sees all countries in filter
+    : allCountries.filter(country => 
+        userCountries.some(userCountry => 
+          country.toLowerCase().includes(userCountry.toLowerCase()) ||
+          userCountry.toLowerCase().includes(country.toLowerCase())
+        )
+      );
   const maxCountryCount = Math.max(1, ...Object.values(countryCounts));
 
   // Sort: Urgent at top
@@ -288,7 +298,7 @@ export default function DashboardPage() {
               )}
             >
               <MenuItem value=""><em>All</em></MenuItem>
-              {allCountries.map(country => (
+              {userAccessibleCountries.map(country => (
                 <MenuItem key={country} value={country}>{country}</MenuItem>
               ))}
             </Select>

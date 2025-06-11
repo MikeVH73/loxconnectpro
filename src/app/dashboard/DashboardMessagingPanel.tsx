@@ -601,12 +601,20 @@ export default function DashboardMessagingPanel() {
 
         // Filter by user's countries and exclude archived
         const userCountries = userProfile?.countries || [];
-        const visibleRequests = userCountries.length > 0
-          ? allRequests.filter(qr => 
-              (userCountries.includes(qr.creatorCountry) || userCountries.includes(qr.involvedCountry)) &&
-              !['Won', 'Lost', 'Cancelled'].includes(qr.status)
-            )
-          : allRequests.filter(qr => !['Won', 'Lost', 'Cancelled'].includes(qr.status));
+        const visibleRequests = userProfile?.role === "superAdmin" || userCountries.length === 0
+          ? allRequests.filter(qr => !['Won', 'Lost', 'Cancelled'].includes(qr.status)) // SuperAdmin sees all, or if no countries set, show all
+          : allRequests.filter(qr => {
+              // Check if user countries match creator or involved country (using partial matching)
+              const creatorMatch = userCountries.some(userCountry => 
+                qr.creatorCountry?.toLowerCase().includes(userCountry.toLowerCase()) ||
+                userCountry.toLowerCase().includes(qr.creatorCountry?.toLowerCase())
+              );
+              const involvedMatch = userCountries.some(userCountry => 
+                qr.involvedCountry?.toLowerCase().includes(userCountry.toLowerCase()) ||
+                userCountry.toLowerCase().includes(qr.involvedCountry?.toLowerCase())
+              );
+              return (creatorMatch || involvedMatch) && !['Won', 'Lost', 'Cancelled'].includes(qr.status);
+            });
 
         setQuoteRequests(visibleRequests);
         setCustomers(allCustomers);

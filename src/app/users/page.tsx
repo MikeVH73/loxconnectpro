@@ -2,7 +2,8 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../AuthProvider";
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc } from "firebase/firestore";
-import { db } from "../../firebaseClient";
+import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
+import { db, auth } from "../../firebaseClient";
 
 export default function UsersPage() {
   const { user, loading, userProfile } = useAuth();
@@ -22,6 +23,7 @@ export default function UsersPage() {
   const [newUser, setNewUser] = useState({
     displayName: "",
     email: "",
+    password: "",
     role: "readOnly",
     countries: [] as string[],
   });
@@ -159,13 +161,39 @@ export default function UsersPage() {
 
   // User management functions
   const handleCreateUser = async () => {
-    if (!newUser.email.trim() || !newUser.displayName.trim()) return;
+    if (!newUser.email.trim() || !newUser.displayName.trim() || !newUser.password.trim()) {
+      setError("Please fill in all required fields (Name, Email, Password)");
+      return;
+    }
+    
+    if (newUser.password.length < 6) {
+      setError("Password must be at least 6 characters long");
+      return;
+    }
     
     try {
+      setSubmitting(true);
+      setError("");
+      
+      // Create Firebase Authentication account
+      const userCredential = await createUserWithEmailAndPassword(
+        auth, 
+        newUser.email.trim(), 
+        newUser.password.trim()
+      );
+      
+      // Update the user profile with display name
+      await updateProfile(userCredential.user, {
+        displayName: newUser.displayName.trim()
+      });
+      
+      // Create Firestore user document
       await addDoc(collection(db, "users"), {
-        ...newUser,
-        email: newUser.email.trim(),
         displayName: newUser.displayName.trim(),
+        email: newUser.email.trim(),
+        role: newUser.role,
+        countries: newUser.countries,
+        uid: userCredential.user.uid, // Link to Firebase Auth user
         createdAt: new Date()
       });
       
@@ -173,10 +201,12 @@ export default function UsersPage() {
       setNewUser({
         displayName: "",
         email: "",
+        password: "",
         role: "readOnly",
         countries: [],
       });
       setShowCreateUser(false);
+      setSuccess(`User ${newUser.displayName} created successfully with Firebase Authentication account`);
       
       // Refresh users list
       const usersSnap = await getDocs(collection(db, "users"));
@@ -188,8 +218,19 @@ export default function UsersPage() {
           })
         : allUsers;
       setUsers(visibleUsers);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error creating user:", error);
+      if (error.code === 'auth/email-already-in-use') {
+        setError("This email address is already registered. Please use a different email.");
+      } else if (error.code === 'auth/invalid-email') {
+        setError("Please enter a valid email address.");
+      } else if (error.code === 'auth/weak-password') {
+        setError("Password is too weak. Please use at least 6 characters.");
+      } else {
+        setError(`Failed to create user: ${error.message}`);
+      }
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -530,6 +571,15 @@ export default function UsersPage() {
                 />
               </div>
               <div>
+                <label className="block text-sm font-medium mb-1">Password</label>
+                <input
+                  type="password"
+                  value={newUser.password}
+                  onChange={(e) => setNewUser({...newUser, password: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#e40115]"
+                />
+              </div>
+              <div>
                 <label className="block text-sm font-medium mb-1">Role</label>
                 <select
                   value={newUser.role}
@@ -583,6 +633,7 @@ export default function UsersPage() {
                   setNewUser({
                     displayName: "",
                     email: "",
+                    password: "",
                     role: "readOnly",
                     countries: [],
                   });

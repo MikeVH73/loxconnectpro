@@ -15,6 +15,7 @@ const navItems = [
   { label: "Users", href: "/users" },
   { label: "Notifications", href: "/notifications" },
   { label: "Modifications", href: "/modifications" },
+  { label: "Profile", href: "/users/profile" },
 ];
 
 export default function Sidebar() {
