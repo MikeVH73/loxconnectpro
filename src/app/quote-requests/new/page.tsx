@@ -124,31 +124,43 @@ export default function NewQuoteRequestPage() {
     setIsArchived(status !== "In Progress");
   }, [status]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     setError("");
     setSuccess("");
     setSubmitting(true);
-    console.log("[QuoteRequest] Submission started");
+    
+    console.log("[QuoteRequest] Submission started - Firebase config check:", {
+      hasApiKey: !!process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+      hasProjectId: !!process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+      userAuth: !!user,
+      userProfile: userProfile
+    });
+
     // Only allow non-readOnly users
     if (userProfile?.role === "readOnly") {
       setError("You do not have permission to create a Quote Request.");
       setSubmitting(false);
       return;
     }
+
     // Required field validation
     if (!title || !creatorCountry || !involvedCountry || !customerId || products.length === 0) {
       setError("Please fill in all required fields: Title, Creator Country, Involved Country, Customer, and at least one Product.");
       setSubmitting(false);
       return;
     }
+
     // Add date validation
     if (!customerDecidesEnd && startDate && endDate && endDate < startDate) {
       setError("End Date cannot be before Start Date.");
       setSubmitting(false);
       return;
     }
+
     try {
+      console.log("[QuoteRequest] Starting Firestore write...");
+      
       // Sanitize all fields to avoid undefined
       const sanitize = (value: any) => value === undefined ? null : value;
       const sanitizedProducts = (products || []).map(p => ({
@@ -158,8 +170,7 @@ export default function NewQuoteRequestPage() {
       }));
       const sanitizedNotes = (notes || []).map(n => ({ ...n, createdAt: new Date().toISOString() }));
       
-      // First create the quote request
-      const docRef = await addDoc(collection(db, "quoteRequests"), {
+      const quoteData = {
         title: sanitize(title),
         creatorCountry: sanitize(creatorCountry),
         involvedCountry: sanitize(involvedCountry),
@@ -181,10 +192,18 @@ export default function NewQuoteRequestPage() {
         attachments: [], // Will be updated after moving files
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-      });
+      };
+
+      console.log("[QuoteRequest] Attempting to write to Firestore:", quoteData);
+      
+      // First create the quote request
+      const docRef = await addDoc(collection(db, "quoteRequests"), quoteData);
+      
+      console.log("[QuoteRequest] Document created with ID:", docRef.id);
       
       // Save attachments directly (using simple base64 storage for now)
       if (attachments.length > 0) {
+        console.log("[QuoteRequest] Updating attachments...");
         await updateDoc(doc(db, "quoteRequests", docRef.id), {
           attachments: attachments
         });
@@ -192,12 +211,31 @@ export default function NewQuoteRequestPage() {
       
       setSuccess("Quote Request created successfully! Redirecting...");
       console.log("[QuoteRequest] Successfully created", docRef.id);
+      
       setTimeout(() => {
         router.push(`/quote-requests/${docRef.id}/edit`);
       }, 1200);
+      
     } catch (err: any) {
-      setError(err.message || "Failed to create quote request");
-      console.error("[QuoteRequest] Error creating:", err);
+      console.error("[QuoteRequest] Detailed error:", err);
+      console.error("[QuoteRequest] Error code:", err.code);
+      console.error("[QuoteRequest] Error message:", err.message);
+      
+      let errorMessage = "Failed to create quote request";
+      
+      if (err.code === 'permission-denied') {
+        errorMessage = "Permission denied. Please check your Firebase security rules.";
+      } else if (err.code === 'unauthenticated') {
+        errorMessage = "You are not authenticated. Please log in again.";
+      } else if (err.code === 'unavailable') {
+        errorMessage = "Firebase service is unavailable. Please try again later.";
+      } else if (err.code === 'failed-precondition') {
+        errorMessage = "Firebase configuration error. Please check environment variables.";
+      } else if (err.message) {
+        errorMessage = `Error: ${err.message}`;
+      }
+      
+      setError(errorMessage);
     } finally {
       setSubmitting(false);
     }
@@ -313,7 +351,8 @@ export default function NewQuoteRequestPage() {
         </div>
         <div className="flex items-center gap-2 ml-auto">
           <button
-            type="submit"
+            type="button"
+            onClick={handleSubmit}
             className="bg-[#e40115] text-white px-6 py-2 rounded text-base font-semibold hover:bg-red-700 transition whitespace-nowrap"
             disabled={loading || submitting || userProfile?.role === "readOnly"}
           >
