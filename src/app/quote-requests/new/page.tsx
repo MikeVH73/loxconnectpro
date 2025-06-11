@@ -55,6 +55,19 @@ export default function NewQuoteRequestPage() {
   const [submitting, setSubmitting] = useState(false);
   const [attachments, setAttachments] = useState<any[]>([]);
 
+  // Debug logging to understand country mismatch
+  useEffect(() => {
+    if (userProfile) {
+      console.log("[NewQuoteRequest] User Profile Debug:", {
+        country: userProfile.country,
+        businessUnit: userProfile.businessUnit,
+        countries: userProfile.countries,
+        role: userProfile.role,
+        calculatedCreatorCountry: creatorCountry
+      });
+    }
+  }, [userProfile, creatorCountry]);
+
   // Fetch customers
   useEffect(() => {
     const fetchCustomers = async () => {

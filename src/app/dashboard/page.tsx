@@ -50,11 +50,21 @@ export default function DashboardPage() {
   console.log("[Dashboard] User countries:", userCountries);
   console.log("[Dashboard] All quote requests:", quoteRequests.map(qr => ({id: qr.id, creatorCountry: qr.creatorCountry, involvedCountry: qr.involvedCountry})));
   
-  const visibleQuoteRequests = userCountries.length > 0
-    ? quoteRequests.filter(qr => 
-        userCountries.includes(qr.creatorCountry) || userCountries.includes(qr.involvedCountry)
-      )
-    : quoteRequests;
+  // More lenient filtering - also check if user has superAdmin role or if countries array is empty
+  const visibleQuoteRequests = userProfile?.role === "superAdmin" || userCountries.length === 0
+    ? quoteRequests // SuperAdmin sees all, or if no countries set, show all
+    : quoteRequests.filter(qr => {
+        // Check if user countries match creator or involved country
+        const creatorMatch = userCountries.some(userCountry => 
+          qr.creatorCountry?.toLowerCase().includes(userCountry.toLowerCase()) ||
+          userCountry.toLowerCase().includes(qr.creatorCountry?.toLowerCase())
+        );
+        const involvedMatch = userCountries.some(userCountry => 
+          qr.involvedCountry?.toLowerCase().includes(userCountry.toLowerCase()) ||
+          userCountry.toLowerCase().includes(qr.involvedCountry?.toLowerCase())
+        );
+        return creatorMatch || involvedMatch;
+      });
     
   console.log("[Dashboard] Visible quote requests:", visibleQuoteRequests.length);
 

@@ -3,18 +3,18 @@ import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 
-// Firebase configuration - environment variables are loading correctly
+// Firebase configuration - check for client-side environment
 const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY!,
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN!,
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID!,
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET!,
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID!,
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID!,
+  apiKey: typeof window !== 'undefined' ? process.env.NEXT_PUBLIC_FIREBASE_API_KEY! : '',
+  authDomain: typeof window !== 'undefined' ? process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN! : '',
+  projectId: typeof window !== 'undefined' ? process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID! : '',
+  storageBucket: typeof window !== 'undefined' ? process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET! : '',
+  messagingSenderId: typeof window !== 'undefined' ? process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID! : '',
+  appId: typeof window !== 'undefined' ? process.env.NEXT_PUBLIC_FIREBASE_APP_ID! : '',
 };
 
 // Debug logging in development
-if (process.env.NODE_ENV === 'development') {
+if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
   console.log('🔥 Firebase Config Loaded:', {
     apiKey: firebaseConfig.apiKey ? '✅ Set' : '❌ Missing',
     authDomain: firebaseConfig.authDomain ? '✅ Set' : '❌ Missing',
@@ -26,10 +26,10 @@ if (process.env.NODE_ENV === 'development') {
 }
 
 // Initialize Firebase app with error handling
-let app;
-let auth;
-let db;
-let storage;
+let app: any;
+let auth: any;
+let db: any;
+let storage: any;
 
 if (typeof window !== 'undefined') {
   try {
@@ -40,15 +40,15 @@ if (typeof window !== 'undefined') {
   } catch (error) {
     console.error('Firebase initialization error:', error);
     // Create dummy exports for server-side compatibility
-    auth = null as any;
-    db = null as any;
-    storage = null as any;
+    auth = null;
+    db = null;
+    storage = null;
   }
 } else {
   // Server-side - create dummy exports
-  auth = null as any;
-  db = null as any;
-  storage = null as any;
+  auth = null;
+  db = null;
+  storage = null;
 }
 
 export { auth, db, storage }; 
