@@ -31,11 +31,33 @@ export default function ArchivedPage() {
       setLoading(true);
       const q = query(collection(db, "quoteRequests"), orderBy("createdAt", "desc"));
       const snapshot = await getDocs(q);
-      setQuoteRequests(
-        snapshot.docs
-          .map(doc => ({ id: doc.id, ...doc.data() } as QuoteRequest))
-          .filter(qr => ["Won", "Lost", "Cancelled"].includes(qr.status))
-      );
+      let allRequests = snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() } as QuoteRequest))
+        .filter(qr => ["Won", "Lost", "Cancelled"].includes(qr.status));
+        
+      // Apply same country filtering as other pages
+      const userCountries = userProfile?.countries || [];
+      console.log("[Archived] User countries:", userCountries);
+      console.log("[Archived] All archived requests:", allRequests.map(qr => ({id: qr.id, creatorCountry: qr.creatorCountry, involvedCountry: qr.involvedCountry})));
+      
+      // More lenient filtering - also check if user has superAdmin role or if countries array is empty
+      if (userProfile?.role !== "superAdmin" && userCountries.length > 0) {
+        allRequests = allRequests.filter(qr => {
+          // Check if user countries match creator or involved country
+          const creatorMatch = userCountries.some((userCountry: string) => 
+            qr.creatorCountry?.toLowerCase().includes(userCountry.toLowerCase()) ||
+            userCountry.toLowerCase().includes(qr.creatorCountry?.toLowerCase())
+          );
+          const involvedMatch = userCountries.some((userCountry: string) => 
+            qr.involvedCountry?.toLowerCase().includes(userCountry.toLowerCase()) ||
+            userCountry.toLowerCase().includes(qr.involvedCountry?.toLowerCase())
+          );
+          return creatorMatch || involvedMatch;
+        });
+      }
+      
+      console.log("[Archived] Visible archived requests:", allRequests.length);
+      setQuoteRequests(allRequests);
       setLoading(false);
     };
     const fetchLabels = async () => {
@@ -49,7 +71,7 @@ export default function ArchivedPage() {
     fetchData();
     fetchLabels();
     fetchCustomers();
-  }, []);
+  }, [userProfile]);
 
   const getLabelName = (id: string) => labels.find(l => l.id === id)?.name || id;
   const getCustomerName = (id: string) => customers.find(c => c.id === id)?.name || id;

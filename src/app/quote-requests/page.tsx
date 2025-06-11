@@ -41,11 +41,26 @@ export default function QuoteRequestsPage() {
         .filter(qr => qr.status !== "Won" && qr.status !== "Lost" && qr.status !== "Cancelled");
       // Filter by user's countries array (same logic as dashboard)
       const userCountries = userProfile?.countries || [];
-      if (userCountries.length > 0) {
-        allRequests = allRequests.filter(qr => 
-          userCountries.includes(qr.creatorCountry) || userCountries.includes(qr.involvedCountry)
-        );
+      console.log("[QuoteRequests] User countries:", userCountries);
+      console.log("[QuoteRequests] All quote requests:", allRequests.map(qr => ({id: qr.id, creatorCountry: qr.creatorCountry, involvedCountry: qr.involvedCountry})));
+      
+      // More lenient filtering - also check if user has superAdmin role or if countries array is empty
+      if (userProfile?.role !== "superAdmin" && userCountries.length > 0) {
+        allRequests = allRequests.filter(qr => {
+          // Check if user countries match creator or involved country
+          const creatorMatch = userCountries.some((userCountry: string) => 
+            qr.creatorCountry?.toLowerCase().includes(userCountry.toLowerCase()) ||
+            userCountry.toLowerCase().includes(qr.creatorCountry?.toLowerCase())
+          );
+          const involvedMatch = userCountries.some((userCountry: string) => 
+            qr.involvedCountry?.toLowerCase().includes(userCountry.toLowerCase()) ||
+            userCountry.toLowerCase().includes(qr.involvedCountry?.toLowerCase())
+          );
+          return creatorMatch || involvedMatch;
+        });
       }
+      
+      console.log("[QuoteRequests] Visible quote requests:", allRequests.length);
       setQuoteRequests(allRequests);
       setLoading(false);
     };
