@@ -12,6 +12,9 @@ export default function UsersPage() {
   const [loadingCountries, setLoadingCountries] = useState(true);
   const [newCountryName, setNewCountryName] = useState("");
   const [editingCountry, setEditingCountry] = useState<{id: string, name: string} | null>(null);
+  const [success, setSuccess] = useState("");
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   
   // User management states
   const [editingUser, setEditingUser] = useState<any | null>(null);
@@ -21,7 +24,6 @@ export default function UsersPage() {
     email: "",
     role: "readOnly",
     countries: [] as string[],
-    businessUnit: ""
   });
 
   useEffect(() => {
@@ -90,17 +92,55 @@ export default function UsersPage() {
   const handleUpdateCountry = async () => {
     if (!editingCountry || !editingCountry.name.trim()) return;
     
+    const oldName = countries.find(c => c.id === editingCountry.id)?.name;
+    const newName = editingCountry.name.trim();
+    
+    // Check if name actually changed
+    if (oldName === newName) {
+      setEditingCountry(null);
+      return;
+    }
+    
+    if (!window.confirm(`Are you sure you want to rename "${oldName}" to "${newName}"?\n\nThis will update ALL existing Quote Requests and User profiles that reference this country. This action cannot be undone.`)) {
+      return;
+    }
+    
     try {
+      setSubmitting(true);
+      
+      // First update the country in the countries collection
       await updateDoc(doc(db, "countries", editingCountry.id), {
-        name: editingCountry.name.trim(),
+        name: newName,
         updatedAt: new Date()
       });
+      
+      // Then migrate all existing data
+      console.log(`[Migration] Starting migration from "${oldName}" to "${newName}"`);
+      const migrationResult = await migrateCountryData(oldName!, newName);
+      
       setEditingCountry(null);
+      setSuccess(`Country updated successfully! Migrated ${migrationResult.quoteRequests} quote requests and ${migrationResult.users} user profiles.`);
+      
       // Refresh countries list
       const countriesSnap = await getDocs(collection(db, "countries"));
       setCountries(countriesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      
+      // Refresh users list to show updated data
+      const usersSnap = await getDocs(collection(db, "users"));
+      const allUsers = usersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const userCountries = userProfile?.countries || [];
+      const visibleUsers = userCountries.length > 0
+        ? allUsers.filter((userData: any) => {
+            return userData.countries?.some((country: string) => userCountries.includes(country));
+          })
+        : allUsers;
+      setUsers(visibleUsers);
+      
     } catch (error) {
       console.error("Error updating country:", error);
+      setError(`Failed to update country: ${error}`);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -126,7 +166,6 @@ export default function UsersPage() {
         ...newUser,
         email: newUser.email.trim(),
         displayName: newUser.displayName.trim(),
-        businessUnit: newUser.businessUnit.trim(),
         createdAt: new Date()
       });
       
@@ -136,7 +175,6 @@ export default function UsersPage() {
         email: "",
         role: "readOnly",
         countries: [],
-        businessUnit: ""
       });
       setShowCreateUser(false);
       
@@ -164,7 +202,6 @@ export default function UsersPage() {
         email: editingUser.email.trim(),
         role: editingUser.role,
         countries: editingUser.countries,
-        businessUnit: editingUser.businessUnit.trim(),
         updatedAt: new Date()
       });
       
@@ -203,6 +240,162 @@ export default function UsersPage() {
       setUsers(visibleUsers);
     } catch (error) {
       console.error("Error deleting user:", error);
+    }
+  };
+
+  // Handle country checkbox toggle for new user
+  const handleNewUserCountryToggle = (countryName: string) => {
+    setNewUser(prev => ({
+      ...prev,
+      countries: prev.countries.includes(countryName)
+        ? prev.countries.filter(c => c !== countryName)
+        : [...prev.countries, countryName]
+    }));
+  };
+
+  // Handle country checkbox toggle for editing user
+  const handleEditUserCountryToggle = (countryName: string) => {
+    if (!editingUser) return;
+    setEditingUser(prev => ({
+      ...prev,
+      countries: (prev.countries || []).includes(countryName)
+        ? (prev.countries || []).filter(c => c !== countryName)
+        : [...(prev.countries || []), countryName]
+    }));
+  };
+
+  // Data migration function for country name changes
+  const migrateCountryData = async (oldName: string, newName: string) => {
+    try {
+      console.log(`[Migration] Starting migration from "${oldName}" to "${newName}"`);
+      
+      // Update all quote requests
+      const qrSnapshot = await getDocs(collection(db, "quoteRequests"));
+      const qrUpdates = [];
+      
+      for (const qrDoc of qrSnapshot.docs) {
+        const data = qrDoc.data();
+        const needsUpdate = data.creatorCountry === oldName || data.involvedCountry === oldName;
+        
+        if (needsUpdate) {
+          const updates: any = {};
+          if (data.creatorCountry === oldName) updates.creatorCountry = newName;
+          if (data.involvedCountry === oldName) updates.involvedCountry = newName;
+          qrUpdates.push(updateDoc(doc(db, "quoteRequests", qrDoc.id), updates));
+        }
+      }
+      
+      // Update all user profiles
+      const usersSnapshot = await getDocs(collection(db, "users"));
+      const userUpdates = [];
+      
+      for (const userDoc of usersSnapshot.docs) {
+        const data = userDoc.data();
+        const needsUpdate = data.country === oldName || 
+                           data.businessUnit === oldName || 
+                           (data.countries && data.countries.includes(oldName));
+        
+        if (needsUpdate) {
+          const updates: any = {};
+          if (data.country === oldName) updates.country = newName;
+          if (data.businessUnit === oldName) updates.businessUnit = newName;
+          if (data.countries && data.countries.includes(oldName)) {
+            updates.countries = data.countries.map((c: string) => c === oldName ? newName : c);
+          }
+          userUpdates.push(updateDoc(doc(db, "users", userDoc.id), updates));
+        }
+      }
+      
+      // Execute all updates
+      await Promise.all([...qrUpdates, ...userUpdates]);
+      
+      console.log(`[Migration] Completed migration: ${qrUpdates.length} quote requests, ${userUpdates.length} users updated`);
+      return { quoteRequests: qrUpdates.length, users: userUpdates.length };
+      
+    } catch (error) {
+      console.error("[Migration] Error during migration:", error);
+      throw error;
+    }
+  };
+
+  // Data consistency checker for analytics and debugging
+  const checkDataConsistency = async () => {
+    try {
+      setSubmitting(true);
+      console.log("[Data Consistency] Starting comprehensive data check...");
+      
+      // Get all countries
+      const countriesSnap = await getDocs(collection(db, "countries"));
+      const validCountries = countriesSnap.docs.map(doc => doc.data().name);
+      console.log("[Data Consistency] Valid countries:", validCountries);
+      
+      // Check Quote Requests
+      const qrSnapshot = await getDocs(collection(db, "quoteRequests"));
+      const orphanedQuoteRequests = [];
+      
+      for (const qrDoc of qrSnapshot.docs) {
+        const data = qrDoc.data();
+        const creatorCountryValid = validCountries.some(c => 
+          c === data.creatorCountry || c.includes(data.creatorCountry) || data.creatorCountry?.includes(c)
+        );
+        const involvedCountryValid = validCountries.some(c => 
+          c === data.involvedCountry || c.includes(data.involvedCountry) || data.involvedCountry?.includes(c)
+        );
+        
+        if (!creatorCountryValid || !involvedCountryValid) {
+          orphanedQuoteRequests.push({
+            id: qrDoc.id,
+            creatorCountry: data.creatorCountry,
+            involvedCountry: data.involvedCountry,
+            creatorValid: creatorCountryValid,
+            involvedValid: involvedCountryValid
+          });
+        }
+      }
+      
+      // Check User Profiles
+      const usersSnapshot = await getDocs(collection(db, "users"));
+      const orphanedUsers = [];
+      
+      for (const userDoc of usersSnapshot.docs) {
+        const data = userDoc.data();
+        const userCountries = data.countries || [];
+        const invalidCountries = userCountries.filter((userCountry: string) => 
+          !validCountries.some(c => c === userCountry || c.includes(userCountry) || userCountry.includes(c))
+        );
+        
+        if (invalidCountries.length > 0) {
+          orphanedUsers.push({
+            id: userDoc.id,
+            email: data.email,
+            countries: userCountries,
+            invalidCountries
+          });
+        }
+      }
+      
+      const report = {
+        validCountries,
+        totalQuoteRequests: qrSnapshot.docs.length,
+        orphanedQuoteRequests: orphanedQuoteRequests.length,
+        totalUsers: usersSnapshot.docs.length,
+        orphanedUsers: orphanedUsers.length,
+        details: {
+          orphanedQuoteRequests,
+          orphanedUsers
+        }
+      };
+      
+      console.log("[Data Consistency] Full Report:", report);
+      setSuccess(`Data Consistency Check Complete:\n✅ ${validCountries.length} countries\n📊 ${qrSnapshot.docs.length} quote requests (${orphanedQuoteRequests.length} inconsistent)\n👥 ${usersSnapshot.docs.length} users (${orphanedUsers.length} inconsistent)\n\nCheck browser console for detailed report.`);
+      
+      return report;
+      
+    } catch (error) {
+      console.error("[Data Consistency] Error during check:", error);
+      setError(`Data consistency check failed: ${error}`);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -255,7 +448,6 @@ export default function UsersPage() {
                     <th className="text-left py-3 px-4 font-semibold">Email</th>
                     <th className="text-left py-3 px-4 font-semibold">Role</th>
                     <th className="text-left py-3 px-4 font-semibold">Countries</th>
-                    <th className="text-left py-3 px-4 font-semibold">Business Unit</th>
                     {canManageUsers && <th className="text-left py-3 px-4 font-semibold">Actions</th>}
                   </tr>
                 </thead>
@@ -283,10 +475,9 @@ export default function UsersPage() {
                             ))}
                           </div>
                         ) : (
-                          <span className="text-gray-400">—</span>
+                          <span className="text-gray-400">No countries assigned</span>
                         )}
                       </td>
-                      <td className="py-3 px-4">{userData.businessUnit || "—"}</td>
                       {canManageUsers && (
                         <td className="py-3 px-4">
                           <div className="flex gap-2">
@@ -351,13 +542,31 @@ export default function UsersPage() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">Business Unit</label>
-                <input
-                  type="text"
-                  value={newUser.businessUnit}
-                  onChange={(e) => setNewUser({...newUser, businessUnit: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#e40115]"
-                />
+                <label className="block text-sm font-medium mb-2">Countries Responsible For</label>
+                <div className="border border-gray-300 rounded-md p-3 max-h-40 overflow-y-auto">
+                  {loadingCountries ? (
+                    <div className="text-sm text-gray-500">Loading countries...</div>
+                  ) : countries.length === 0 ? (
+                    <div className="text-sm text-gray-500">No countries available</div>
+                  ) : (
+                    <div className="grid grid-cols-1 gap-2">
+                      {countries.map((country) => (
+                        <label key={country.id} className="flex items-center space-x-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={newUser.countries.includes(country.name)}
+                            onChange={() => handleNewUserCountryToggle(country.name)}
+                            className="rounded border-gray-300 text-[#e40115] focus:ring-[#e40115]"
+                          />
+                          <span className="text-sm">{country.name}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="text-xs text-gray-500 mt-1">
+                  User will see Quote Requests where selected countries are creator or involved country
+                </div>
               </div>
             </div>
             <div className="flex gap-3 mt-6">
@@ -376,7 +585,6 @@ export default function UsersPage() {
                     email: "",
                     role: "readOnly",
                     countries: [],
-                    businessUnit: ""
                   });
                 }}
                 className="flex-1 btn-modern btn-modern-secondary"
@@ -425,13 +633,31 @@ export default function UsersPage() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">Business Unit</label>
-                <input
-                  type="text"
-                  value={editingUser.businessUnit || ""}
-                  onChange={(e) => setEditingUser({...editingUser, businessUnit: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#e40115]"
-                />
+                <label className="block text-sm font-medium mb-2">Countries Responsible For</label>
+                <div className="border border-gray-300 rounded-md p-3 max-h-40 overflow-y-auto">
+                  {loadingCountries ? (
+                    <div className="text-sm text-gray-500">Loading countries...</div>
+                  ) : countries.length === 0 ? (
+                    <div className="text-sm text-gray-500">No countries available</div>
+                  ) : (
+                    <div className="grid grid-cols-1 gap-2">
+                      {countries.map((country) => (
+                        <label key={country.id} className="flex items-center space-x-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={(editingUser.countries || []).includes(country.name)}
+                            onChange={() => handleEditUserCountryToggle(country.name)}
+                            className="rounded border-gray-300 text-[#e40115] focus:ring-[#e40115]"
+                          />
+                          <span className="text-sm">{country.name}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="text-xs text-gray-500 mt-1">
+                  User will see Quote Requests where selected countries are creator or involved country
+                </div>
               </div>
             </div>
             <div className="flex gap-3 mt-6">
@@ -457,10 +683,43 @@ export default function UsersPage() {
       {canManageCountries && (
         <div className="card-modern mt-8">
           <h2 className="text-lg font-semibold mb-4">Countries Management</h2>
+          
+          {/* Success/Error Messages */}
+          {success && (
+            <div className="mb-4 p-3 bg-green-100 border border-green-400 text-green-700 rounded">
+              {success}
+              <button 
+                onClick={() => setSuccess("")}
+                className="ml-2 text-green-900 hover:text-green-700 font-bold"
+              >
+                ×
+              </button>
+            </div>
+          )}
+          {error && (
+            <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
+              {error}
+              <button 
+                onClick={() => setError("")}
+                className="ml-2 text-red-900 hover:text-red-700 font-bold"
+              >
+                ×
+              </button>
+            </div>
+          )}
         
         {/* Add New Country */}
         <div className="mb-6 p-4 bg-gray-50 rounded-lg">
-          <h3 className="text-md font-medium mb-3">Add New Country</h3>
+          <div className="flex justify-between items-center mb-3">
+            <h3 className="text-md font-medium">Add New Country</h3>
+            <button
+              onClick={checkDataConsistency}
+              disabled={submitting}
+              className="btn-modern btn-modern-secondary disabled:opacity-50 text-sm px-4 py-2"
+            >
+              {submitting ? "Checking..." : "Check Data Consistency"}
+            </button>
+          </div>
           <div className="flex gap-3 items-center">
             <input
               type="text"
@@ -476,11 +735,14 @@ export default function UsersPage() {
             />
             <button
               onClick={handleCreateCountry}
-              disabled={!newCountryName.trim()}
+              disabled={!newCountryName.trim() || submitting}
               className="btn-modern btn-modern-primary disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Add Country
+              {submitting ? "Processing..." : "Add Country"}
             </button>
+          </div>
+          <div className="text-xs text-gray-500 mt-2">
+            <strong>Data Consistency:</strong> When changing country names, all existing Quote Requests and User profiles are automatically updated to maintain data integrity for analytics.
           </div>
         </div>
 
@@ -532,9 +794,10 @@ export default function UsersPage() {
                             <>
                               <button
                                 onClick={handleUpdateCountry}
-                                className="text-green-600 hover:text-green-800 font-medium text-sm"
+                                disabled={submitting}
+                                className="text-green-600 hover:text-green-800 font-medium text-sm disabled:opacity-50"
                               >
-                                Save
+                                {submitting ? "Saving..." : "Save"}
                               </button>
                               <button
                                 onClick={() => setEditingCountry(null)}
