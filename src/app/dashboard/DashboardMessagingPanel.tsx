@@ -719,9 +719,9 @@ export default function DashboardMessagingPanel() {
     <div className="h-full flex flex-col">
       {/* Header */}
       <div className="mb-3">
-        <p className="text-sm text-gray-600">
-          Choose a Quote Request from the list to start messaging between countries
-        </p>
+      <p className="text-sm text-gray-600">
+        Choose a Quote Request from the list to start messaging between countries
+      </p>
       </div>
       
       {/* Full Height Messaging */}

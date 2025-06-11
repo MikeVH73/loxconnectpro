@@ -22,11 +22,19 @@ export default function CountriesPage() {
   const [editingCountry, setEditingCountry] = useState<Country | null>(null);
   const [countryName, setCountryName] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [isClient, setIsClient] = useState(false);
 
   const isSuperAdmin = userProfile?.role === "superAdmin";
 
+  // Ensure we're on the client side
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
   // Fetch countries
   useEffect(() => {
+    if (!isClient) return;
+    
     const fetchCountries = async () => {
       try {
         setLoading(true);
@@ -60,7 +68,7 @@ export default function CountriesPage() {
     };
 
     fetchCountries();
-  }, []);
+  }, [isClient]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

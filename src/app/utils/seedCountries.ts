@@ -12,6 +12,12 @@ const initialCountries = [
 ];
 
 export const seedCountries = async () => {
+  // Only run on client side
+  if (typeof window === 'undefined') {
+    console.log("seedCountries: Skipping on server side");
+    return;
+  }
+
   try {
     // Check if countries already exist
     const snapshot = await getDocs(collection(db, "countries"));
@@ -34,8 +40,11 @@ export const seedCountries = async () => {
     }
   } catch (error) {
     console.error("Error seeding countries:", error);
+    // Don't throw error, just log it
   }
 };
 
 // Function to call from browser console if needed
-(window as any).seedCountries = seedCountries; 
+if (typeof window !== 'undefined') {
+  (window as any).seedCountries = seedCountries;
+} 

@@ -25,7 +25,30 @@ if (process.env.NODE_ENV === 'development') {
   });
 }
 
-const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
-export const auth = getAuth(app);
-export const db = getFirestore(app);
-export const storage = getStorage(app); 
+// Initialize Firebase app with error handling
+let app;
+let auth;
+let db;
+let storage;
+
+if (typeof window !== 'undefined') {
+  try {
+    app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+    auth = getAuth(app);
+    db = getFirestore(app);
+    storage = getStorage(app);
+  } catch (error) {
+    console.error('Firebase initialization error:', error);
+    // Create dummy exports for server-side compatibility
+    auth = null as any;
+    db = null as any;
+    storage = null as any;
+  }
+} else {
+  // Server-side - create dummy exports
+  auth = null as any;
+  db = null as any;
+  storage = null as any;
+}
+
+export { auth, db, storage }; 

@@ -62,18 +62,18 @@ export default function FileUpload({
         
         // If we reach here, storage is accessible
         console.log('[FileUpload] Storage accessible, proceeding with upload...');
-        
-        // Generate unique file ID
-        const fileId = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        
-        // For new quote requests, store files temporarily
-        const storagePath = quoteRequestId === "new" 
+      
+      // Generate unique file ID
+      const fileId = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      
+      // For new quote requests, store files temporarily
+      const storagePath = quoteRequestId === "new" 
           ? `temp-uploads/${fileId}_${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`
           : `quote-requests/${quoteRequestId}/${fileId}_${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
-        
+      
         console.log('[FileUpload] Storage path:', storagePath);
         setUploadProgress(`Uploading ${file.name} to storage...`);
-        const fileRef = ref(storage, storagePath);
+      const fileRef = ref(storage, storagePath);
 
         // Upload with timeout and progress
         console.log('[FileUpload] Starting upload to Firebase Storage...');
