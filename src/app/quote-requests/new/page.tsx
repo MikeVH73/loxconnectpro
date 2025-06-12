@@ -143,8 +143,8 @@ export default function NewQuoteRequestPage() {
     setSubmitting(true);
     
     console.log("[QuoteRequest] Submission started - Firebase config check:", {
-      hasApiKey: !!process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-      hasProjectId: !!process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+      hasApiKey: true, // Firebase config is hardcoded
+      hasProjectId: true, // Firebase config is hardcoded
       userAuth: !!user,
       userProfile: userProfile
     });

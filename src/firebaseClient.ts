@@ -3,14 +3,14 @@ import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 
-// Firebase configuration - use fallback values for production
+// Firebase configuration with hardcoded values (no process.env to avoid client-side errors)
 const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "AIzaSyD3LGcmPieAnJuGrNUyIRTQw3bQ1Gzsjj0",
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "loxconnect-pro.firebaseapp.com",
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "loxconnect-pro",
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "loxconnect-pro.firebasestorage.app",
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "767888928675",
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "1:767888928675:web:abcdef123456",
+  apiKey: "AIzaSyD3LGcmPieAnJuGrNUyIRTQw3bQ1Gzsjj0",
+  authDomain: "loxconnect-pro.firebaseapp.com",
+  projectId: "loxconnect-pro",
+  storageBucket: "loxconnect-pro.firebasestorage.app",
+  messagingSenderId: "767888928675",
+  appId: "1:767888928675:web:abcdef123456",
 };
 
 // Debug logging in development
