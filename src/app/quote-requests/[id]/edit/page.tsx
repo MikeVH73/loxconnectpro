@@ -291,14 +291,14 @@ export default function EditQuoteRequestPage() {
               value={form.status || ""}
               onChange={e => handleChange("status", e.target.value)}
               required
-              disabled={isReadOnly || userProfile?.country !== form.creatorCountry}
+              disabled={isReadOnly || (userProfile?.country !== form.creatorCountry && userProfile?.country !== form.involvedCountry)}
             >
               {statuses.map(s => (
                 <option key={s} value={s}>{s}</option>
               ))}
             </select>
-            {userProfile?.country !== form.creatorCountry && (
-              <div className="text-xs text-gray-400 mt-1">Only the creator country can change the status.</div>
+            {(userProfile?.country !== form.creatorCountry && userProfile?.country !== form.involvedCountry) && (
+              <div className="text-xs text-gray-400 mt-1">Only the creator or involved country can change the status.</div>
             )}
           </div>
         </div>

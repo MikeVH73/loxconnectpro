@@ -298,7 +298,7 @@ export default function DashboardPage() {
               <h3 className="font-bold text-red-800">Urgent / Problems</h3>
               <p className="text-sm text-red-600">{urgentProblemsKanban.length} items</p>
             </div>
-            <div className="flex-1 p-4 space-y-3 overflow-y-auto max-h-96">
+            <div className="flex-1 p-4 space-y-3 overflow-y-auto max-h-[500px]">
               {urgentProblemsKanban.length === 0 ? (
                 <div className="text-center text-gray-500 py-8">None</div>
               ) : (
@@ -315,7 +315,7 @@ export default function DashboardPage() {
               <h3 className="font-bold text-blue-800">Standard</h3>
               <p className="text-sm text-blue-600">{standardKanban.length} items</p>
             </div>
-            <div className="flex-1 p-4 space-y-3 overflow-y-auto max-h-96">
+            <div className="flex-1 p-4 space-y-3 overflow-y-auto max-h-[500px]">
               {standardKanban.length === 0 ? (
                 <div className="text-center text-gray-500 py-8">None</div>
               ) : (
@@ -332,7 +332,7 @@ export default function DashboardPage() {
               <h3 className="font-bold text-yellow-800">Waiting for Answer</h3>
               <p className="text-sm text-yellow-600">{waitingKanban.length} items</p>
             </div>
-            <div className="flex-1 p-4 space-y-3 overflow-y-auto max-h-96">
+            <div className="flex-1 p-4 space-y-3 overflow-y-auto max-h-[500px]">
               {waitingKanban.length === 0 ? (
                 <div className="text-center text-gray-500 py-8">None</div>
               ) : (
@@ -349,7 +349,7 @@ export default function DashboardPage() {
               <h3 className="font-bold text-gray-800">Snoozed</h3>
               <p className="text-sm text-gray-600">{snoozedKanban.length} items</p>
             </div>
-            <div className="flex-1 p-4 space-y-3 overflow-y-auto max-h-96">
+            <div className="flex-1 p-4 space-y-3 overflow-y-auto max-h-[500px]">
               {snoozedKanban.length === 0 ? (
                 <div className="text-center text-gray-500 py-8">None</div>
               ) : (
@@ -380,10 +380,10 @@ function QuoteRequestCard({ qr, customers, labels }: { qr: any, customers: any[]
   const getLabelName = (id: string) => labels.find((l: any) => l.id === id)?.name || id;
 
   return (
-    <div className="card-modern border-l-8 border-[#e40115] p-4 min-h-[180px] flex flex-col justify-between relative">
+    <div className="card-modern border-l-4 border-[#e40115] p-3 min-h-[120px] flex flex-col justify-between relative">
       <Link
         href={`/quote-requests/${qr.id}/edit`}
-        className="absolute top-3 right-3 text-gray-400 hover:text-[#e40115] focus:outline-none focus:ring-2 focus:ring-[#e40115] rounded-full text-lg"
+        className="absolute top-2 right-2 text-gray-400 hover:text-[#e40115] focus:outline-none focus:ring-2 focus:ring-[#e40115] rounded-full text-sm"
         title="View details"
         tabIndex={0}
         aria-label="View Quote Request details"
@@ -391,13 +391,13 @@ function QuoteRequestCard({ qr, customers, labels }: { qr: any, customers: any[]
       >
         🔍
       </Link>
-      <div className="font-bold text-base flex items-center gap-2">
+      <div className="font-bold text-sm flex items-center gap-2 pr-6">
         {qr.title}
       </div>
-      <div className="text-sm text-gray-500 mb-1">{getCustomerName(qr.customer)}</div>
+      <div className="text-xs text-gray-500 mb-1">{getCustomerName(qr.customer)}</div>
       <div className="text-xs text-gray-500 mb-1">Jobsite: {qr.jobsite?.address || <span className='italic text-gray-300'>No jobsite</span>}</div>
       <div className="text-xs text-gray-400 mb-1">{qr.creatorCountry} → {qr.involvedCountry}</div>
-      <div className="flex flex-wrap gap-1 mt-2">
+      <div className="flex flex-wrap gap-1 mt-1">
         {(qr.labels || []).map(id => {
           const labelName = getLabelName(id)?.toLowerCase?.();
           let colorClass = "";
@@ -408,7 +408,7 @@ function QuoteRequestCard({ qr, customers, labels }: { qr: any, customers: any[]
           return (
             <span
               key={id}
-              className={`${colorClass} text-xs px-2 py-1 rounded font-light text-white`}
+              className={`${colorClass} text-xs px-1.5 py-0.5 rounded font-light text-white`}
             >
               {getLabelName(id)}
             </span>
@@ -416,7 +416,7 @@ function QuoteRequestCard({ qr, customers, labels }: { qr: any, customers: any[]
         })}
       </div>
       {Array.isArray(qr.notes) && qr.notes.length > 0 && (
-        <div className="text-xs text-gray-400 italic mt-2 truncate" title={qr.notes[qr.notes.length-1].text}>
+        <div className="text-xs text-gray-400 italic mt-1 truncate" title={qr.notes[qr.notes.length-1].text}>
           Last note: {qr.notes[qr.notes.length-1].text}
         </div>
       )}
