@@ -1,4 +1,3 @@
-"use client";
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
@@ -21,8 +20,10 @@ const inter = Inter({
   subsets: ["latin"],
 });
 
-// Note: metadata export removed since this is now a client component
-// Metadata should be handled in page.tsx files instead
+export const metadata: Metadata = {
+  title: "LoxConnect Pro",
+  description: "International quote request management system with real-time messaging",
+};
 
 export default function RootLayout({
   children,
