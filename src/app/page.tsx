@@ -3,6 +3,12 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "./AuthProvider";
 import Image from "next/image";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "LoxConnect Pro",
+  description: "International quote request management system with real-time messaging",
+};
 
 export default function Home() {
   const { user, loading } = useAuth();

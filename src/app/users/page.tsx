@@ -470,8 +470,19 @@ export default function UsersPage() {
             <h2 className="text-lg font-semibold">Users List</h2>
             {canManageUsers && (
               <button
-                onClick={() => setShowCreateUser(true)}
-                className="btn-modern btn-modern-primary"
+                onClick={() => {
+                  // Reset form completely when opening modal
+                  setNewUser({
+                    displayName: "",
+                    email: "",
+                    password: "",
+                    role: "readOnly",
+                    countries: [],
+                  });
+                  setError("");
+                  setShowCreateUser(true);
+                }}
+                className="bg-[#e40115] text-white px-4 py-2 rounded-md hover:bg-[#c7010e] transition font-semibold"
               >
                 Add New User
               </button>
@@ -568,6 +579,9 @@ export default function UsersPage() {
                   value={newUser.email}
                   onChange={(e) => setNewUser({...newUser, email: e.target.value})}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#e40115]"
+                  autoComplete="new-password"
+                  placeholder="Enter email address"
+                  name="new-user-email"
                 />
               </div>
               <div>
@@ -630,6 +644,7 @@ export default function UsersPage() {
               <button
                 onClick={() => {
                   setShowCreateUser(false);
+                  // Reset form completely
                   setNewUser({
                     displayName: "",
                     email: "",
@@ -637,6 +652,7 @@ export default function UsersPage() {
                     role: "readOnly",
                     countries: [],
                   });
+                  setError("");
                 }}
                 className="flex-1 btn-modern btn-modern-secondary"
               >
