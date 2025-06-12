@@ -1,8 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useAuth } from "../AuthProvider";
-import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc } from "firebase/firestore";
-import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
+import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, setDoc } from "firebase/firestore";
+import { createUserWithEmailAndPassword, updateProfile, signInWithEmailAndPassword, signOut } from "firebase/auth";
 import { db, auth } from "../../firebaseClient";
 
 export default function UsersPage() {
@@ -20,6 +20,8 @@ export default function UsersPage() {
   // User management states
   const [editingUser, setEditingUser] = useState<any | null>(null);
   const [showCreateUser, setShowCreateUser] = useState(false);
+  const [adminPassword, setAdminPassword] = useState("");
+  const [showPasswordPrompt, setShowPasswordPrompt] = useState(false);
   const [newUser, setNewUser] = useState({
     displayName: "",
     email: "",
@@ -171,11 +173,30 @@ export default function UsersPage() {
       return;
     }
     
+    // Prompt for admin password to re-authenticate later
+    setShowPasswordPrompt(true);
+  };
+
+  const handleCreateUserWithPassword = async () => {
+    if (!adminPassword.trim()) {
+      setError("Please enter your admin password to continue");
+      return;
+    }
+
     try {
       setSubmitting(true);
       setError("");
       
-      // Create Firebase Authentication account
+      // Store current user info
+      const currentUser = auth.currentUser;
+      const currentUserEmail = currentUser?.email;
+      
+      if (!currentUserEmail) {
+        setError("No current user found");
+        return;
+      }
+      
+      // Create Firebase Authentication account (this will sign in the new user)
       const userCredential = await createUserWithEmailAndPassword(
         auth, 
         newUser.email.trim(), 
@@ -187,17 +208,23 @@ export default function UsersPage() {
         displayName: newUser.displayName.trim()
       });
       
-      // Create Firestore user document
-      await addDoc(collection(db, "users"), {
+      // Create Firestore user document with the Firebase Auth UID as document ID
+      await setDoc(doc(db, "users", userCredential.user.uid), {
         displayName: newUser.displayName.trim(),
         email: newUser.email.trim(),
         role: newUser.role,
         countries: newUser.countries,
-        uid: userCredential.user.uid, // Link to Firebase Auth user
+        uid: userCredential.user.uid,
         createdAt: new Date()
       });
       
-      // Reset form
+      // Sign out the newly created user
+      await signOut(auth);
+      
+      // Re-authenticate the original admin user
+      await signInWithEmailAndPassword(auth, currentUserEmail, adminPassword);
+      
+      // Reset form and close modals
       setNewUser({
         displayName: "",
         email: "",
@@ -205,8 +232,10 @@ export default function UsersPage() {
         role: "readOnly",
         countries: [],
       });
+      setAdminPassword("");
       setShowCreateUser(false);
-      setSuccess(`User ${newUser.displayName} created successfully with Firebase Authentication account`);
+      setShowPasswordPrompt(false);
+      setSuccess(`User ${newUser.displayName} created successfully!`);
       
       // Refresh users list
       const usersSnap = await getDocs(collection(db, "users"));
@@ -218,6 +247,7 @@ export default function UsersPage() {
           })
         : allUsers;
       setUsers(visibleUsers);
+      
     } catch (error: any) {
       console.error("Error creating user:", error);
       if (error.code === 'auth/email-already-in-use') {
@@ -226,6 +256,8 @@ export default function UsersPage() {
         setError("Please enter a valid email address.");
       } else if (error.code === 'auth/weak-password') {
         setError("Password is too weak. Please use at least 6 characters.");
+      } else if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+        setError("Incorrect admin password. Please try again.");
       } else {
         setError(`Failed to create user: ${error.message}`);
       }
@@ -737,6 +769,59 @@ export default function UsersPage() {
               </button>
               <button
                 onClick={() => setEditingUser(null)}
+                className="flex-1 btn-modern btn-modern-secondary"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Admin Password Prompt Modal */}
+      {showPasswordPrompt && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <h3 className="text-lg font-semibold mb-4">Confirm Admin Password</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              To create a new user, please enter your admin password to maintain security.
+            </p>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Your Password</label>
+                <input
+                  type="password"
+                  value={adminPassword}
+                  onChange={(e) => setAdminPassword(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#e40115]"
+                  placeholder="Enter your admin password"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      handleCreateUserWithPassword();
+                    }
+                  }}
+                />
+              </div>
+            </div>
+            {error && (
+              <div className="mt-3 p-2 bg-red-100 border border-red-400 text-red-700 rounded text-sm">
+                {error}
+              </div>
+            )}
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={handleCreateUserWithPassword}
+                disabled={!adminPassword.trim() || submitting}
+                className="flex-1 btn-modern btn-modern-primary disabled:opacity-50"
+              >
+                {submitting ? "Creating User..." : "Create User"}
+              </button>
+              <button
+                onClick={() => {
+                  setShowPasswordPrompt(false);
+                  setAdminPassword("");
+                  setError("");
+                }}
                 className="flex-1 btn-modern btn-modern-secondary"
               >
                 Cancel

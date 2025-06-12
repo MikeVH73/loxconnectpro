@@ -2,7 +2,7 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { onAuthStateChanged, User } from "firebase/auth";
 import { auth, db } from "../firebaseClient";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, collection, query, where, getDocs } from "firebase/firestore";
 
 interface AuthContextType {
   user: User | null;
@@ -22,15 +22,41 @@ const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser);
-      setLoading(false);
+      
       if (firebaseUser) {
-        // Fetch user profile from Firestore
-        const userDoc = await getDoc(doc(db, "users", firebaseUser.uid));
-        setUserProfile(userDoc.exists() ? userDoc.data() : null);
+        try {
+          // First try to get user profile by UID (new method)
+          let userDoc = await getDoc(doc(db, "users", firebaseUser.uid));
+          
+          if (!userDoc.exists()) {
+            // Fallback: search by email for existing users (old method)
+            const usersQuery = query(
+              collection(db, "users"), 
+              where("email", "==", firebaseUser.email)
+            );
+            const querySnapshot = await getDocs(usersQuery);
+            
+            if (!querySnapshot.empty) {
+              const userData = querySnapshot.docs[0].data();
+              setUserProfile(userData);
+            } else {
+              console.warn("No user profile found for:", firebaseUser.email);
+              setUserProfile(null);
+            }
+          } else {
+            setUserProfile(userDoc.data());
+          }
+        } catch (error) {
+          console.error("Error fetching user profile:", error);
+          setUserProfile(null);
+        }
       } else {
         setUserProfile(null);
       }
+      
+      setLoading(false);
     });
+    
     return () => unsubscribe();
   }, []);
 
