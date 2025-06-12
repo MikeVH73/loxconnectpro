@@ -93,7 +93,7 @@ const QuoteRequestList = ({ onSelect, selectedId, quoteRequests, userCountries, 
   };
 
   return (
-    <div className="w-[420px] border-r h-full overflow-y-auto bg-gray-50">
+    <div className="h-full overflow-y-auto bg-gray-50">
       <div className="p-5 border-b bg-white shadow-sm flex-shrink-0">
         <h3 className="font-bold text-gray-900 text-lg">Conversations</h3>
         <p className="text-sm text-gray-500 mt-1">{quoteRequests.length} active chats</p>
@@ -389,165 +389,146 @@ const ChatWindow = ({ quoteRequestId, userCountries, userProfile, onBack }: any)
 
   const isImageFile = (type: string) => type.startsWith('image/');
 
-  if (!quoteRequestId) {
-    return (
-      <div className="flex-1 h-full bg-gray-50">
-      </div>
-    );
-  }
-
   const isArchived = selectedQR && ['Won', 'Lost', 'Cancelled'].includes(selectedQR.status);
 
   return (
     <div className="flex-1 flex flex-col h-full">
-      {!quoteRequestId ? (
-        <div className="flex-1 flex items-center justify-center text-gray-500">
-          <div className="text-center">
-            <div className="text-4xl mb-4">💬</div>
-            <p className="text-lg font-medium">Select a conversation</p>
-            <p className="text-sm">Choose a Quote Request from the list to start messaging</p>
+      {/* Chat Header */}
+      <div className="p-4 border-b bg-white flex-shrink-0">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="font-semibold text-gray-900">{selectedQR?.title}</h3>
+            <p className="text-sm text-gray-600">
+              {selectedQR?.creatorCountry} ↔ {selectedQR?.involvedCountry}
+            </p>
           </div>
+          <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+            selectedQR?.status === 'In Progress' ? 'bg-green-100 text-green-800' :
+            selectedQR?.status === 'Snoozed' ? 'bg-yellow-100 text-yellow-800' :
+            'bg-gray-100 text-gray-800'
+          }`}>
+            {selectedQR?.status}
+          </span>
         </div>
-      ) : (
-        <>
-          {/* Chat Header */}
-          <div className="p-4 border-b bg-white flex-shrink-0">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="font-semibold text-gray-900">{selectedQR?.title}</h3>
-                <p className="text-sm text-gray-600">
-                  {selectedQR?.creatorCountry} ↔ {selectedQR?.involvedCountry}
-                </p>
-              </div>
-              <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                selectedQR?.status === 'In Progress' ? 'bg-green-100 text-green-800' :
-                selectedQR?.status === 'Snoozed' ? 'bg-yellow-100 text-yellow-800' :
-                'bg-gray-100 text-gray-800'
-              }`}>
-                {selectedQR?.status}
-              </span>
-            </div>
-          </div>
+      </div>
 
-          {/* Messages Area */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
-            {loading ? (
-              <div className="flex justify-center py-8">
-                <div className="text-gray-500">Loading messages...</div>
-              </div>
-            ) : messages.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
-                <div className="text-2xl mb-2">💬</div>
-                <p>No messages yet. Start the conversation!</p>
-              </div>
-            ) : (
-              messages.map((message) => {
-                const isFromUser = userCountries.includes(message.senderCountry);
-                return (
-                  <div key={message.id} className={`flex ${isFromUser ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-[70%] rounded-lg px-4 py-2 ${
-                      isFromUser 
-                        ? 'bg-[#e40115] text-white' 
-                        : 'bg-white border border-gray-200 text-gray-900'
-                    }`}>
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-xs font-medium opacity-75">
-                          {message.senderCountry}
-                        </span>
-                        <span className="text-xs opacity-60">
-                          {getRelativeTime(message.timestamp)}
-                        </span>
-                      </div>
-                      
-                      {message.file ? (
-                        <div className="space-y-2">
-                          {message.text && (
-                            <p className="text-sm">{message.text}</p>
-                          )}
-                          <div className={`p-3 rounded border ${
-                            isFromUser ? 'border-white/20 bg-white/10' : 'border-gray-200 bg-gray-50'
-                          }`}>
-                            <div className="flex items-center gap-2 mb-2">
-                              <span className="text-lg">{getFileIcon(message.file.type)}</span>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium truncate">{message.file.name}</p>
-                                <p className="text-xs opacity-75">{formatFileSize(message.file.size)}</p>
-                              </div>
-                            </div>
-                            
-                            {isImageFile(message.file.type) && (
-                              <img 
-                                src={message.file.url} 
-                                alt={message.file.name}
-                                className="max-w-full h-auto rounded border"
-                                style={{ maxHeight: '200px' }}
-                              />
-                            )}
-                            
-                            <button
-                              onClick={() => downloadFile(message.file)}
-                              className={`mt-2 px-3 py-1 rounded text-xs font-medium transition-colors ${
-                                isFromUser 
-                                  ? 'bg-white/20 hover:bg-white/30 text-white' 
-                                  : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
-                              }`}
-                            >
-                              Download
-                            </button>
+      {/* Messages Area */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
+        {loading ? (
+          <div className="flex justify-center py-8">
+            <div className="text-gray-500">Loading messages...</div>
+          </div>
+        ) : messages.length === 0 ? (
+          <div className="text-center py-8 text-gray-500">
+            <div className="text-2xl mb-2">💬</div>
+            <p>No messages yet. Start the conversation!</p>
+          </div>
+        ) : (
+          messages.map((message) => {
+            const isFromUser = userCountries.includes(message.senderCountry);
+            return (
+              <div key={message.id} className={`flex ${isFromUser ? 'justify-end' : 'justify-start'}`}>
+                <div className={`max-w-[70%] rounded-lg px-4 py-2 ${
+                  isFromUser 
+                    ? 'bg-[#e40115] text-white' 
+                    : 'bg-white border border-gray-200 text-gray-900'
+                }`}>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-xs font-medium opacity-75">
+                      {message.senderCountry}
+                    </span>
+                    <span className="text-xs opacity-60">
+                      {getRelativeTime(message.timestamp)}
+                    </span>
+                  </div>
+                  
+                  {message.file ? (
+                    <div className="space-y-2">
+                      {message.text && (
+                        <p className="text-sm">{message.text}</p>
+                      )}
+                      <div className={`p-3 rounded border ${
+                        isFromUser ? 'border-white/20 bg-white/10' : 'border-gray-200 bg-gray-50'
+                      }`}>
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-lg">{getFileIcon(message.file.type)}</span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{message.file.name}</p>
+                            <p className="text-xs opacity-75">{formatFileSize(message.file.size)}</p>
                           </div>
                         </div>
-                      ) : (
-                        <p className="text-sm whitespace-pre-wrap">{message.text}</p>
-                      )}
+                        
+                        {isImageFile(message.file.type) && (
+                          <img 
+                            src={message.file.url} 
+                            alt={message.file.name}
+                            className="max-w-full h-auto rounded border"
+                            style={{ maxHeight: '200px' }}
+                          />
+                        )}
+                        
+                        <button
+                          onClick={() => downloadFile(message.file)}
+                          className={`mt-2 px-3 py-1 rounded text-xs font-medium transition-colors ${
+                            isFromUser 
+                              ? 'bg-white/20 hover:bg-white/30 text-white' 
+                              : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
+                          }`}
+                        >
+                          Download
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                );
-              })
-            )}
-            <div ref={messagesEndRef} />
-          </div>
+                  ) : (
+                    <p className="text-sm whitespace-pre-wrap">{message.text}</p>
+                  )}
+                </div>
+              </div>
+            );
+          })
+        )}
+        <div ref={messagesEndRef} />
+      </div>
 
-          {/* Message Input */}
-          <div className="p-4 bg-white border-t flex-shrink-0">
-            <div className="flex gap-3">
-              <div className="flex-1">
-                <textarea
-                  value={newMessage}
-                  onChange={(e) => setNewMessage(e.target.value)}
-                  onKeyDown={handleKeyPress}
-                  placeholder="Type your message..."
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#e40115] resize-none"
-                  rows={2}
-                />
-              </div>
-              <div className="flex flex-col gap-2">
-                <button
-                  onClick={sendMessage}
-                  disabled={!newMessage.trim() || loading}
-                  className="px-4 py-2 bg-[#e40115] text-white rounded-md hover:bg-[#c7010e] disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
-                >
-                  Send
-                </button>
-                <DashboardFileSharing 
-                  onFileShared={handleFileShared}
-                  currentUser={userProfile?.displayName || "User"}
-                  currentCountry={getUserSendingCountry()}
-                  disabled={false}
-                />
-              </div>
-            </div>
-            
-            <div className="text-xs text-gray-500 mt-3 flex justify-between items-center">
-              <span className="flex items-center gap-1">
-                📤 Sending as: <strong>{getUserSendingCountry()}</strong>
-              </span>
-              <span className="text-right">
-                👥 Visible to: {selectedQR?.creatorCountry} & {selectedQR?.involvedCountry}
-              </span>
-            </div>
+      {/* Message Input */}
+      <div className="p-4 bg-white border-t flex-shrink-0">
+        <div className="flex gap-3">
+          <div className="flex-1">
+            <textarea
+              value={newMessage}
+              onChange={(e) => setNewMessage(e.target.value)}
+              onKeyDown={handleKeyPress}
+              placeholder="Type your message..."
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#e40115] resize-none"
+              rows={2}
+            />
           </div>
-        </>
-      )}
+          <div className="flex flex-col gap-2">
+            <button
+              onClick={sendMessage}
+              disabled={!newMessage.trim() || loading}
+              className="px-4 py-2 bg-[#e40115] text-white rounded-md hover:bg-[#c7010e] disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+            >
+              Send
+            </button>
+            <DashboardFileSharing 
+              onFileShared={handleFileShared}
+              currentUser={userProfile?.displayName || "User"}
+              currentCountry={getUserSendingCountry()}
+              disabled={false}
+            />
+          </div>
+        </div>
+        
+        <div className="text-xs text-gray-500 mt-3 flex justify-between items-center">
+          <span className="flex items-center gap-1">
+            📤 Sending as: <strong>{getUserSendingCountry()}</strong>
+          </span>
+          <span className="text-right">
+            👥 Visible to: {selectedQR?.creatorCountry} & {selectedQR?.involvedCountry}
+          </span>
+        </div>
+      </div>
     </div>
   );
 };
@@ -719,21 +700,28 @@ export default function DashboardMessagingPanel() {
       
       {/* Full Height Messaging */}
       <div className="flex flex-1 bg-white rounded-lg shadow-lg border overflow-hidden">
-        <QuoteRequestList
-          onSelect={handleSelectConversation}
-          selectedId={selectedQuoteRequestId}
-          quoteRequests={quoteRequests}
-          userCountries={userProfile?.countries || []}
-          customers={customers}
-          unreadCounts={unreadCounts}
-          lastMessageTimes={lastMessageTimes}
-        />
-        <ChatWindow 
-          quoteRequestId={selectedQuoteRequestId} 
-          userCountries={userProfile?.countries || []}
-          userProfile={userProfile}
-          onBack={() => setSelectedQuoteRequestId(null)}
-        />
+        {/* Quote Request List - takes full width when no conversation selected */}
+        <div className={selectedQuoteRequestId ? "w-[420px] border-r" : "w-full"}>
+          <QuoteRequestList
+            onSelect={handleSelectConversation}
+            selectedId={selectedQuoteRequestId}
+            quoteRequests={quoteRequests}
+            userCountries={userProfile?.countries || []}
+            customers={customers}
+            unreadCounts={unreadCounts}
+            lastMessageTimes={lastMessageTimes}
+          />
+        </div>
+        
+        {/* Chat Window - only render when conversation is selected */}
+        {selectedQuoteRequestId && (
+          <ChatWindow 
+            quoteRequestId={selectedQuoteRequestId} 
+            userCountries={userProfile?.countries || []}
+            userProfile={userProfile}
+            onBack={() => setSelectedQuoteRequestId(null)}
+          />
+        )}
       </div>
     </div>
   );
