@@ -160,11 +160,9 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen flex flex-row bg-gray-50">
-      {/* The left sidebar is already handled by the app shell/layout, so no extra sidebar here */}
-
+    <div className="h-full flex flex-row">
       {/* Middle: In Progress Quote Requests with Filters */}
-      <div className="flex-1 flex flex-col px-8 py-8 overflow-y-auto min-h-screen">
+      <div className="flex-1 flex flex-col px-8 py-8 overflow-y-auto">
         {/* Dashboard Title */}
         <div className="headline-modern text-[#e40115] mb-8">Dashboard</div>
         {/* Header Cards */}
@@ -198,41 +196,36 @@ export default function DashboardPage() {
                 {allCountries.map((country, i) => {
                   const barHeight = maxCountryCount > 0 ? (countryCounts[country] / maxCountryCount) * 60 : 0;
                   const barWidth = 32;
-                  const gap = 38;
-                  const x = 20 + i * (barWidth + gap);
+                  const x = i * 70 + 19;
+                  const y = 80 - barHeight;
                   return (
                     <g key={country}>
-                      {/* Value above bar */}
-                      <text
-                        x={x + barWidth / 2}
-                        y={80 - barHeight - 12}
-                        textAnchor="middle"
-                        fontSize="16"
-                        fontWeight="bold"
-                        fill="#e40115"
-                        style={{ fontFamily: 'inherit' }}
-                      >
-                        {countryCounts[country]}
-                      </text>
-                      {/* Bar */}
                       <rect
                         x={x}
-                        y={80 - barHeight}
+                        y={y}
                         width={barWidth}
                         height={barHeight}
                         fill="#e40115"
-                        rx={8}
+                        rx="2"
                       />
-                      {/* Label below bar */}
                       <text
                         x={x + barWidth / 2}
                         y={95}
                         textAnchor="middle"
-                        fontSize="13"
-                        fill="#333"
-                        style={{ fontFamily: 'inherit' }}
+                        fontSize="10"
+                        fill="#666"
                       >
-                        {country}
+                        {country.substring(0, 3)}
+                      </text>
+                      <text
+                        x={x + barWidth / 2}
+                        y={y - 5}
+                        textAnchor="middle"
+                        fontSize="10"
+                        fill="#333"
+                        fontWeight="bold"
+                      >
+                        {countryCounts[country]}
                       </text>
                     </g>
                   );
@@ -241,154 +234,141 @@ export default function DashboardPage() {
             </div>
           </div>
         </div>
+
         {/* Filters */}
-        <div className="filter-bar-modern flex gap-4 items-center">
-          {/* Label Filter */}
-          <FormControl size="small" sx={{ minWidth: 160 }}>
-            <InputLabel id="label-filter-label">Label</InputLabel>
-            <Select
-              labelId="label-filter-label"
-              value={selectedLabel}
-              label="Label"
-              onChange={e => setSelectedLabel(e.target.value)}
-              endAdornment={selectedLabel && (
-                <IconButton size="small" onClick={() => setSelectedLabel("")}>
-                  <ClearIcon fontSize="small" />
-                </IconButton>
-              )}
-            >
+        <div className="w-full max-w-6xl mx-auto mb-6 flex flex-wrap gap-4 items-center">
+          <FormControl size="small" style={{ minWidth: 120 }}>
+            <InputLabel>Label</InputLabel>
+            <Select value={selectedLabel} onChange={(e) => setSelectedLabel(e.target.value)}>
               <MenuItem value=""><em>All</em></MenuItem>
               {labels.map(label => (
                 <MenuItem key={label.id} value={label.id}>{label.name}</MenuItem>
               ))}
             </Select>
           </FormControl>
-          {/* Customer Filter */}
-          <FormControl size="small" sx={{ minWidth: 180 }}>
-            <InputLabel id="customer-filter-label">Customer</InputLabel>
-            <Select
-              labelId="customer-filter-label"
-              value={selectedCustomer}
-              label="Customer"
-              onChange={e => setSelectedCustomer(e.target.value)}
-              endAdornment={selectedCustomer && (
-                <IconButton size="small" onClick={() => setSelectedCustomer("")}>
-                  <ClearIcon fontSize="small" />
-                </IconButton>
-              )}
-            >
+
+          <FormControl size="small" style={{ minWidth: 120 }}>
+            <InputLabel>Customer</InputLabel>
+            <Select value={selectedCustomer} onChange={(e) => setSelectedCustomer(e.target.value)}>
               <MenuItem value=""><em>All</em></MenuItem>
               {customers.map(customer => (
                 <MenuItem key={customer.id} value={customer.id}>{customer.name}</MenuItem>
               ))}
             </Select>
           </FormControl>
-          {/* Country Filter */}
-          <FormControl size="small" sx={{ minWidth: 160 }}>
-            <InputLabel id="country-filter-label">Country</InputLabel>
-            <Select
-              labelId="country-filter-label"
-              value={selectedCountry}
-              label="Country"
-              onChange={e => setSelectedCountry(e.target.value)}
-              endAdornment={selectedCountry && (
-                <IconButton size="small" onClick={() => setSelectedCountry("")}>
-                  <ClearIcon fontSize="small" />
-                </IconButton>
-              )}
-            >
+
+          <FormControl size="small" style={{ minWidth: 120 }}>
+            <InputLabel>Country</InputLabel>
+            <Select value={selectedCountry} onChange={(e) => setSelectedCountry(e.target.value)}>
               <MenuItem value=""><em>All</em></MenuItem>
               {userAccessibleCountries.map(country => (
                 <MenuItem key={country} value={country}>{country}</MenuItem>
               ))}
             </Select>
           </FormControl>
-          {/* User Filter */}
-          <FormControl size="small" sx={{ minWidth: 180 }}>
-            <InputLabel id="user-filter-label">User</InputLabel>
-            <Select
-              labelId="user-filter-label"
-              value={selectedUser}
-              label="User"
-              onChange={e => setSelectedUser(e.target.value)}
-              endAdornment={selectedUser && (
-                <IconButton size="small" onClick={() => setSelectedUser("")}>
-                  <ClearIcon fontSize="small" />
-                </IconButton>
-              )}
-            >
+
+          <FormControl size="small" style={{ minWidth: 120 }}>
+            <InputLabel>User</InputLabel>
+            <Select value={selectedUser} onChange={(e) => setSelectedUser(e.target.value)}>
               <MenuItem value=""><em>All</em></MenuItem>
-              {quoteRequests.map(qr => (
+              {[...new Set(visibleQuoteRequests.map(qr => qr.user))].map(user => (
                 <MenuItem key={qr.id} value={qr.user}>{qr.user}</MenuItem>
               ))}
             </Select>
           </FormControl>
-          {/* Clear Filters Button */}
-      <button
-            className="ml-auto px-3 py-1 rounded-full border border-[#e40115] text-[#e40115] text-xs font-semibold bg-white hover:bg-[#e40115] hover:text-white transition focus:outline-none focus:ring-2 focus:ring-[#e40115]"
+
+          <button
             onClick={() => {
               setSelectedLabel("");
               setSelectedCustomer("");
               setSelectedCountry("");
               setSelectedUser("");
             }}
-            disabled={!selectedLabel && !selectedCustomer && !selectedCountry && !selectedUser}
+            className="btn-modern btn-modern-secondary"
           >
             Clear Filters
           </button>
         </div>
-        {/* In Progress Quote Requests Kanban Board */}
-        <div className="flex-1 overflow-y-auto mt-6">
-          <div className="grid grid-cols-4 gap-6">
-  {/* Urgent / Problems */}
-  <div>
-    <div className="font-bold text-lg mb-4 text-[#e40115] text-center">Urgent / Problems</div>
-    <div className="flex flex-col gap-4">
-      {urgentProblemsKanban.length === 0 && <div className="text-gray-400">None</div>}
-      {urgentProblemsKanban.map(qr => (
-        <QuoteRequestCard key={qr.id} qr={qr} customers={customers} labels={labels} />
-      ))}
-    </div>
-  </div>
-  {/* Standard */}
-  <div className="border-l border-gray-200 pl-6">
-    <div className="font-bold text-lg mb-4 text-[#e40115] text-center">Standard</div>
-    <div className="flex flex-col gap-4">
-      {standardKanban.length === 0 && <div className="text-gray-400">None</div>}
-      {standardKanban.map(qr => (
-        <QuoteRequestCard key={qr.id} qr={qr} customers={customers} labels={labels} />
-      ))}
-    </div>
-  </div>
-  {/* Waiting for Answer */}
-  <div className="border-l border-gray-200 pl-6">
-    <div className="font-bold text-lg mb-4 text-[#e40115] text-center">Waiting for Answer</div>
-    <div className="flex flex-col gap-4">
-      {waitingKanban.length === 0 && <div className="text-gray-400">None</div>}
-      {waitingKanban.map(qr => (
-        <QuoteRequestCard key={qr.id} qr={qr} customers={customers} labels={labels} />
-      ))}
-    </div>
-  </div>
-  {/* Snoozed */}
-  <div className="border-l border-gray-200 pl-6">
-    <div className="font-bold text-lg mb-4 text-[#e40115] text-center">Snoozed</div>
-    <div className="flex flex-col gap-4">
-      {snoozedKanban.length === 0 && <div className="text-gray-400">None</div>}
-      {snoozedKanban.map(qr => (
-        <QuoteRequestCard key={qr.id} qr={qr} customers={customers} labels={labels} />
-      ))}
-    </div>
-  </div>
-</div>
+
+        {/* Kanban Board */}
+        <div className="w-full max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 flex-1">
+          {/* Urgent / Problems Column */}
+          <div className="bg-white rounded-lg shadow border overflow-hidden flex flex-col">
+            <div className="bg-red-50 border-b border-red-200 p-4">
+              <h3 className="font-bold text-red-800">Urgent / Problems</h3>
+              <p className="text-sm text-red-600">{urgentProblemsKanban.length} items</p>
+            </div>
+            <div className="flex-1 p-4 space-y-3 overflow-y-auto max-h-96">
+              {urgentProblemsKanban.length === 0 ? (
+                <div className="text-center text-gray-500 py-8">None</div>
+              ) : (
+                urgentProblemsKanban.map(qr => (
+                  <QuoteRequestCard key={qr.id} qr={qr} customers={customers} labels={labels} />
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Standard Column */}
+          <div className="bg-white rounded-lg shadow border overflow-hidden flex flex-col">
+            <div className="bg-blue-50 border-b border-blue-200 p-4">
+              <h3 className="font-bold text-blue-800">Standard</h3>
+              <p className="text-sm text-blue-600">{standardKanban.length} items</p>
+            </div>
+            <div className="flex-1 p-4 space-y-3 overflow-y-auto max-h-96">
+              {standardKanban.length === 0 ? (
+                <div className="text-center text-gray-500 py-8">None</div>
+              ) : (
+                standardKanban.map(qr => (
+                  <QuoteRequestCard key={qr.id} qr={qr} customers={customers} labels={labels} />
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Waiting for Answer Column */}
+          <div className="bg-white rounded-lg shadow border overflow-hidden flex flex-col">
+            <div className="bg-yellow-50 border-b border-yellow-200 p-4">
+              <h3 className="font-bold text-yellow-800">Waiting for Answer</h3>
+              <p className="text-sm text-yellow-600">{waitingKanban.length} items</p>
+            </div>
+            <div className="flex-1 p-4 space-y-3 overflow-y-auto max-h-96">
+              {waitingKanban.length === 0 ? (
+                <div className="text-center text-gray-500 py-8">None</div>
+              ) : (
+                waitingKanban.map(qr => (
+                  <QuoteRequestCard key={qr.id} qr={qr} customers={customers} labels={labels} />
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Snoozed Column */}
+          <div className="bg-white rounded-lg shadow border overflow-hidden flex flex-col">
+            <div className="bg-gray-50 border-b border-gray-200 p-4">
+              <h3 className="font-bold text-gray-800">Snoozed</h3>
+              <p className="text-sm text-gray-600">{snoozedKanban.length} items</p>
+            </div>
+            <div className="flex-1 p-4 space-y-3 overflow-y-auto max-h-96">
+              {snoozedKanban.length === 0 ? (
+                <div className="text-center text-gray-500 py-8">None</div>
+              ) : (
+                snoozedKanban.map(qr => (
+                  <QuoteRequestCard key={qr.id} qr={qr} customers={customers} labels={labels} />
+                ))
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
       {/* Right: Messaging Panel */}
-      <div className="w-[520px] bg-white border-l flex flex-col min-h-screen px-6 py-8">
-        <h1 className="text-2xl font-bold mb-4">Messaging</h1>
-        <div className="flex-1 flex flex-col">
-        <DashboardMessagingPanel />
+      <div className="w-[600px] border-l bg-white flex flex-col h-full">
+        <div className="p-6 border-b">
+          <h2 className="text-xl font-bold text-gray-900">Messaging</h2>
+        </div>
+        <div className="flex-1 p-6 overflow-hidden">
+          <DashboardMessagingPanel />
         </div>
       </div>
     </div>

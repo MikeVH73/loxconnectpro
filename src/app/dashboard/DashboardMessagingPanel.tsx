@@ -94,12 +94,12 @@ const QuoteRequestList = ({ onSelect, selectedId, quoteRequests, userCountries, 
 
   return (
     <div className="w-[420px] border-r h-full overflow-y-auto bg-gray-50">
-      <div className="p-5 border-b bg-white shadow-sm">
+      <div className="p-5 border-b bg-white shadow-sm flex-shrink-0">
         <h3 className="font-bold text-gray-900 text-lg">Conversations</h3>
         <p className="text-sm text-gray-500 mt-1">{quoteRequests.length} active chats</p>
       </div>
       
-      <div className="p-3 space-y-2">
+      <div className="p-3 space-y-2 overflow-y-auto">
         {quoteRequests.length === 0 ? (
           <div className="text-center py-8 text-gray-500">
             <div className="text-2xl mb-2">💬</div>
@@ -125,69 +125,68 @@ const QuoteRequestList = ({ onSelect, selectedId, quoteRequests, userCountries, 
                 `}
               >
                 {/* Header with title and countries */}
-                                 <div className="flex items-start justify-between mb-3">
-                   <div className="flex-1 min-w-0">
-                     <h4 
-                       className="font-semibold text-gray-900 text-sm leading-tight mb-1 pr-2"
-                       title={qr.title}
-                     >
-                       {qr.title}
-                     </h4>
-                     <p className="text-sm font-medium text-gray-700 mb-2">
-                       {getCustomerName(qr.customer)}
-                     </p>
-                     <div className="flex items-center gap-2 text-xs text-gray-600">
-                       <span className="flex items-center gap-1">
-                         {countryFlags.creator} {countryCodes.creator}
-                       </span>
-                       <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
-                       </svg>
-                       <span className="flex items-center gap-1">
-                         {countryFlags.involved} {countryCodes.involved}
-                       </span>
-                     </div>
-                   </div>
-                  
-                  {/* Status badge */}
-                  <span className={`
-                    flex-shrink-0 px-2 py-1 rounded-full text-xs font-medium ml-2
-                    ${qr.status === 'In Progress' ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : 
-                      qr.status === 'Snoozed' ? 'bg-amber-100 text-amber-700 border border-amber-200' :
-                      'bg-gray-100 text-gray-700 border border-gray-200'
-                    }
-                  `}>
-                    {qr.status === 'In Progress' ? '🟢' : qr.status === 'Snoozed' ? '😴' : '⏸️'} {qr.status}
-                  </span>
-                </div>
-
-                {/* Footer with metadata */}
-                <div className="flex items-center justify-between text-xs text-gray-500">
-                  <span className="truncate">
-                    Last activity: {getRelativeTime(lastMessageTimes[qr.id])}
-                  </span>
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    {/* Unread indicator */}
-                    {unreadCounts[qr.id] > 0 && (
-                      <span className="bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full min-w-[20px] text-center">
-                        {unreadCounts[qr.id]}
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex-1 min-w-0">
+                    <h4 
+                      className="font-semibold text-gray-900 text-sm leading-tight mb-1 pr-2"
+                      title={qr.title}
+                    >
+                      {qr.title}
+                    </h4>
+                    <p className="text-sm font-medium text-gray-700 mb-2">
+                      {getCustomerName(qr.customer)}
+                    </p>
+                    <div className="flex items-center gap-2 text-xs text-gray-600">
+                      <span className="flex items-center gap-1">
+                        {countryFlags.creator} {countryCodes.creator}
                       </span>
-                    )}
+                      <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                      </svg>
+                      <span className="flex items-center gap-1">
+                        {countryFlags.involved} {countryCodes.involved}
+                      </span>
+                    </div>
                   </div>
-                </div>
+                 
+                 {/* Status badge */}
+                 <span className={`
+                   flex-shrink-0 px-2 py-1 rounded-full text-xs font-medium ml-2
+                   ${qr.status === 'In Progress' ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : 
+                     qr.status === 'Snoozed' ? 'bg-amber-100 text-amber-700 border border-amber-200' :
+                     'bg-gray-100 text-gray-700 border border-gray-200'
+                   }
+                 `}>
+                   {qr.status === 'In Progress' ? '🟢' : qr.status === 'Snoozed' ? '😴' : '⏸️'} {qr.status}
+                 </span>
+               </div>
 
-                {/* Selected indicator */}
-                {isSelected && (
-                  <div className="absolute left-0 top-4 bottom-4 w-1 bg-blue-500 rounded-r"></div>
-                )}
-              </div>
-            );
-          })
-        )}
-      </div>
-    </div>
-  );
-};
+               {/* Footer with metadata */}
+               <div className="flex items-center justify-between text-xs text-gray-500">
+                 <span className="truncate">
+                   Last activity: {getRelativeTime(lastMessageTimes[qr.id])}
+                 </span>
+                 <div className="flex items-center gap-2 flex-shrink-0">
+                   {/* Unread indicator */}
+                   {unreadCounts[qr.id] > 0 && (
+                     <span className="bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full min-w-[20px] text-center">
+                       {unreadCounts[qr.id]}
+                     </span>
+                   )}
+                 </div>
+               </div>
+
+               {/* Selected indicator */}
+               {isSelected && (
+                 <div className="absolute left-0 top-4 bottom-4 w-1 bg-blue-500 rounded-r"></div>
+               )}
+             </div>
+           );
+         })
+       )}
+     </div>
+   </div>
+ );
 
 // Chat Window Component  
 const ChatWindow = ({ quoteRequestId, userCountries, userProfile, onBack }: any) => {
@@ -399,169 +398,153 @@ const ChatWindow = ({ quoteRequestId, userCountries, userProfile, onBack }: any)
   const isArchived = selectedQR && ['Won', 'Lost', 'Cancelled'].includes(selectedQR.status);
 
   return (
-    <div className="flex-1 h-full flex flex-col bg-white">
-      {/* Chat Header */}
-      <div className="p-5 border-b bg-white shadow-sm">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={onBack}
-              className="p-2 hover:bg-gray-100 rounded-full transition-colors flex-shrink-0"
-              title="Back to conversations"
-            >
-              <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
-            <div className="min-w-0 flex-1">
-              <h3 className="font-bold text-gray-900 text-lg truncate" title={selectedQR?.title}>
-                {selectedQR?.title || "Loading..."}
-              </h3>
-              <div className="flex items-center gap-2 text-sm text-gray-600 mt-1">
-                <span className="flex items-center gap-1">
-                  {selectedQR?.creatorCountry}
-                </span>
-                <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
-                </svg>
-                <span className="flex items-center gap-1">
-                  {selectedQR?.involvedCountry}
-                </span>
+    <div className="flex-1 flex flex-col h-full">
+      {!quoteRequestId ? (
+        <div className="flex-1 flex items-center justify-center text-gray-500">
+          <div className="text-center">
+            <div className="text-4xl mb-4">💬</div>
+            <p className="text-lg font-medium">Select a conversation</p>
+            <p className="text-sm">Choose a Quote Request from the list to start messaging</p>
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* Chat Header */}
+          <div className="p-4 border-b bg-white flex-shrink-0">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-semibold text-gray-900">{selectedQR?.title}</h3>
+                <p className="text-sm text-gray-600">
+                  {selectedQR?.creatorCountry} ↔ {selectedQR?.involvedCountry}
+                </p>
               </div>
+              <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                selectedQR?.status === 'In Progress' ? 'bg-green-100 text-green-800' :
+                selectedQR?.status === 'Snoozed' ? 'bg-yellow-100 text-yellow-800' :
+                'bg-gray-100 text-gray-800'
+              }`}>
+                {selectedQR?.status}
+              </span>
             </div>
           </div>
-          {isArchived && (
-            <span className="px-3 py-1 bg-red-100 text-red-700 rounded-full text-sm font-medium border border-red-200">
-              🔒 Archived
-            </span>
-          )}
-        </div>
-      </div>
 
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
-        {messages.map((message) => {
-          const isMyCountry = userCountries.includes(message.senderCountry);
-          return (
-            <div
-              key={message.id}
-              className={`flex ${isMyCountry ? 'justify-end' : 'justify-start'} animate-fade-in`}
-            >
-              <div
-                className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg shadow-sm transition-all duration-200 hover:shadow-md ${
-                  isMyCountry
-                    ? 'bg-[#e40115] text-white'
-                    : 'bg-gray-200 text-gray-800'
-                }`}
-              >
-                <div className="text-sm">{message.text}</div>
-                
-                {/* File attachment */}
-                {message.file && (
-                  <div className={`mt-2 border rounded p-3 ${
-                    isMyCountry ? 'border-red-300 bg-red-600' : 'border-gray-300 bg-gray-100'
-                  }`}>
-                    {isImageFile(message.file.type) ? (
-                      <div className="space-y-2">
-                        <img 
-                          src={message.file.url} 
-                          alt={message.file.name}
-                          className="max-w-full h-auto rounded cursor-pointer hover:opacity-90"
-                          onClick={() => downloadFile(message.file)}
-                          style={{ maxHeight: '200px' }}
-                        />
-                        <div className={`text-xs ${isMyCountry ? 'text-red-100' : 'text-gray-600'}`}>
-                          {message.file.name} • {formatFileSize(message.file.size)}
-                        </div>
+          {/* Messages Area */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
+            {loading ? (
+              <div className="flex justify-center py-8">
+                <div className="text-gray-500">Loading messages...</div>
+              </div>
+            ) : messages.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                <div className="text-2xl mb-2">💬</div>
+                <p>No messages yet. Start the conversation!</p>
+              </div>
+            ) : (
+              messages.map((message) => {
+                const isFromUser = userCountries.includes(message.senderCountry);
+                return (
+                  <div key={message.id} className={`flex ${isFromUser ? 'justify-end' : 'justify-start'}`}>
+                    <div className={`max-w-[70%] rounded-lg px-4 py-2 ${
+                      isFromUser 
+                        ? 'bg-[#e40115] text-white' 
+                        : 'bg-white border border-gray-200 text-gray-900'
+                    }`}>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-xs font-medium opacity-75">
+                          {message.senderCountry}
+                        </span>
+                        <span className="text-xs opacity-60">
+                          {getRelativeTime(message.timestamp)}
+                        </span>
                       </div>
-                    ) : (
-                      <div 
-                        className="flex items-center space-x-3 cursor-pointer hover:opacity-80"
-                        onClick={() => downloadFile(message.file)}
-                      >
-                        <div className="text-2xl">{getFileIcon(message.file.type)}</div>
-                        <div className="flex-1 min-w-0">
-                          <div className={`text-sm font-medium truncate ${
-                            isMyCountry ? 'text-white' : 'text-gray-900'
+                      
+                      {message.file ? (
+                        <div className="space-y-2">
+                          {message.text && (
+                            <p className="text-sm">{message.text}</p>
+                          )}
+                          <div className={`p-3 rounded border ${
+                            isFromUser ? 'border-white/20 bg-white/10' : 'border-gray-200 bg-gray-50'
                           }`}>
-                            {message.file.name}
-                          </div>
-                          <div className={`text-xs ${
-                            isMyCountry ? 'text-red-100' : 'text-gray-500'
-                          }`}>
-                            {formatFileSize(message.file.size)} • Click to download
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className="text-lg">{getFileIcon(message.file.type)}</span>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium truncate">{message.file.name}</p>
+                                <p className="text-xs opacity-75">{formatFileSize(message.file.size)}</p>
+                              </div>
+                            </div>
+                            
+                            {isImageFile(message.file.type) && (
+                              <img 
+                                src={message.file.url} 
+                                alt={message.file.name}
+                                className="max-w-full h-auto rounded border"
+                                style={{ maxHeight: '200px' }}
+                              />
+                            )}
+                            
+                            <button
+                              onClick={() => downloadFile(message.file)}
+                              className={`mt-2 px-3 py-1 rounded text-xs font-medium transition-colors ${
+                                isFromUser 
+                                  ? 'bg-white/20 hover:bg-white/30 text-white' 
+                                  : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
+                              }`}
+                            >
+                              Download
+                            </button>
                           </div>
                         </div>
-                      </div>
-                    )}
+                      ) : (
+                        <p className="text-sm whitespace-pre-wrap">{message.text}</p>
+                      )}
+                    </div>
                   </div>
-                )}
-                
-                <div className={`text-xs mt-1 flex items-center justify-between ${isMyCountry ? 'text-red-100' : 'text-gray-500'}`}>
-                  <span>
-                    {message.senderCountry} • {getRelativeTime(message.timestamp)}
-                  </span>
-                  {isMyCountry && message.status && (
-                    <span className="ml-2">
-                      {message.status === 'delivered' ? '✓' : '⏳'}
-                    </span>
-                  )}
-                </div>
+                );
+              })
+            )}
+            <div ref={messagesEndRef} />
+          </div>
+
+          {/* Message Input */}
+          <div className="p-4 bg-white border-t flex-shrink-0">
+            <div className="flex gap-3">
+              <div className="flex-1">
+                <textarea
+                  value={newMessage}
+                  onChange={(e) => setNewMessage(e.target.value)}
+                  onKeyDown={handleKeyPress}
+                  placeholder="Type your message..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#e40115] resize-none"
+                  rows={2}
+                />
+              </div>
+              <div className="flex flex-col gap-2">
+                <button
+                  onClick={sendMessage}
+                  disabled={!newMessage.trim() || loading}
+                  className="px-4 py-2 bg-[#e40115] text-white rounded-md hover:bg-[#c7010e] disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+                >
+                  Send
+                </button>
+                <DashboardFileSharing 
+                  quoteRequestId={quoteRequestId}
+                  userCountries={userCountries}
+                  onFileShared={handleFileShared}
+                />
               </div>
             </div>
-          );
-        })}
-        <div ref={messagesEndRef} />
-      </div>
-
-      {/* Message Input */}
-      {!isArchived && (
-        <div className="p-4 border-t bg-white">
-          <div className="flex gap-3 items-end">
-            <input
-              type="text"
-              value={newMessage}
-              onChange={(e) => setNewMessage(e.target.value)}
-              onKeyPress={handleKeyPress}
-              placeholder="Type your message..."
-              className="flex-1 px-4 py-3 border border-gray-300 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#e40115] focus:border-transparent resize-none transition-all"
-              disabled={loading}
-            />
-            <button
-              onClick={sendMessage}
-              disabled={!newMessage.trim() || loading}
-              className="px-5 py-3 bg-[#e40115] text-white rounded-2xl hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 font-medium flex items-center gap-2"
-            >
-              {loading ? (
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-              ) : (
-                <>
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                  </svg>
-                  Send
-                </>
-              )}
-            </button>
+            
+            <div className="text-xs text-gray-500 mt-3 flex justify-between items-center">
+              <span className="flex items-center gap-1">
+                📤 Sending as: <strong>{getUserSendingCountry()}</strong>
+              </span>
+              <span className="text-right">
+                👥 Visible to: {selectedQR?.creatorCountry} & {selectedQR?.involvedCountry}
+              </span>
+            </div>
           </div>
-          
-          {/* File sharing for quote requests */}
-          <DashboardFileSharing
-            onFileShared={handleFileShared}
-            currentUser={userProfile?.name || "User"}
-            currentCountry={getUserSendingCountry()}
-            disabled={false}
-          />
-          
-          <div className="text-xs text-gray-500 mt-3 flex justify-between items-center">
-            <span className="flex items-center gap-1">
-              📤 Sending as: <strong>{getUserSendingCountry()}</strong>
-            </span>
-            <span className="text-right">
-              👥 Visible to: {selectedQR?.creatorCountry} & {selectedQR?.involvedCountry}
-            </span>
-          </div>
-        </div>
+        </>
       )}
     </div>
   );
@@ -726,10 +709,10 @@ export default function DashboardMessagingPanel() {
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
-      <div className="mb-3">
-      <p className="text-sm text-gray-600">
-        Choose a Quote Request from the list to start messaging between countries
-      </p>
+      <div className="mb-3 flex-shrink-0">
+        <p className="text-sm text-gray-600">
+          Choose a Quote Request from the list to start messaging between countries
+        </p>
       </div>
       
       {/* Full Height Messaging */}

@@ -1,9 +1,7 @@
 "use client";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useAuth } from "./AuthProvider";
-import { signOut } from "firebase/auth";
-import { auth } from "../firebaseClient";
 
 const navItems = [
   { label: "Dashboard", href: "/dashboard" },
@@ -20,7 +18,6 @@ const navItems = [
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const router = useRouter();
   const { user, userProfile } = useAuth();
   console.log("[Sidebar] userProfile:", userProfile);
 
@@ -39,7 +36,7 @@ export default function Sidebar() {
   });
 
   return (
-    <aside className="w-64 bg-white border-r border-gray-200 flex flex-col min-h-screen shadow-md">
+    <aside className="w-64 bg-white border-r border-gray-200 flex flex-col h-screen shadow-md">
       <div className="flex flex-col items-center justify-center border-b border-gray-100 py-4 gap-2">
         <div className="flex items-center justify-center w-20 h-20">
           <img
@@ -53,7 +50,7 @@ export default function Sidebar() {
         </div>
         <span className="text-2xl font-bold text-[#e40115] tracking-wide text-center">LoxConnect PRO</span>
       </div>
-      <nav className="flex-1 py-6">
+      <nav className="flex-1 py-6 overflow-y-auto">
         <ul className="space-y-1">
           {filteredNavItems.map((item) => (
             <li key={item.href}>
@@ -72,27 +69,10 @@ export default function Sidebar() {
         </ul>
       </nav>
       {/* Small welcome/user info at the bottom */}
-      <div className="mt-auto mb-2 px-6 text-xs text-gray-400 text-center">
+      <div className="mt-auto mb-4 px-6 text-xs text-gray-400 text-center">
         <div>Welcome, {user?.displayName || user?.email || "User"}</div>
         <div>You are logged in.</div>
       </div>
-      <div className="px-6 mb-6">
-        <button
-          onClick={async () => {
-            try {
-              await signOut(auth);
-              router.replace("/login");
-            } catch (error) {
-              console.error("Logout error:", error);
-            }
-          }}
-          className="w-full bg-gray-200 text-gray-700 text-xs py-2 rounded hover:bg-gray-300 transition font-semibold"
-        >
-          Sign Out
-        </button>
-      </div>
-      {/* Leave space for future settings */}
-      <div className="mb-4" />
     </aside>
   );
 } 

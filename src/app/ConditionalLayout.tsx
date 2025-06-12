@@ -2,6 +2,7 @@
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import Sidebar from "./Sidebar";
+import Header from "./Header";
 
 export function ConditionalLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -20,9 +21,14 @@ export function ConditionalLayout({ children }: { children: React.ReactNode }) {
 
   if (showSidebar) {
     return (
-      <div className="flex min-h-screen">
+      <div className="flex h-screen overflow-hidden">
         <Sidebar />
-        <main className="flex-1 bg-gray-50">{children}</main>
+        <div className="flex flex-col flex-1 overflow-hidden">
+          <Header />
+          <main className="flex-1 bg-gray-50 overflow-auto">
+            {children}
+          </main>
+        </div>
       </div>
     );
   }
