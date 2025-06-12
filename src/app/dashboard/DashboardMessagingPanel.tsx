@@ -187,6 +187,7 @@ const QuoteRequestList = ({ onSelect, selectedId, quoteRequests, userCountries, 
      </div>
    </div>
  );
+};
 
 // Chat Window Component  
 const ChatWindow = ({ quoteRequestId, userCountries, userProfile, onBack }: any) => {
@@ -528,9 +529,10 @@ const ChatWindow = ({ quoteRequestId, userCountries, userProfile, onBack }: any)
                   Send
                 </button>
                 <DashboardFileSharing 
-                  quoteRequestId={quoteRequestId}
-                  userCountries={userCountries}
                   onFileShared={handleFileShared}
+                  currentUser={userProfile?.displayName || "User"}
+                  currentCountry={getUserSendingCountry()}
+                  disabled={false}
                 />
               </div>
             </div>
