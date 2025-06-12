@@ -9,6 +9,121 @@ import relativeTime from 'dayjs/plugin/relativeTime';
 
 dayjs.extend(relativeTime);
 
+// Modal Component for Full Chat Experience
+const ChatModal = ({ isOpen, onClose, selectedQuoteRequestId, quoteRequests, userCountries, customers, userProfile, unreadCounts, lastMessageTimes, onSelectConversation }: any) => {
+  const modalRef = useRef<HTMLDivElement>(null);
+
+  // Close modal when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (modalRef.current && !modalRef.current.contains(event.target as Node)) {
+        onClose();
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      document.body.style.overflow = 'hidden'; // Prevent background scrolling
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.body.style.overflow = 'unset';
+    };
+  }, [isOpen, onClose]);
+
+  // Close modal on Escape key
+  useEffect(() => {
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onClose();
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('keydown', handleEscape);
+    }
+
+    return () => {
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [isOpen, onClose]);
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      {/* Dark backdrop */}
+      <div className="absolute inset-0 bg-black bg-opacity-50 backdrop-blur-sm"></div>
+      
+      {/* Modal content */}
+      <div 
+        ref={modalRef}
+        className="relative bg-white rounded-2xl shadow-2xl w-[95vw] h-[90vh] max-w-7xl mx-4 overflow-hidden border border-gray-200"
+      >
+        {/* Modal header */}
+        <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900">Team Messaging</h2>
+            <p className="text-sm text-gray-600 mt-1">Communicate seamlessly across countries</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-gray-100 rounded-full transition-colors duration-200 group"
+            aria-label="Close modal"
+          >
+            <svg className="w-6 h-6 text-gray-400 group-hover:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Modal body - Full messaging interface */}
+        <div className="flex h-[calc(90vh-88px)]">
+          {/* Left side - Conversations list */}
+          <div className="w-[420px] border-r border-gray-200 bg-gray-50">
+            <QuoteRequestList
+              onSelect={onSelectConversation}
+              selectedId={selectedQuoteRequestId}
+              quoteRequests={quoteRequests}
+              userCountries={userCountries}
+              customers={customers}
+              unreadCounts={unreadCounts}
+              lastMessageTimes={lastMessageTimes}
+              isModal={true}
+            />
+          </div>
+          
+          {/* Right side - Chat window */}
+          <div className="flex-1">
+            {selectedQuoteRequestId ? (
+              <ChatWindow 
+                quoteRequestId={selectedQuoteRequestId} 
+                userCountries={userCountries}
+                userProfile={userProfile}
+                onBack={() => onSelectConversation(null)}
+                isModal={true}
+              />
+            ) : (
+              <div className="flex-1 flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100">
+                <div className="text-center">
+                  <div className="w-24 h-24 mx-auto mb-6 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-full flex items-center justify-center">
+                    <svg className="w-12 h-12 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                    </svg>
+                  </div>
+                  <h3 className="text-xl font-semibold text-gray-900 mb-2">Select a Conversation</h3>
+                  <p className="text-gray-600 max-w-md">Choose a Quote Request from the list to start messaging between countries and collaborate effectively.</p>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 interface QuoteRequest {
   id: string;
   title: string;
@@ -46,8 +161,8 @@ interface FileData {
 
 // GeneralMessage interface removed - no longer needed
 
-// Quote Request List Component
-const QuoteRequestList = ({ onSelect, selectedId, quoteRequests, userCountries, customers, unreadCounts, lastMessageTimes }: any) => {
+// Quote Request List Component (Enhanced for modal)
+const QuoteRequestList = ({ onSelect, selectedId, quoteRequests, userCountries, customers, unreadCounts, lastMessageTimes, isModal = false }: any) => {
   const getCountryCodes = (creatorCountry: string, involvedCountry: string) => {
     const codeMap: any = {
       'Netherlands': 'NL',
@@ -190,7 +305,7 @@ const QuoteRequestList = ({ onSelect, selectedId, quoteRequests, userCountries, 
 };
 
 // Chat Window Component  
-const ChatWindow = ({ quoteRequestId, userCountries, userProfile, onBack }: any) => {
+const ChatWindow = ({ quoteRequestId, userCountries, userProfile, onBack, isModal = false }: any) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [loading, setLoading] = useState(false);
@@ -538,6 +653,7 @@ const ChatWindow = ({ quoteRequestId, userCountries, userProfile, onBack }: any)
 // Main Component
 export default function DashboardMessagingPanel() {
   const [selectedQuoteRequestId, setSelectedQuoteRequestId] = useState<string | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [quoteRequests, setQuoteRequests] = useState<QuoteRequest[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -664,9 +780,10 @@ export default function DashboardMessagingPanel() {
     };
   }, [userProfile, quoteRequests]);
 
-  // Reset unread count when opening a conversation
+  // Open modal and select conversation
   const handleSelectConversation = (quoteRequestId: string) => {
     setSelectedQuoteRequestId(quoteRequestId);
+    setIsModalOpen(true);
     
     // Mark conversation as read by storing current timestamp
     const currentTime = new Date();
@@ -681,6 +798,31 @@ export default function DashboardMessagingPanel() {
     }));
   };
 
+  // Handle modal conversation selection
+  const handleModalConversationSelect = (quoteRequestId: string | null) => {
+    setSelectedQuoteRequestId(quoteRequestId);
+    
+    if (quoteRequestId) {
+      // Mark conversation as read by storing current timestamp
+      const currentTime = new Date();
+      setLastReadTimes(prev => ({
+        ...prev,
+        [quoteRequestId]: currentTime
+      }));
+      
+      setUnreadCounts(prev => ({
+        ...prev,
+        [quoteRequestId]: 0
+      }));
+    }
+  };
+
+  // Close modal
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setSelectedQuoteRequestId(null);
+  };
+
   if (loading) {
     return (
       <div className="flex h-[600px] bg-white rounded shadow border overflow-hidden items-center justify-center">
@@ -690,39 +832,45 @@ export default function DashboardMessagingPanel() {
   }
 
   return (
-    <div className="h-full flex flex-col">
-      {/* Header */}
-      <div className="mb-3 flex-shrink-0">
-        <p className="text-sm text-gray-600">
-          Choose a Quote Request from the list to start messaging between countries
-        </p>
-      </div>
-      
-      {/* Full Height Messaging */}
-      <div className="flex flex-1 bg-white rounded-lg shadow-lg border overflow-hidden">
-        {/* Quote Request List - takes full width when no conversation selected */}
-        <div className={selectedQuoteRequestId ? "w-[420px] border-r" : "w-full"}>
-          <QuoteRequestList
-            onSelect={handleSelectConversation}
-            selectedId={selectedQuoteRequestId}
-            quoteRequests={quoteRequests}
-            userCountries={userProfile?.countries || []}
-            customers={customers}
-            unreadCounts={unreadCounts}
-            lastMessageTimes={lastMessageTimes}
-          />
+    <>
+      <div className="h-full flex flex-col">
+        {/* Header */}
+        <div className="mb-3 flex-shrink-0">
+          <p className="text-sm text-gray-600">
+            Choose a Quote Request from the list to start messaging between countries
+          </p>
         </div>
         
-        {/* Chat Window - only render when conversation is selected */}
-        {selectedQuoteRequestId && (
-          <ChatWindow 
-            quoteRequestId={selectedQuoteRequestId} 
-            userCountries={userProfile?.countries || []}
-            userProfile={userProfile}
-            onBack={() => setSelectedQuoteRequestId(null)}
-          />
-        )}
+        {/* Conversations List Only - Full Width */}
+        <div className="flex flex-1 bg-white rounded-lg shadow-lg border overflow-hidden">
+          <div className="w-full">
+            <QuoteRequestList
+              onSelect={handleSelectConversation}
+              selectedId={null} // No selection in the main view
+              quoteRequests={quoteRequests}
+              userCountries={userProfile?.countries || []}
+              customers={customers}
+              unreadCounts={unreadCounts}
+              lastMessageTimes={lastMessageTimes}
+              isModal={false}
+            />
+          </div>
+        </div>
       </div>
-    </div>
+
+      {/* Chat Modal */}
+      <ChatModal
+        isOpen={isModalOpen}
+        onClose={handleCloseModal}
+        selectedQuoteRequestId={selectedQuoteRequestId}
+        quoteRequests={quoteRequests}
+        userCountries={userProfile?.countries || []}
+        customers={customers}
+        userProfile={userProfile}
+        unreadCounts={unreadCounts}
+        lastMessageTimes={lastMessageTimes}
+        onSelectConversation={handleModalConversationSelect}
+      />
+    </>
   );
 } 
