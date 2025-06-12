@@ -272,7 +272,7 @@ export default function DashboardPage() {
             <Select value={selectedUser} onChange={(e) => setSelectedUser(e.target.value)}>
               <MenuItem value=""><em>All</em></MenuItem>
               {[...new Set(visibleQuoteRequests.map(qr => qr.user))].map(user => (
-                <MenuItem key={qr.id} value={qr.user}>{qr.user}</MenuItem>
+                <MenuItem key={user} value={user}>{user}</MenuItem>
               ))}
             </Select>
           </FormControl>
