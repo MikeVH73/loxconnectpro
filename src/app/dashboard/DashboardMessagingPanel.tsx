@@ -590,11 +590,11 @@ export default function DashboardMessagingPanel() {
           ? allRequests.filter(qr => !['Won', 'Lost', 'Cancelled'].includes(qr.status)) // SuperAdmin sees all, or if no countries set, show all
           : allRequests.filter(qr => {
               // Check if user countries match creator or involved country (using partial matching)
-              const creatorMatch = userCountries.some(userCountry => 
+              const creatorMatch = userCountries.some((userCountry: string) => 
                 qr.creatorCountry?.toLowerCase().includes(userCountry.toLowerCase()) ||
                 userCountry.toLowerCase().includes(qr.creatorCountry?.toLowerCase())
               );
-              const involvedMatch = userCountries.some(userCountry => 
+              const involvedMatch = userCountries.some((userCountry: string) => 
                 qr.involvedCountry?.toLowerCase().includes(userCountry.toLowerCase()) ||
                 userCountry.toLowerCase().includes(qr.involvedCountry?.toLowerCase())
               );
@@ -709,31 +709,53 @@ export default function DashboardMessagingPanel() {
   }
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-[calc(100vh-64px)] flex flex-col"> {/* Adjust 64px if header is different height */}
       {/* Header */}
       <div className="mb-3 flex-shrink-0">
         <p className="text-sm text-gray-600">
           Choose a Quote Request from the list to start messaging between countries
         </p>
       </div>
-      
-      {/* Full Height Messaging */}
-      <div className="flex flex-1 bg-white rounded-lg shadow-lg border overflow-hidden">
-        <QuoteRequestList
-          onSelect={handleSelectConversation}
-          selectedId={selectedQuoteRequestId}
-          quoteRequests={quoteRequests}
-          userCountries={userProfile?.countries || []}
-          customers={customers}
-          unreadCounts={unreadCounts}
-          lastMessageTimes={lastMessageTimes}
-        />
-        <ChatWindow 
-          quoteRequestId={selectedQuoteRequestId} 
-          userCountries={userProfile?.countries || []}
-          userProfile={userProfile}
-          onBack={() => setSelectedQuoteRequestId(null)}
-        />
+      {/* Messaging Panel */}
+      <div className="flex flex-1 min-h-0 bg-white rounded-lg shadow-lg border p-4 gap-4 overflow-hidden"> {/* Visual separation, padding */}
+        {/* Conversations List */}
+        <div className="flex flex-col w-[320px] min-w-[280px] max-w-[360px] h-full bg-gray-50 border-r rounded-l-lg overflow-hidden">
+          {/* Sticky header */}
+          <div className="sticky top-0 z-10 bg-white shadow-sm border-b p-4">
+            <h3 className="font-bold text-gray-900 text-base">Conversations</h3>
+            <p className="text-sm text-gray-500 mt-1">{quoteRequests.length} active chats</p>
+          </div>
+          {/* Scrollable list */}
+          <div className="flex-1 min-h-0 overflow-y-auto p-2 space-y-2">
+            {/* Render conversation items here (reuse QuoteRequestList logic) */}
+            <QuoteRequestList
+              onSelect={handleSelectConversation}
+              selectedId={selectedQuoteRequestId}
+              quoteRequests={quoteRequests}
+              userCountries={userProfile?.countries || []}
+              customers={customers}
+              unreadCounts={unreadCounts}
+              lastMessageTimes={lastMessageTimes}
+            />
+          </div>
+        </div>
+        {/* Chat View */}
+        <div className="flex-1 flex flex-col h-full min-w-0">
+          {/* Chat messages area (scrollable) */}
+          <div className="flex-1 min-h-0 overflow-y-auto px-4 py-2 space-y-4 text-base">
+            {/* ... existing code for chat messages ... */}
+            <ChatWindow 
+              quoteRequestId={selectedQuoteRequestId} 
+              userCountries={userProfile?.countries || []}
+              userProfile={userProfile}
+              onBack={() => setSelectedQuoteRequestId(null)}
+            />
+          </div>
+          {/* File-drop and message input area (sticky/pinned to bottom) */}
+          <div className="sticky bottom-0 z-10 bg-white pt-2 pb-4 px-4 border-t flex flex-col gap-2">
+            {/* ... existing code for file drop and message input ... */}
+          </div>
+        </div>
       </div>
     </div>
   );
