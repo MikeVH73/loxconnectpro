@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useRef } from 'react';
 
 interface FileData {
   id: string;
@@ -24,33 +24,23 @@ export default function DashboardFileSharing({
   currentCountry,
   disabled = false
 }: DashboardFileSharingProps) {
-  const [uploading, setUploading] = useState(false);
-  const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileSelect = async (selectedFiles: FileList | null) => {
     if (!selectedFiles || disabled) return;
-
-    setUploading(true);
-
     for (let i = 0; i < selectedFiles.length; i++) {
       const file = selectedFiles[i];
-      
-      // Check file size (limit to 5MB for dashboard sharing)
       if (file.size > 5 * 1024 * 1024) {
         alert(`File ${file.name} is too large. Maximum size is 5MB.`);
         continue;
       }
-
       try {
-        // Convert file to base64 for storage
         const base64 = await new Promise<string>((resolve, reject) => {
           const reader = new FileReader();
           reader.onload = () => resolve(reader.result as string);
           reader.onerror = reject;
           reader.readAsDataURL(file);
         });
-
         const fileData: FileData = {
           id: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
           name: file.name,
@@ -61,121 +51,74 @@ export default function DashboardFileSharing({
           uploadedBy: currentUser,
           uploadedByCountry: currentCountry
         };
-
-        // Call the callback to handle the file
         onFileShared(fileData);
       } catch (error) {
         console.error('Error processing file:', file.name, error);
         alert(`Failed to process ${file.name}`);
       }
     }
-
-    setUploading(false);
-  };
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    setDragOver(true);
-  };
-
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
-    setDragOver(false);
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setDragOver(false);
-    if (!disabled) {
-      handleFileSelect(e.dataTransfer.files);
+    // Reset file input so the same file can be uploaded again
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
     }
   };
 
   return (
-    <div className="border-t pt-3">
-      {/* File Upload Area */}
-      <div
-        className={`border-2 border-dashed rounded-lg p-4 text-center transition-colors cursor-pointer ${
-          dragOver 
-            ? 'border-blue-400 bg-blue-50' 
-            : 'border-gray-300 hover:border-gray-400'
-        } ${uploading || disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-        onClick={() => !disabled && !uploading && fileInputRef.current?.click()}
+    <div className="flex gap-4 justify-center items-center mb-3">
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        className="hidden"
+        onChange={(e) => handleFileSelect(e.target.files)}
+        accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
+        disabled={disabled}
+      />
+      <button
+        type="button"
+        onClick={() => {
+          if (fileInputRef.current) {
+            fileInputRef.current.accept = 'image/*';
+            fileInputRef.current.click();
+          }
+        }}
+        className="flex flex-col items-center justify-center px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition min-w-[80px] min-h-[64px] text-lg"
+        disabled={disabled}
+        title="Upload Photos"
       >
-        <input
-          ref={fileInputRef}
-          type="file"
-          multiple
-          className="hidden"
-          onChange={(e) => handleFileSelect(e.target.files)}
-          accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
-          disabled={disabled || uploading}
-        />
-        
-        {uploading ? (
-          <div className="flex flex-col items-center">
-            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mb-2"></div>
-            <span className="text-blue-600 font-medium text-sm">Processing files...</span>
-          </div>
-        ) : disabled ? (
-          <div className="text-gray-400">
-            <div className="text-2xl mb-1">📎</div>
-            <p className="text-sm">File sharing disabled</p>
-          </div>
-        ) : (
-          <div>
-            <div className="text-2xl mb-2">📎</div>
-            <p className="text-sm text-gray-600 mb-1">
-              Drop files here or click to browse
-            </p>
-            <p className="text-xs text-gray-400">
-              Images, PDF, Word, Excel • Max 5MB each
-            </p>
-          </div>
-        )}
-      </div>
-
-      {/* Quick Access Buttons */}
-      {!disabled && !uploading && (
-        <div className="flex gap-2 mt-2">
-          <button
-            onClick={() => {
-              if (fileInputRef.current) {
-                fileInputRef.current.accept = "image/*";
-                fileInputRef.current.click();
-              }
-            }}
-            className="flex-1 text-xs px-2 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200 transition"
-          >
-            📸 Photos
-          </button>
-          <button
-            onClick={() => {
-              if (fileInputRef.current) {
-                fileInputRef.current.accept = ".pdf";
-                fileInputRef.current.click();
-              }
-            }}
-            className="flex-1 text-xs px-2 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 transition"
-          >
-            📄 PDF
-          </button>
-          <button
-            onClick={() => {
-              if (fileInputRef.current) {
-                fileInputRef.current.accept = ".doc,.docx,.xls,.xlsx";
-                fileInputRef.current.click();
-              }
-            }}
-            className="flex-1 text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition"
-          >
-            📝 Docs
-          </button>
-        </div>
-      )}
+        <svg className="mb-1" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#374151" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h3.17a2 2 0 0 0 1.41-.59l1.83-1.82A2 2 0 0 1 10.83 2h2.34a2 2 0 0 1 1.42.59l1.83 1.82A2 2 0 0 0 17.83 5H21a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+        <span className="text-xs font-medium">Photos</span>
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          if (fileInputRef.current) {
+            fileInputRef.current.accept = '.pdf';
+            fileInputRef.current.click();
+          }
+        }}
+        className="flex flex-col items-center justify-center px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition min-w-[80px] min-h-[64px] text-lg"
+        disabled={disabled}
+        title="Upload PDF"
+      >
+        <svg className="mb-1" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#374151" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" fill="none"/><path d="M7 8h10M7 12h10M7 16h6" stroke="#374151" strokeWidth="2"/></svg>
+        <span className="text-xs font-medium">PDF</span>
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          if (fileInputRef.current) {
+            fileInputRef.current.accept = '.doc,.docx,.xls,.xlsx';
+            fileInputRef.current.click();
+          }
+        }}
+        className="flex flex-col items-center justify-center px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition min-w-[80px] min-h-[64px] text-lg"
+        disabled={disabled}
+        title="Upload Docs"
+      >
+        <svg className="mb-1" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#374151" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" fill="none"/><path d="M7 8h10M7 12h10M7 16h6" stroke="#374151" strokeWidth="2"/></svg>
+        <span className="text-xs font-medium">Docs</span>
+      </button>
     </div>
   );
 } 
