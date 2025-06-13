@@ -9,6 +9,7 @@ import { db } from "../../firebaseClient";
 import { Select, MenuItem, InputLabel, FormControl, Checkbox, ListItemText, IconButton } from "@mui/material";
 import ClearIcon from '@mui/icons-material/Clear';
 import Link from "next/link";
+import DashboardMessagingPanel from "./DashboardMessagingPanel";
 
 export default function DashboardPage() {
   const { user, loading, userProfile } = useAuth();
