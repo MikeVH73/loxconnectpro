@@ -9,7 +9,7 @@ import { db } from "../../firebaseClient";
 import { Select, MenuItem, InputLabel, FormControl, Checkbox, ListItemText, IconButton } from "@mui/material";
 import ClearIcon from '@mui/icons-material/Clear';
 import Link from "next/link";
-import DashboardMessagingPanel from "./DashboardMessagingPanel";
+import MessagingPanel from "./MessagingPanel";
 
 export default function DashboardPage() {
   const { user, loading, userProfile } = useAuth();
@@ -367,7 +367,7 @@ export default function DashboardPage() {
           <h2 className="text-xl font-bold text-gray-900">Messaging</h2>
         </div>
         <div className="flex-1 p-6 overflow-hidden">
-          <DashboardMessagingPanel selectedQuoteId={selectedQuoteId} />
+          <MessagingPanel selectedQuoteId={selectedQuoteId} />
         </div>
       </div>
     </div>
