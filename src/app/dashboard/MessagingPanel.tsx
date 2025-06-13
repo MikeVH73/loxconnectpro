@@ -655,202 +655,26 @@ interface DashboardMessagingPanelProps {
   selectedQuoteId: string | null;
 }
 
-export default function DashboardMessagingPanel({ selectedQuoteId }: DashboardMessagingPanelProps) {
-  const [quoteRequests, setQuoteRequests] = useState<QuoteRequest[]>([]);
-  const [customers, setCustomers] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
-  const [lastMessageTimes, setLastMessageTimes] = useState<Record<string, any>>({});
-  const [lastReadTimes, setLastReadTimes] = useState<Record<string, any>>({});
-  const { userProfile } = useAuth();
-
-  // Fetch Quote Requests and Customers (same filtering as dashboard)
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [qrSnap, custSnap] = await Promise.all([
-          getDocs(collection(db, "quoteRequests")),
-          getDocs(collection(db, "customers"))
-        ]);
-        
-        const allRequests = qrSnap.docs.map(doc => ({ 
-          id: doc.id, 
-          ...doc.data() 
-        })) as QuoteRequest[];
-
-        const allCustomers = custSnap.docs.map(doc => ({ 
-          id: doc.id, 
-          ...doc.data() 
-        }));
-
-        // Filter by user's countries and exclude archived
-        const userCountries = userProfile?.countries || [];
-        const visibleRequests = userProfile?.role === "superAdmin" || userCountries.length === 0
-          ? allRequests.filter(qr => !['Won', 'Lost', 'Cancelled'].includes(qr.status)) // SuperAdmin sees all, or if no countries set, show all
-          : allRequests.filter(qr => {
-              // Check if user countries match creator or involved country (using partial matching)
-              const creatorMatch = userCountries.some((userCountry: string) => 
-                qr.creatorCountry?.toLowerCase().includes(userCountry.toLowerCase()) ||
-                userCountry.toLowerCase().includes(qr.creatorCountry?.toLowerCase())
-              );
-              const involvedMatch = userCountries.some((userCountry: string) => 
-                qr.involvedCountry?.toLowerCase().includes(userCountry.toLowerCase()) ||
-                userCountry.toLowerCase().includes(qr.involvedCountry?.toLowerCase())
-              );
-              return (creatorMatch || involvedMatch) && !['Won', 'Lost', 'Cancelled'].includes(qr.status);
-            });
-
-        setQuoteRequests(visibleRequests);
-        setCustomers(allCustomers);
-      } catch (error) {
-        console.error("Error fetching data:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    if (userProfile) {
-      fetchData();
-    }
-  }, [userProfile]);
-
-  // Track unread messages for all conversations
-  useEffect(() => {
-    if (!userProfile || quoteRequests.length === 0) return;
-
-    const userCountries = userProfile.countries || [];
-    const unsubscribeFunctions: (() => void)[] = [];
-
-    quoteRequests.forEach(qr => {
-      const messagesRef = collection(db, "quoteRequests", qr.id, "messages");
-      const q = query(messagesRef, orderBy("timestamp", "desc"));
-      
-      const unsubscribe = onSnapshot(q, (snapshot) => {
-        const messages = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        })) as Message[];
-        
-        // Get last read time for this conversation
-        const lastReadTime = lastReadTimes[qr.id];
-        
-        // Count unread messages (from other countries AND after last read time)
-        const unreadCount = messages.filter(msg => {
-          // Must be from other country
-          if (userCountries.includes(msg.senderCountry)) return false;
-          
-          // If no read time recorded, only count recent messages (last 24 hours)
-          if (!lastReadTime) {
-            const msgDate = msg.timestamp?.toDate ? msg.timestamp.toDate() : new Date(msg.timestamp);
-            const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-            return msgDate > oneDayAgo;
-          }
-          
-          // Count messages after last read time
-          const msgDate = msg.timestamp?.toDate ? msg.timestamp.toDate() : new Date(msg.timestamp);
-          const readDate = lastReadTime?.toDate ? lastReadTime.toDate() : new Date(lastReadTime);
-          return msgDate > readDate;
-        }).length;
-        
-        // Get last message timestamp
-        const lastMessageTime = messages.length > 0 ? messages[0].timestamp : null;
-        
-        console.log(`📊 Unread count for QR ${qr.id}:`, {
-          totalMessages: messages.length,
-          messagesFromOtherCountries: messages.filter(msg => !userCountries.includes(msg.senderCountry)).length,
-          unreadCount,
-          lastReadTime,
-          userCountries
-        });
-        
-        setUnreadCounts(prev => ({
-          ...prev,
-          [qr.id]: unreadCount
-        }));
-        
-        setLastMessageTimes(prev => ({
-          ...prev,
-          [qr.id]: lastMessageTime
-        }));
-      });
-      
-      unsubscribeFunctions.push(unsubscribe);
-    });
-
-    return () => {
-      unsubscribeFunctions.forEach(unsubscribe => unsubscribe());
-    };
-  }, [userProfile, quoteRequests]);
-
-  // Mark conversation as read when selected
-  const handleSelectConversation = (quoteRequestId: string) => {
-    const currentTime = new Date();
-    setLastReadTimes(prev => ({ ...prev, [quoteRequestId]: currentTime }));
-    setUnreadCounts(prev => ({ ...prev, [quoteRequestId]: 0 }));
-  };
-
-  if (loading) {
-    return (
-      <div className="flex h-[600px] bg-white rounded shadow border overflow-hidden items-center justify-center">
-        <div>Loading messaging...</div>
-      </div>
-    );
-  }
-
+export default function MessagingPanel({ selectedQuoteId }: DashboardMessagingPanelProps) {
   if (!selectedQuoteId) {
     return (
-      <div className="flex flex-col h-full items-center justify-center text-gray-500 text-lg">
-        Select a Quote Request to start messaging…
+      <div className="h-full flex items-center justify-center text-gray-500">
+        Select a Quote Request above to start chatting…
       </div>
     );
   }
-
+  // Render the actual chat UI here (reuse your previous chat/conversations UI)
+  // For now, just a placeholder for the chat UI:
   return (
-    <div className="h-[calc(100vh-64px)] flex flex-col"> {/* Adjust 64px if header is different height */}
-      {/* Header */}
-      <div className="mb-3 flex-shrink-0">
-        <p className="text-sm text-gray-600">
-          Choose a Quote Request from the list to start messaging between countries
-        </p>
+    <div className="flex flex-col h-full">
+      {/* Sticky header example */}
+      <div className="sticky top-0 z-10 bg-white shadow-sm border-b p-4">
+        <h3 className="font-bold text-gray-900 text-base">Chat for Quote: {selectedQuoteId}</h3>
       </div>
-      {/* Messaging Panel */}
-      <div className="flex flex-1 min-h-0 bg-white rounded-lg shadow-lg border p-4 gap-4 overflow-hidden"> {/* Visual separation, padding */}
-        {/* Conversations List */}
-        <div className="flex flex-col w-[320px] min-w-[280px] max-w-[360px] h-full bg-gray-50 border-r rounded-l-lg overflow-hidden">
-          {/* Sticky header */}
-          <div className="sticky top-0 z-10 bg-white shadow-sm border-b p-4">
-            <h3 className="font-bold text-gray-900 text-base">Conversations</h3>
-            <p className="text-sm text-gray-500 mt-1">{quoteRequests.length} active chats</p>
-          </div>
-          {/* Scrollable list */}
-          <div className="flex-1 min-h-0 overflow-y-auto p-2 space-y-2">
-            <QuoteRequestList
-              onSelect={handleSelectConversation}
-              selectedId={selectedQuoteId}
-              quoteRequests={quoteRequests}
-              userCountries={userProfile?.countries || []}
-              customers={customers}
-              unreadCounts={unreadCounts}
-              lastMessageTimes={lastMessageTimes}
-            />
-          </div>
-        </div>
-        {/* Chat View */}
-        <div className="flex-1 flex flex-col h-full min-w-0">
-          {/* Chat messages area (scrollable) */}
-          <div className="flex-1 min-h-0 overflow-y-auto px-4 py-2 space-y-4 text-base">
-            <ChatWindow 
-              quoteRequestId={selectedQuoteId} 
-              userCountries={userProfile?.countries || []}
-              userProfile={userProfile}
-              onBack={() => {}}
-            />
-          </div>
-          {/* File-drop and message input area (sticky/pinned to bottom) */}
-          <div className="sticky bottom-0 z-10 bg-white pt-2 pb-4 px-4 border-t flex flex-col gap-2">
-            {/* ... existing code for file drop and message input ... */}
-          </div>
-        </div>
+      {/* Chat body (scrollable) */}
+      <div className="flex-1 min-h-0 overflow-y-auto p-4">
+        {/* TODO: Render chat messages and input here */}
+        <div className="text-gray-400">[Chat UI goes here]</div>
       </div>
     </div>
   );

@@ -161,7 +161,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-row">
       {/* Main Content: In Progress Quote Requests with Filters */}
       <div className="flex-1 flex flex-col px-8 py-6 overflow-y-auto">
         {/* Header Cards */}
