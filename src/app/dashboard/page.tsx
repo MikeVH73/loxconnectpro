@@ -422,6 +422,4 @@ function QuoteRequestCard({ qr, customers, labels, onCardClick }: { qr: any, cus
       )}
     </div>
   );
-} 
-/ /   f o r c e   c l e a n   b u i l d  
- 
+}
