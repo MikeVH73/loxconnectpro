@@ -21,6 +21,7 @@ export default function DashboardPage() {
   const [selectedCustomer, setSelectedCustomer] = useState<string>("");
   const [selectedCountry, setSelectedCountry] = useState<string>("");
   const [selectedUser, setSelectedUser] = useState<string>("");
+  const [selectedQuoteId, setSelectedQuoteId] = useState<string | null>(null);
 
   // Move getLabelName to the top so it can be used in all logic below
   const getLabelName = (id: string) => labels.find(l => l.id === id)?.name || id;
@@ -303,7 +304,7 @@ export default function DashboardPage() {
                 <div className="text-center text-gray-500 py-8">None</div>
               ) : (
                 urgentProblemsKanban.map(qr => (
-                  <QuoteRequestCard key={qr.id} qr={qr} customers={customers} labels={labels} />
+                  <QuoteRequestCard key={qr.id} qr={qr} customers={customers} labels={labels} onCardClick={() => setSelectedQuoteId(qr.id)} />
                 ))
               )}
             </div>
@@ -320,7 +321,7 @@ export default function DashboardPage() {
                 <div className="text-center text-gray-500 py-8">None</div>
               ) : (
                 standardKanban.map(qr => (
-                  <QuoteRequestCard key={qr.id} qr={qr} customers={customers} labels={labels} />
+                  <QuoteRequestCard key={qr.id} qr={qr} customers={customers} labels={labels} onCardClick={() => setSelectedQuoteId(qr.id)} />
                 ))
               )}
             </div>
@@ -337,7 +338,7 @@ export default function DashboardPage() {
                 <div className="text-center text-gray-500 py-8">None</div>
               ) : (
                 waitingKanban.map(qr => (
-                  <QuoteRequestCard key={qr.id} qr={qr} customers={customers} labels={labels} />
+                  <QuoteRequestCard key={qr.id} qr={qr} customers={customers} labels={labels} onCardClick={() => setSelectedQuoteId(qr.id)} />
                 ))
               )}
             </div>
@@ -354,7 +355,7 @@ export default function DashboardPage() {
                 <div className="text-center text-gray-500 py-8">None</div>
               ) : (
                 snoozedKanban.map(qr => (
-                  <QuoteRequestCard key={qr.id} qr={qr} customers={customers} labels={labels} />
+                  <QuoteRequestCard key={qr.id} qr={qr} customers={customers} labels={labels} onCardClick={() => setSelectedQuoteId(qr.id)} />
                 ))
               )}
             </div>
@@ -368,19 +369,19 @@ export default function DashboardPage() {
           <h2 className="text-xl font-bold text-gray-900">Messaging</h2>
         </div>
         <div className="flex-1 p-6 overflow-hidden">
-          <DashboardMessagingPanel />
+          <DashboardMessagingPanel selectedQuoteId={selectedQuoteId} />
         </div>
       </div>
     </div>
   );
 }
 
-function QuoteRequestCard({ qr, customers, labels }: { qr: any, customers: any[], labels: any[] }) {
+function QuoteRequestCard({ qr, customers, labels, onCardClick }: { qr: any, customers: any[], labels: any[], onCardClick: () => void }) {
   const getCustomerName = (id: string) => customers.find((c: any) => c.id === id)?.name || id;
   const getLabelName = (id: string) => labels.find((l: any) => l.id === id)?.name || id;
 
   return (
-    <div className="card-modern border-l-4 border-[#e40115] p-3 min-h-[120px] flex flex-col justify-between relative">
+    <div className="card-modern border-l-4 border-[#e40115] p-3 min-h-[120px] flex flex-col justify-between relative cursor-pointer" onClick={onCardClick}>
       <Link
         href={`/quote-requests/${qr.id}/edit`}
         className="absolute top-2 right-2 text-gray-400 hover:text-[#e40115] focus:outline-none focus:ring-2 focus:ring-[#e40115] rounded-full text-sm"
@@ -388,6 +389,7 @@ function QuoteRequestCard({ qr, customers, labels }: { qr: any, customers: any[]
         tabIndex={0}
         aria-label="View Quote Request details"
         prefetch={false}
+        onClick={e => e.stopPropagation()}
       >
         🔍
       </Link>

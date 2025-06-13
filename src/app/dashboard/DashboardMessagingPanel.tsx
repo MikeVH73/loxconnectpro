@@ -555,8 +555,11 @@ const ChatWindow = ({ quoteRequestId, userCountries, userProfile, onBack }: any)
 // General Communication component removed - no longer needed
 
 // Main Component
-export default function DashboardMessagingPanel() {
-  const [selectedQuoteRequestId, setSelectedQuoteRequestId] = useState<string | null>(null);
+interface DashboardMessagingPanelProps {
+  selectedQuoteId: string | null;
+}
+
+export default function DashboardMessagingPanel({ selectedQuoteId }: DashboardMessagingPanelProps) {
   const [quoteRequests, setQuoteRequests] = useState<QuoteRequest[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -685,8 +688,6 @@ export default function DashboardMessagingPanel() {
 
   // Reset unread count when opening a conversation
   const handleSelectConversation = (quoteRequestId: string) => {
-    setSelectedQuoteRequestId(quoteRequestId);
-    
     // Mark conversation as read by storing current timestamp
     const currentTime = new Date();
     setLastReadTimes(prev => ({
@@ -704,6 +705,14 @@ export default function DashboardMessagingPanel() {
     return (
       <div className="flex h-[600px] bg-white rounded shadow border overflow-hidden items-center justify-center">
         <div>Loading messaging...</div>
+      </div>
+    );
+  }
+
+  if (!selectedQuoteId) {
+    return (
+      <div className="flex flex-col h-full items-center justify-center text-gray-500 text-lg">
+        Select a Quote Request to start messaging…
       </div>
     );
   }
@@ -730,7 +739,7 @@ export default function DashboardMessagingPanel() {
             {/* Render conversation items here (reuse QuoteRequestList logic) */}
             <QuoteRequestList
               onSelect={handleSelectConversation}
-              selectedId={selectedQuoteRequestId}
+              selectedId={selectedQuoteId}
               quoteRequests={quoteRequests}
               userCountries={userProfile?.countries || []}
               customers={customers}
@@ -745,10 +754,10 @@ export default function DashboardMessagingPanel() {
           <div className="flex-1 min-h-0 overflow-y-auto px-4 py-2 space-y-4 text-base">
             {/* ... existing code for chat messages ... */}
             <ChatWindow 
-              quoteRequestId={selectedQuoteRequestId} 
+              quoteRequestId={selectedQuoteId} 
               userCountries={userProfile?.countries || []}
               userProfile={userProfile}
-              onBack={() => setSelectedQuoteRequestId(null)}
+              onBack={() => {}}
             />
           </div>
           {/* File-drop and message input area (sticky/pinned to bottom) */}
