@@ -4,7 +4,6 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "../AuthProvider";
 import { signOut } from "firebase/auth";
 import { auth } from "../../firebaseClient";
-import DashboardMessagingPanel from "./DashboardMessagingPanel";
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "../../firebaseClient";
 import { Select, MenuItem, InputLabel, FormControl, Checkbox, ListItemText, IconButton } from "@mui/material";
@@ -161,13 +160,11 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="h-full flex flex-row">
-      {/* Middle: In Progress Quote Requests with Filters */}
-      <div className="flex-1 flex flex-col px-8 py-8 overflow-y-auto">
-        {/* Dashboard Title */}
-        <div className="headline-modern text-[#e40115] mb-8">Dashboard</div>
+    <div className="h-full flex flex-col">
+      {/* Main Content: In Progress Quote Requests with Filters */}
+      <div className="flex-1 flex flex-col px-8 py-6 overflow-y-auto">
         {/* Header Cards */}
-        <div className="w-full max-w-6xl mx-auto mb-8 flex flex-wrap gap-6">
+        <div className="w-full max-w-7xl mx-auto mb-8 flex flex-wrap gap-6">
           {/* In Progress Card */}
           <div className="flex-1 min-w-[220px] card-modern flex flex-col items-center justify-center">
             <div className="text-4xl font-extrabold text-[#e40115]">{inProgressCount}</div>
@@ -237,7 +234,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Filters */}
-        <div className="w-full max-w-6xl mx-auto mb-6 flex flex-wrap gap-4 items-center">
+        <div className="w-full max-w-7xl mx-auto mb-6 flex flex-wrap gap-4 items-center">
           <FormControl size="small" style={{ minWidth: 120 }}>
             <InputLabel>Label</InputLabel>
             <Select value={selectedLabel} onChange={(e) => setSelectedLabel(e.target.value)}>
@@ -292,7 +289,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Kanban Board */}
-        <div className="w-full max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 flex-1">
+        <div className="w-full max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 flex-1">
           {/* Urgent / Problems Column */}
           <div className="bg-white rounded-lg shadow border overflow-hidden flex flex-col">
             <div className="bg-red-50 border-b border-red-200 p-4">
