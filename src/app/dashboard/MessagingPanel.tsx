@@ -6,6 +6,8 @@ import { useAuth } from "../AuthProvider";
 import DashboardFileSharing from "../components/DashboardFileSharing";
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
+import { getDownloadURL } from 'firebase/storage';
+import { storage } from '../../firebaseClient';
 
 dayjs.extend(relativeTime);
 
@@ -185,22 +187,30 @@ export default function MessagingPanel({ selectedQuoteId }: DashboardMessagingPa
                   >
                     ❌
                   </button>
-                  <a
-                    href={file.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  <button
+                    type="button"
                     className="flex flex-col items-center w-full"
                     title={file.name}
+                    onClick={async () => {
+                      try {
+                        const url = await getDownloadURL(storage, file.storagePath);
+                        window.open(url, '_blank');
+                      } catch (err) {
+                        alert('Failed to fetch file.');
+                      }
+                    }}
                   >
-                    {file.type.startsWith('image/') ? (
-                      <img src={file.url} alt={file.name} className="w-16 h-16 object-cover rounded mb-1 border" />
+                    {file.type && file.type.startsWith('image/') ? (
+                      <span className="w-16 h-16 flex items-center justify-center mb-1 border rounded bg-gray-100">
+                        <span className="text-4xl">🖼️</span>
+                      </span>
                     ) : file.type === 'application/pdf' ? (
                       <span className="text-4xl">📄</span>
                     ) : (
                       <span className="text-4xl">📝</span>
                     )}
                     <span className="text-xs text-center truncate w-full">{file.name}</span>
-                  </a>
+                  </button>
                 </div>
               ))}
             </div>
