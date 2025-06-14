@@ -145,13 +145,16 @@ const ChatModal = ({ isOpen, onClose, selectedQuoteRequestId, quoteRequests, use
 
 // Chat Window Component  
 const ChatWindow = ({ quoteRequestId, userCountries, userProfile, onBack, isModal = false }: any) => {
-  // same as before, up to message.file handling...
-  // Replace this block:
-  // {message.file ? ( ... old preview ... ) : <p>...text</p>}
-  // With:
-  // <FilePreview file={message.file} />
-  // inside your messages.map loop
-  // ... rest of ChatWindow unchanged ...
+  // ...other ChatWindow logic...
+
+  // Example message rendering inside messages.map:
+  // Replace the old file/text block with this:
+  // {message.file && <FilePreview file={message.file} />}
+  // {!message.file && (
+  //   <p className="text-sm whitespace-pre-wrap">{message.text}</p>
+  // )}
+
+  // ...rest of ChatWindow unchanged...
 };
 
 // Main Component
