@@ -145,16 +145,144 @@ const ChatModal = ({ isOpen, onClose, selectedQuoteRequestId, quoteRequests, use
 
 // Chat Window Component  
 const ChatWindow = ({ quoteRequestId, userCountries, userProfile, onBack, isModal = false }: any) => {
-  // ...other ChatWindow logic...
+  const [messages, setMessages] = useState<any[]>([]);
+  const [newMessage, setNewMessage] = useState("");
+  const [loading, setLoading] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Example message rendering inside messages.map:
-  // Replace the old file/text block with this:
-  // {message.file && <FilePreview file={message.file} />}
-  // {!message.file && (
-  //   <p className="text-sm whitespace-pre-wrap">{message.text}</p>
-  // )}
+  // Fetch messages in real-time
+  useEffect(() => {
+    if (!quoteRequestId) return;
+    const messagesRef = collection(db, "quoteRequests", quoteRequestId, "messages");
+    const q = query(messagesRef, orderBy("timestamp", "asc"), limit(50));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const messagesList = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setMessages(messagesList);
+    });
+    return () => unsubscribe();
+  }, [quoteRequestId]);
 
-  // ...rest of ChatWindow unchanged...
+  // Auto-scroll to bottom
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  const sendMessage = async () => {
+    if (!newMessage.trim() || !quoteRequestId || loading) return;
+    setLoading(true);
+    try {
+      const messagesRef = collection(db, "quoteRequests", quoteRequestId, "messages");
+      await addDoc(messagesRef, {
+        senderCountry: userCountries[0],
+        text: newMessage.trim(),
+        timestamp: serverTimestamp(),
+        status: 'delivered'
+      });
+      setNewMessage("");
+    } catch (error) {
+      alert("Error sending message");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  };
+
+  const handleFileShared = async (fileData: any) => {
+    if (!quoteRequestId) return;
+    try {
+      const messagesRef = collection(db, "quoteRequests", quoteRequestId, "messages");
+      await addDoc(messagesRef, {
+        senderCountry: userCountries[0],
+        text: `📎 Shared a file: ${fileData.name}`,
+        timestamp: serverTimestamp(),
+        status: 'delivered',
+        file: {
+          id: fileData.id,
+          name: fileData.name,
+          storagePath: fileData.storagePath,
+          type: fileData.type,
+          size: fileData.size,
+        },
+      });
+    } catch (error) {
+      alert("Failed to share file. Please try again.");
+    }
+  };
+
+  return (
+    <div className="flex-1 flex flex-col h-full">
+      {/* Messages Area */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
+        {loading ? (
+          <div className="flex justify-center py-8">
+            <div className="text-gray-500">Loading messages...</div>
+          </div>
+        ) : messages.length === 0 ? (
+          <div className="text-center py-8 text-gray-500">
+            <div className="text-2xl mb-2">💬</div>
+            <p>No messages yet. Start the conversation!</p>
+          </div>
+        ) : (
+          messages.map((message) => (
+            <div key={message.id} className="flex">
+              <div className="max-w-[70%] rounded-lg px-4 py-2 bg-white border border-gray-200 text-gray-900">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-xs font-medium opacity-75">
+                    {message.senderCountry}
+                  </span>
+                </div>
+                {message.file && <FilePreview file={message.file} />}
+                {!message.file && (
+                  <p className="text-sm whitespace-pre-wrap">{message.text}</p>
+                )}
+              </div>
+            </div>
+          ))
+        )}
+        <div ref={messagesEndRef} />
+      </div>
+
+      {/* Message Input */}
+      <div className="p-4 bg-white border-t flex-shrink-0">
+        <div className="flex gap-3">
+          <div className="flex-1">
+            <textarea
+              value={newMessage}
+              onChange={(e) => setNewMessage(e.target.value)}
+              onKeyDown={handleKeyPress}
+              placeholder="Type your message..."
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#e40115] resize-none"
+              rows={2}
+            />
+          </div>
+          <div className="flex flex-col gap-2">
+            <button
+              onClick={sendMessage}
+              disabled={!newMessage.trim() || loading}
+              className="px-4 py-2 bg-[#e40115] text-white rounded-md hover:bg-[#c7010e] disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+            >
+              Send
+            </button>
+            <DashboardFileSharing 
+              onFileShared={handleFileShared}
+              currentUser={userProfile?.displayName || "User"}
+              currentCountry={userCountries[0]}
+              disabled={false}
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 };
 
 // Main Component
