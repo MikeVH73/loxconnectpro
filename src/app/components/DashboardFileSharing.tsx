@@ -1,14 +1,16 @@
 import React, { useRef } from 'react';
+import { ref, uploadBytes } from 'firebase/storage';
+import { storage } from '../../firebaseClient';
 
 interface FileData {
   id: string;
   name: string;
-  url: string;
   type: string;
   size: number;
   uploadedAt: Date;
   uploadedBy: string;
   uploadedByCountry: string;
+  storagePath: string;
 }
 
 interface DashboardFileSharingProps {
@@ -27,37 +29,53 @@ export default function DashboardFileSharing({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileSelect = async (selectedFiles: FileList | null) => {
+    window.alert('Uploading file...');
     if (!selectedFiles || disabled) return;
+
     for (let i = 0; i < selectedFiles.length; i++) {
       const file = selectedFiles[i];
       if (file.size > 5 * 1024 * 1024) {
         alert(`File ${file.name} is too large. Maximum size is 5MB.`);
         continue;
       }
+
       try {
-        const base64 = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result as string);
-          reader.onerror = reject;
-          reader.readAsDataURL(file);
-        });
+        // Maak een referentie naar de storage-locatie
+        const storageRef = ref(storage, `uploads/${Date.now()}_${file.name}`);
+
+        // **DEBUG LOGS** vóór de upload
+        console.log('[UPLOAD] Attempting upload to storage path:', storageRef.fullPath);
+        console.log('[UPLOAD] Storage bucket:', storage.app.options.storageBucket);
+
+        // Upload file
+        const uploadResult = await uploadBytes(storageRef, file);
+
+        // **DEBUG LOG** bij succes
+        console.log('[UPLOAD] Success! Upload result:', uploadResult);
+
+        // Bouw het FileData-object
         const fileData: FileData = {
           id: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
           name: file.name,
-          url: base64,
           type: file.type,
           size: file.size,
           uploadedAt: new Date(),
           uploadedBy: currentUser,
-          uploadedByCountry: currentCountry
+          uploadedByCountry: currentCountry,
+          storagePath: storageRef.fullPath
         };
+
+        // Callback naar parent
         onFileShared(fileData);
+
       } catch (error) {
-        console.error('Error processing file:', file.name, error);
-        alert(`Failed to process ${file.name}`);
+        // **DEBUG LOG** bij fout
+        console.error('[UPLOAD] Error uploading file:', file.name, error);
+        alert(`Failed to upload ${file.name}: ${error?.message || error}`);
       }
     }
-    // Reset file input so the same file can be uploaded again
+
+    // Reset file input zodat dezelfde file opnieuw gekozen kan worden
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -74,6 +92,7 @@ export default function DashboardFileSharing({
         accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
         disabled={disabled}
       />
+
       <button
         type="button"
         onClick={() => {
@@ -89,36 +108,8 @@ export default function DashboardFileSharing({
         <svg className="mb-1" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#374151" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h3.17a2 2 0 0 0 1.41-.59l1.83-1.82A2 2 0 0 1 10.83 2h2.34a2 2 0 0 1 1.42.59l1.83 1.82A2 2 0 0 0 17.83 5H21a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
         <span className="text-xs font-medium">Photos</span>
       </button>
+
       <button
         type="button"
         onClick={() => {
-          if (fileInputRef.current) {
-            fileInputRef.current.accept = '.pdf';
-            fileInputRef.current.click();
-          }
-        }}
-        className="flex flex-col items-center justify-center px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition min-w-[80px] min-h-[64px] text-lg"
-        disabled={disabled}
-        title="Upload PDF"
-      >
-        <svg className="mb-1" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#374151" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" fill="none"/><path d="M7 8h10M7 12h10M7 16h6" stroke="#374151" strokeWidth="2"/></svg>
-        <span className="text-xs font-medium">PDF</span>
-      </button>
-      <button
-        type="button"
-        onClick={() => {
-          if (fileInputRef.current) {
-            fileInputRef.current.accept = '.doc,.docx,.xls,.xlsx';
-            fileInputRef.current.click();
-          }
-        }}
-        className="flex flex-col items-center justify-center px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition min-w-[80px] min-h-[64px] text-lg"
-        disabled={disabled}
-        title="Upload Docs"
-      >
-        <svg className="mb-1" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#374151" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" fill="none"/><path d="M7 8h10M7 12h10M7 16h6" stroke="#374151" strokeWidth="2"/></svg>
-        <span className="text-xs font-medium">Docs</span>
-      </button>
-    </div>
-  );
-} 
+          if (fileI
