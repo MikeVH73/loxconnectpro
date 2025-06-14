@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useEffect, useRef } from "react";
-import { collection, getDocs, addDoc, query, orderBy, limit, onSnapshot, serverTimestamp, doc, deleteDoc } from "firebase/firestore";
+import { collection, getDocs, addDoc, query, orderBy, limit, onSnapshot, serverTimestamp, doc, deleteDoc, deleteField, updateDoc, arrayRemove } from "firebase/firestore";
 import { db } from "../../firebaseClient";
 import { useAuth } from "../AuthProvider";
 import dayjs from 'dayjs';
@@ -231,6 +231,27 @@ const ChatWindow = ({ quoteRequestId, userCountries, userProfile, onBack, isModa
     }
   };
 
+  const handleDeleteFile = async (messageId: string, file: any) => {
+    if (!file.storagePath) return;
+    
+    try {
+      // Delete from Storage
+      await deleteObject(storageRef(storage, file.storagePath));
+      
+      // Update Firestore document to remove the specific file
+      const messageRef = doc(db, "quoteRequests", quoteRequestId, "messages", messageId);
+      await updateDoc(messageRef, {
+        files: arrayRemove(file)
+      });
+      
+      // Success notification
+      console.log("File deleted successfully");
+    } catch (error) {
+      console.error("Error deleting file:", error);
+      alert("Failed to delete file. Please try again.");
+    }
+  };
+
   return (
     <div className="flex-1 flex flex-col h-full">
       {/* Messages Area */}
@@ -259,7 +280,7 @@ const ChatWindow = ({ quoteRequestId, userCountries, userProfile, onBack, isModa
                     messageId={message.id}
                     canDelete={message.file.uploadedBy === userProfile.displayName}
                     onDelete={async () => {
-                      await deleteDoc(doc(db, "quoteRequests", quoteRequestId, "messages", message.id));
+                      await handleDeleteFile(message.id, message.file);
                     }}
                   />
                 )}
