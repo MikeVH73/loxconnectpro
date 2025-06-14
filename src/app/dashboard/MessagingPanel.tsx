@@ -1,69 +1,82 @@
 "use client";
 import React, { useState, useEffect, useRef } from "react";
-import { collection, getDocs, addDoc, query, orderBy, limit, onSnapshot, serverTimestamp } from "firebase/firestore";
+import { collection, getDocs, addDoc, query, orderBy, limit, onSnapshot, serverTimestamp, doc, deleteDoc } from "firebase/firestore";
 import { db } from "../../firebaseClient";
 import { useAuth } from "../AuthProvider";
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
-import { getDownloadURL, ref as storageRef } from "firebase/storage";
+import { getDownloadURL, ref as storageRef, deleteObject } from "firebase/storage";
 import { storage } from "../../firebaseClient";
 import DashboardFileSharing from "../components/DashboardFileSharing";
 
 dayjs.extend(relativeTime);
 
 // Reusable FilePreview component
-function FilePreview({ file }: { file: any }) {
+function FilePreview({ file, messageId, canDelete, onDelete }: { file: any, messageId: string, canDelete: boolean, onDelete: () => void }) {
   const [downloadUrl, setDownloadUrl] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(true);
+  const [deleting, setDeleting] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     let isMounted = true;
     setLoading(true);
-
-    const path = file.storagePath || file.url; 
+    setError(null);
+    const path = file.storagePath || file.url;
     getDownloadURL(storageRef(storage, path))
       .then((url) => { if (isMounted) setDownloadUrl(url); })
-      .catch(() => { if (isMounted) setDownloadUrl(null); })
+      .catch(() => { if (isMounted) { setDownloadUrl(null); setError('Could not load file preview'); } })
       .finally(() => { if (isMounted) setLoading(false); });
-
     return () => { isMounted = false; };
   }, [file]);
 
-  if (loading) {
-    return (
-      <div className="w-full h-32 flex items-center justify-center">
-        <span className="loader" />
-      </div>
-    );
-  }
+  const handleDelete = async () => {
+    if (!file.storagePath || !messageId) return;
+    setDeleting(true);
+    try {
+      await deleteObject(storageRef(storage, file.storagePath));
+      await onDelete();
+    } catch (e) {
+      setError('Failed to delete file');
+    } finally {
+      setDeleting(false);
+    }
+  };
 
-  if (!downloadUrl) {
-    return <div className="text-xs text-red-500">Could not load file preview</div>;
-  }
-
-  if (file.type?.startsWith("image/")) {
-    return (
-      <a href={downloadUrl} target="_blank" rel="noopener noreferrer">
-        <img
-          src={downloadUrl}
-          alt={file.name}
-          className="object-cover w-full h-32 rounded border"
-        />
-      </a>
-    );
-  }
-
-  // Non-image file
   return (
-    <a
-      href={downloadUrl}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="flex items-center gap-2"
-    >
-      <span className="text-2xl">📄</span>
-      <span className="truncate">{file.name}</span>
-    </a>
+    <div className="relative">
+      {loading && (
+        <div className="w-full h-32 flex items-center justify-center">
+          <span className="loader" />
+        </div>
+      )}
+      {!loading && !downloadUrl && (
+        <div className="text-xs text-red-500 flex items-center justify-between">
+          Could not load file preview
+          {canDelete && (
+            <button onClick={handleDelete} disabled={deleting} className="ml-2 text-red-600 hover:text-red-800 font-bold text-lg">✖</button>
+          )}
+        </div>
+      )}
+      {!loading && downloadUrl && (
+        <>
+          {file.type?.startsWith("image/") ? (
+            <a href={downloadUrl} target="_blank" rel="noopener noreferrer">
+              <img src={downloadUrl} alt={file.name} className="object-cover w-full h-32 rounded border" />
+            </a>
+          ) : (
+            <a href={downloadUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2">
+              <span className="text-2xl">📄</span>
+              <span className="truncate">{file.name}</span>
+            </a>
+          )}
+          {canDelete && (
+            <button onClick={handleDelete} disabled={deleting} className="absolute top-1 right-1 text-red-600 hover:text-red-800 font-bold text-lg bg-white bg-opacity-80 rounded-full w-7 h-7 flex items-center justify-center">✖</button>
+          )}
+        </>
+      )}
+      {error && <div className="text-xs text-red-500 mt-1">{error}</div>}
+    </div>
   );
 }
 
@@ -240,7 +253,16 @@ const ChatWindow = ({ quoteRequestId, userCountries, userProfile, onBack, isModa
                     {message.senderCountry}
                   </span>
                 </div>
-                {message.file && <FilePreview file={message.file} />}
+                {message.file && (
+                  <FilePreview
+                    file={message.file}
+                    messageId={message.id}
+                    canDelete={message.file.uploadedBy === userProfile.displayName}
+                    onDelete={async () => {
+                      await deleteDoc(doc(db, "quoteRequests", quoteRequestId, "messages", message.id));
+                    }}
+                  />
+                )}
                 {!message.file && (
                   <p className="text-sm whitespace-pre-wrap">{message.text}</p>
                 )}
