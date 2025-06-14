@@ -656,6 +656,10 @@ interface DashboardMessagingPanelProps {
 }
 
 export default function MessagingPanel({ selectedQuoteId }: DashboardMessagingPanelProps) {
+  // TODO: Replace these placeholders with real userCountries and userProfile from your auth/user context
+  const userCountries = ["Netherlands"];
+  const userProfile = { displayName: "User" };
+
   if (!selectedQuoteId) {
     return (
       <div className="h-full flex items-center justify-center text-gray-500">
@@ -663,19 +667,14 @@ export default function MessagingPanel({ selectedQuoteId }: DashboardMessagingPa
       </div>
     );
   }
-  // Render the actual chat UI here (reuse your previous chat/conversations UI)
-  // For now, just a placeholder for the chat UI:
+
   return (
-    <div className="flex flex-col h-full">
-      {/* Sticky header example */}
-      <div className="sticky top-0 z-10 bg-white shadow-sm border-b p-4">
-        <h3 className="font-bold text-gray-900 text-base">Chat for Quote: {selectedQuoteId}</h3>
-      </div>
-      {/* Chat body (scrollable) */}
-      <div className="flex-1 min-h-0 overflow-y-auto p-4">
-        {/* TODO: Render chat messages and input here */}
-        <div className="text-gray-400">[Chat UI goes here]</div>
-      </div>
-    </div>
+    <ChatWindow
+      quoteRequestId={selectedQuoteId}
+      userCountries={userCountries}
+      userProfile={userProfile}
+      onBack={() => {}}
+      isModal={false}
+    />
   );
-} 
+}
