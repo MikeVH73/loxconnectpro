@@ -40,20 +40,12 @@ export default function DashboardFileSharing({
       }
 
       try {
-        // Maak een referentie naar de storage-locatie
+        // Upload file to Firebase Storage
         const storageRef = ref(storage, `uploads/${Date.now()}_${file.name}`);
-
-        // **DEBUG LOGS** vóór de upload
         console.log('[UPLOAD] Attempting upload to storage path:', storageRef.fullPath);
         console.log('[UPLOAD] Storage bucket:', storage.app.options.storageBucket);
-
-        // Upload file
         const uploadResult = await uploadBytes(storageRef, file);
-
-        // **DEBUG LOG** bij succes
         console.log('[UPLOAD] Success! Upload result:', uploadResult);
-
-        // Bouw het FileData-object
         const fileData: FileData = {
           id: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
           name: file.name,
@@ -64,12 +56,8 @@ export default function DashboardFileSharing({
           uploadedByCountry: currentCountry,
           storagePath: storageRef.fullPath
         };
-
-        // Callback naar parent
         onFileShared(fileData);
-
       } catch (error) {
-        // **DEBUG LOG** bij fout
         console.error('[UPLOAD] Error uploading file:', file.name, error);
         alert(`Failed to upload ${file.name}: ${error?.message || error}`);
       }
@@ -112,4 +100,34 @@ export default function DashboardFileSharing({
       <button
         type="button"
         onClick={() => {
-          if (fileI
+          if (fileInputRef.current) {
+            fileInputRef.current.accept = '.pdf';
+            fileInputRef.current.click();
+          }
+        }}
+        className="flex flex-col items-center justify-center px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition min-w-[80px] min-h-[64px] text-lg"
+        disabled={disabled}
+        title="Upload PDF"
+      >
+        <svg className="mb-1" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#374151" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" fill="none"/><path d="M7 8h10M7 12h10M7 16h6" stroke="#374151" strokeWidth="2"/></svg>
+        <span className="text-xs font-medium">PDF</span>
+      </button>
+
+      <button
+        type="button"
+        onClick={() => {
+          if (fileInputRef.current) {
+            fileInputRef.current.accept = '.doc,.docx,.xls,.xlsx';
+            fileInputRef.current.click();
+          }
+        }}
+        className="flex flex-col items-center justify-center px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition min-w-[80px] min-h-[64px] text-lg"
+        disabled={disabled}
+        title="Upload Docs"
+      >
+        <svg className="mb-1" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#374151" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" fill="none"/><path d="M7 8h10M7 12h10M7 16h6" stroke="#374151" strokeWidth="2"/></svg>
+        <span className="text-xs font-medium">Docs</span>
+      </button>
+    </div>
+  );
+}
