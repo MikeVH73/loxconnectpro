@@ -10,6 +10,7 @@ import { Select, MenuItem, InputLabel, FormControl, Checkbox, ListItemText, Icon
 import ClearIcon from '@mui/icons-material/Clear';
 import Link from "next/link";
 import MessagingPanel from "../components/MessagingPanel";
+import DashboardMessaging from "../components/DashboardMessaging";
 
 interface Message {
   id: string;
@@ -364,12 +365,14 @@ export default function DashboardPage() {
           {/* Right: Messaging Panel */}
           <div className="w-[400px] border-l bg-white flex flex-col min-h-0 overflow-hidden">
             {selectedQuoteId ? (
-              <MessagingPanel
+              <DashboardMessaging
                 messages={messages}
                 currentUser={user?.email || ""}
                 currentCountry={userProfile?.countries?.[0] || ""}
                 onSendMessage={handleSendMessage}
-                quoteTitle={quoteRequests.find(qr => qr.id === selectedQuoteId)?.title || selectedQuoteId}
+                selectedQuoteId={selectedQuoteId}
+                quoteTitle={quoteRequests.find(qr => qr.id === selectedQuoteId)?.title}
+                quoteFiles={quoteRequests.find(qr => qr.id === selectedQuoteId)?.files || []}
               />
             ) : (
               <div className="flex items-center justify-center h-full text-gray-500">

@@ -12,6 +12,12 @@ interface Message {
   senderCountry: string;
 }
 
+interface QuoteFile {
+  name: string;
+  url: string;
+  type: string;
+}
+
 interface MessagingPanelProps {
   messages: Message[];
   currentUser: string;
@@ -19,6 +25,7 @@ interface MessagingPanelProps {
   onSendMessage: (text: string, attachments?: File[]) => void;
   quoteTitle?: string;
   onBack?: () => void;
+  quoteRequestFiles?: QuoteFile[];
 }
 
 export default function MessagingPanel({
@@ -27,7 +34,8 @@ export default function MessagingPanel({
   currentCountry = "",
   onSendMessage = () => {},
   quoteTitle = "",
-  onBack
+  onBack,
+  quoteRequestFiles = []
 }: MessagingPanelProps) {
   const [messageText, setMessageText] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -63,6 +71,43 @@ export default function MessagingPanel({
           {quoteTitle}
         </h2>
       </div>
+
+      {/* Quote Request Attachments */}
+      {quoteRequestFiles.length > 0 && (
+        <div className="flex-none border-b bg-white p-3">
+          <div className="text-sm font-medium text-gray-700 mb-2">
+            Attached Files ({quoteRequestFiles.length})
+          </div>
+          <div className="space-y-2">
+            {quoteRequestFiles.map((file, index) => (
+              <div
+                key={index}
+                className="flex items-center justify-between bg-gray-50 p-2 rounded-lg"
+              >
+                <div className="flex items-center space-x-2">
+                  <img
+                    src={file.url}
+                    alt={file.name}
+                    className="w-8 h-8 object-cover rounded"
+                  />
+                  <span className="text-sm text-gray-600 truncate max-w-[200px]">
+                    {file.name}
+                  </span>
+                </div>
+                <a
+                  href={file.url}
+                  download={file.name}
+                  className="text-blue-600 hover:text-blue-800 text-sm"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Download
+                </a>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Messages Container */}
       <div className="flex-1 overflow-y-auto min-h-0">
