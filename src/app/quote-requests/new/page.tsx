@@ -783,12 +783,12 @@ export default function NewQuoteRequestPage() {
             <StorageTest />
             <div className="mt-4">
               <FileUploadSimple
-                quoteRequestId="new" // Temporary ID for new quote requests
-                files={attachments}
-                onFilesChange={setAttachments}
-                currentUser={userProfile?.name || "User"}
-                readOnly={false}
-              />
+              quoteRequestId="new" // Temporary ID for new quote requests
+              files={attachments}
+              onFilesChange={setAttachments}
+              currentUser={userProfile?.name || "User"}
+              readOnly={false}
+            />
             </div>
           </div>
           {/* Messaging container below notes, read-only, for archived messages */}

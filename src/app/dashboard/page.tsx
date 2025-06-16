@@ -4,12 +4,21 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "../AuthProvider";
 import { signOut } from "firebase/auth";
 import { auth } from "../../firebaseClient";
-import { collection, getDocs } from "firebase/firestore";
+import { collection, getDocs, addDoc, query, where, orderBy, onSnapshot, serverTimestamp } from "firebase/firestore";
 import { db } from "../../firebaseClient";
 import { Select, MenuItem, InputLabel, FormControl, Checkbox, ListItemText, IconButton } from "@mui/material";
 import ClearIcon from '@mui/icons-material/Clear';
 import Link from "next/link";
-import MessagingPanel from "./MessagingPanel";
+import MessagingPanel from "../components/MessagingPanel";
+
+interface Message {
+  id: string;
+  text: string;
+  createdAt: Date;
+  sender: string;
+  senderCountry: string;
+  quoteRequestId: string;
+}
 
 export default function DashboardPage() {
   const { user, loading, userProfile } = useAuth();
@@ -22,9 +31,25 @@ export default function DashboardPage() {
   const [selectedCountry, setSelectedCountry] = useState<string>("");
   const [selectedUser, setSelectedUser] = useState<string>("");
   const [selectedQuoteId, setSelectedQuoteId] = useState<string | null>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
 
-  // Move getLabelName to the top so it can be used in all logic below
-  const getLabelName = (id: string) => labels.find(l => l.id === id)?.name || id;
+  // Utility functions defined at the top
+  const getLabelName: (id: string) => string = (id) => labels.find((l: any) => l.id === id)?.name || id;
+  const getCustomerName: (id: string) => string = (id) => customers.find((c: any) => c.id === id)?.name || id;
+  const getLabelByName: (name: string) => any = (name) => labels.find((l: any) => l.name?.toLowerCase() === name);
+  
+  // Special label names and labels
+  const specialLabels = ["urgent", "problems", "waiting for answer", "snooze"];
+  const urgentLabel = getLabelByName("urgent");
+  const problemsLabel = getLabelByName("problems");
+  const waitingLabel = getLabelByName("waiting for answer");
+  const snoozeLabel = getLabelByName("snooze");
+
+  // Column filters
+  const isUrgentOrProblems = (qr: any) => (qr.labels || []).some((id: string) => [urgentLabel?.id, problemsLabel?.id].includes(id));
+  const isWaiting = (qr: any) => (qr.labels || []).includes(waitingLabel?.id);
+  const isSnoozed = (qr: any) => (qr.status === "Snoozed" || (qr.labels || []).includes(snoozeLabel?.id));
+  const isStandard = (qr: any) => !isUrgentOrProblems(qr) && !isWaiting(qr) && !isSnoozed(qr);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -46,10 +71,48 @@ export default function DashboardPage() {
     fetchData();
   }, []);
 
+  useEffect(() => {
+    if (!selectedQuoteId) return;
+
+    const messagesRef = collection(db, "messages");
+    const q = query(
+      messagesRef,
+      where("quoteRequestId", "==", selectedQuoteId),
+      orderBy("createdAt", "asc")
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const newMessages = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+        createdAt: doc.data().createdAt?.toDate() || new Date(),
+      })) as Message[];
+      setMessages(newMessages);
+    });
+
+    return () => unsubscribe();
+  }, [selectedQuoteId]);
+
+  const handleSendMessage = async (text: string) => {
+    if (!selectedQuoteId || !user) return;
+
+    try {
+      const messagesRef = collection(db, "messages");
+      await addDoc(messagesRef, {
+        text,
+        sender: user.email,
+        senderCountry: userProfile?.countries?.[0] || "Unknown",
+        quoteRequestId: selectedQuoteId,
+        createdAt: serverTimestamp(),
+      });
+    } catch (error) {
+      console.error("Error sending message:", error);
+      alert("Failed to send message. Please try again.");
+    }
+  };
+
   // Filter quoteRequests by user's countries array
   const userCountries = userProfile?.countries || [];
-  console.log("[Dashboard] User countries:", userCountries);
-  console.log("[Dashboard] All quote requests:", quoteRequests.map(qr => ({id: qr.id, creatorCountry: qr.creatorCountry, involvedCountry: qr.involvedCountry})));
   
   // More lenient filtering - also check if user has superAdmin role or if countries array is empty
   const visibleQuoteRequests = userProfile?.role === "superAdmin" || userCountries.length === 0
@@ -66,17 +129,8 @@ export default function DashboardPage() {
         );
         return creatorMatch || involvedMatch;
       });
-    
-  console.log("[Dashboard] Visible quote requests:", visibleQuoteRequests.length);
 
   const inProgressCount = visibleQuoteRequests.filter(qr => qr.status === "In Progress").length;
-  // Special label names
-  const specialLabels = ["urgent", "problems", "waiting for answer", "snooze"];
-  const getLabelByName = (name: string) => labels.find((l: any) => l.name?.toLowerCase() === name);
-  const urgentLabel = getLabelByName("urgent");
-  const problemsLabel = getLabelByName("problems");
-  const waitingLabel = getLabelByName("waiting for answer");
-  const snoozeLabel = getLabelByName("snooze");
 
   // Only include active quote requests
   const activeRequests = visibleQuoteRequests.filter(qr => qr.status === "In Progress" || qr.status === "Snoozed");
@@ -86,6 +140,7 @@ export default function DashboardPage() {
   const waiting: any[] = [];
   const urgentProblems: any[] = [];
   const standard: any[] = [];
+  
   activeRequests.forEach(qr => {
     if (qr.status === "Snoozed") {
       snoozed.push(qr);
@@ -97,12 +152,6 @@ export default function DashboardPage() {
       standard.push(qr);
     }
   });
-
-  // Column filters (now only on active requests)
-  const isUrgentOrProblems = (qr: any) => (qr.labels || []).some((id: string) => [urgentLabel?.id, problemsLabel?.id].includes(id));
-  const isWaiting = (qr: any) => (qr.labels || []).includes(waitingLabel?.id);
-  const isSnoozed = (qr: any) => (qr.status === "Snoozed" || (qr.labels || []).includes(snoozeLabel?.id));
-  const isStandard = (qr: any) => !isUrgentOrProblems(qr) && !isWaiting(qr) && !isSnoozed(qr);
 
   // Filtering logic (only on active requests)
   const inProgressRequests = activeRequests.filter(qr => qr.status === "In Progress" || qr.status === "Snoozed");
@@ -154,220 +203,180 @@ export default function DashboardPage() {
     return 0;
   });
 
-  const getCustomerName = (id: string) => customers.find((c: any) => c.id === id)?.name || id;
-
   if (loading || !user) {
     return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
   }
 
   return (
-    <div className="h-full flex flex-row">
-      {/* Main Content: In Progress Quote Requests with Filters */}
-      <div className="flex-1 flex flex-col px-8 py-6 overflow-y-auto">
-        {/* Header Cards */}
-        <div className="w-full max-w-7xl mx-auto mb-8 flex flex-wrap gap-6">
-          {/* In Progress Card */}
-          <div className="flex-1 min-w-[220px] card-modern flex flex-col items-center justify-center">
-            <div className="text-4xl font-extrabold text-[#e40115]">{inProgressCount}</div>
-            <div className="text-base text-gray-600 mt-2">In Progress</div>
-          </div>
-          {/* Urgent Card */}
-          <div className="flex-1 min-w-[220px] card-modern flex flex-col items-center justify-center">
-            <div className="text-4xl font-extrabold text-[#e40115]">{urgentProblemsKanban.length}</div>
-            <div className="text-base text-gray-600 mt-2">Urgent</div>
-          </div>
-          {/* Waiting Card */}
-          <div className="flex-1 min-w-[220px] card-modern flex flex-col items-center justify-center">
-            <div className="text-4xl font-extrabold text-[#e40115]">{waitingKanban.length}</div>
-            <div className="text-base text-gray-600 mt-2">Waiting</div>
-          </div>
-          {/* Country Bar Chart Card */}
-          <div className="flex-1 min-w-[220px] card-modern flex flex-col items-center justify-center">
-            <div className="w-full flex flex-col items-center">
-              <span className="text-base text-gray-600 mb-2">Quote Requests by Country</span>
-              <svg
-                viewBox={`0 0 ${allCountries.length * 70} 100`}
-                width="100%"
-                height="100"
-                style={{ maxWidth: 340, minWidth: 180 }}
-                className="block"
-              >
-                {allCountries.map((country, i) => {
-                  const barHeight = maxCountryCount > 0 ? (countryCounts[country] / maxCountryCount) * 60 : 0;
-                  const barWidth = 32;
-                  const x = i * 70 + 19;
-                  const y = 80 - barHeight;
-                  return (
-                    <g key={country}>
-                      <rect
-                        x={x}
-                        y={y}
-                        width={barWidth}
-                        height={barHeight}
-                        fill="#e40115"
-                        rx="2"
-                      />
-                      <text
-                        x={x + barWidth / 2}
-                        y={95}
-                        textAnchor="middle"
-                        fontSize="10"
-                        fill="#666"
-                      >
-                        {country.substring(0, 3)}
-                      </text>
-                      <text
-                        x={x + barWidth / 2}
-                        y={y - 5}
-                        textAnchor="middle"
-                        fontSize="10"
-                        fill="#333"
-                        fontWeight="bold"
-                      >
-                        {countryCounts[country]}
-                      </text>
-                    </g>
-                  );
-                })}
-              </svg>
+    <div className="flex flex-col h-screen overflow-hidden">
+      {/* Main Content */}
+      <div className="flex-1 min-h-0 overflow-hidden">
+        <div className="h-full flex overflow-hidden">
+          {/* Left: Kanban Board */}
+          <div className="flex-1 px-4 py-6 flex flex-col min-h-0 overflow-hidden">
+            {/* Filters */}
+            <div className="flex gap-4 mb-6 flex-shrink-0">
+              <FormControl size="small" className="w-[300px]">
+                <InputLabel>Filter by Label</InputLabel>
+                <Select
+                  value={selectedLabel}
+                  label="Filter by Label"
+                  onChange={(e) => setSelectedLabel(e.target.value)}
+                >
+                  <MenuItem value="">
+                    <em>None</em>
+                  </MenuItem>
+                  {labels.map((label) => (
+                    <MenuItem key={label.id} value={label.id}>
+                      {label.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+
+              <FormControl size="small" className="w-[300px]">
+                <InputLabel>Filter by Customer</InputLabel>
+                <Select
+                  value={selectedCustomer}
+                  label="Filter by Customer"
+                  onChange={(e) => setSelectedCustomer(e.target.value)}
+                >
+                  <MenuItem value="">
+                    <em>None</em>
+                  </MenuItem>
+                  {customers.map((customer) => (
+                    <MenuItem key={customer.id} value={customer.id}>
+                      {customer.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+
+              <FormControl size="small" className="w-[300px]">
+                <InputLabel>Filter by Country</InputLabel>
+                <Select
+                  value={selectedCountry}
+                  label="Filter by Country"
+                  onChange={(e) => setSelectedCountry(e.target.value)}
+                >
+                  <MenuItem value="">
+                    <em>None</em>
+                  </MenuItem>
+                  {userAccessibleCountries.map((country) => (
+                    <MenuItem key={country} value={country}>
+                      {country}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+
+              {selectedLabel || selectedCustomer || selectedCountry || selectedUser ? (
+                <IconButton
+                  onClick={() => {
+                    setSelectedLabel("");
+                    setSelectedCustomer("");
+                    setSelectedCountry("");
+                    setSelectedUser("");
+                  }}
+                  size="small"
+                >
+                  <ClearIcon />
+                </IconButton>
+              ) : null}
             </div>
-          </div>
-        </div>
 
-        {/* Filters */}
-        <div className="w-full max-w-7xl mx-auto mb-6 flex flex-wrap gap-4 items-center">
-          <FormControl size="small" style={{ minWidth: 120 }}>
-            <InputLabel>Label</InputLabel>
-            <Select value={selectedLabel} onChange={(e) => setSelectedLabel(e.target.value)}>
-              <MenuItem value=""><em>All</em></MenuItem>
-              {labels.map(label => (
-                <MenuItem key={label.id} value={label.id}>{label.name}</MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+            {/* Kanban Board */}
+            <div className="grid grid-cols-4 gap-4 min-h-0 flex-1 overflow-hidden">
+              {/* Urgent & Problems */}
+              <div className="bg-white rounded-lg shadow overflow-hidden flex flex-col">
+                <div className="p-4 bg-red-50 border-b">
+                  <h3 className="font-semibold text-red-700">Urgent & Problems ({urgentProblemsKanban.length})</h3>
+                </div>
+                <div className="flex-1 p-4 space-y-4 overflow-y-auto min-h-0">
+                  {urgentProblemsKanban.map((qr) => (
+                    <QuoteRequestCard
+                      key={qr.id}
+                      qr={qr}
+                      customers={customers}
+                      labels={labels}
+                      onCardClick={() => setSelectedQuoteId(qr.id)}
+                    />
+                  ))}
+                </div>
+              </div>
 
-          <FormControl size="small" style={{ minWidth: 120 }}>
-            <InputLabel>Customer</InputLabel>
-            <Select value={selectedCustomer} onChange={(e) => setSelectedCustomer(e.target.value)}>
-              <MenuItem value=""><em>All</em></MenuItem>
-              {customers.map(customer => (
-                <MenuItem key={customer.id} value={customer.id}>{customer.name}</MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+              {/* Waiting for Answer */}
+              <div className="bg-white rounded-lg shadow overflow-hidden flex flex-col">
+                <div className="p-4 bg-yellow-50 border-b">
+                  <h3 className="font-semibold text-yellow-700">Waiting ({waitingKanban.length})</h3>
+                </div>
+                <div className="flex-1 p-4 space-y-4 overflow-y-auto min-h-0">
+                  {waitingKanban.map((qr) => (
+                    <QuoteRequestCard
+                      key={qr.id}
+                      qr={qr}
+                      customers={customers}
+                      labels={labels}
+                      onCardClick={() => setSelectedQuoteId(qr.id)}
+                    />
+                  ))}
+                </div>
+              </div>
 
-          <FormControl size="small" style={{ minWidth: 120 }}>
-            <InputLabel>Country</InputLabel>
-            <Select value={selectedCountry} onChange={(e) => setSelectedCountry(e.target.value)}>
-              <MenuItem value=""><em>All</em></MenuItem>
-              {userAccessibleCountries.map(country => (
-                <MenuItem key={country} value={country}>{country}</MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+              {/* Standard */}
+              <div className="bg-white rounded-lg shadow overflow-hidden flex flex-col">
+                <div className="p-4 bg-green-50 border-b">
+                  <h3 className="font-semibold text-green-700">Standard ({standardKanban.length})</h3>
+                </div>
+                <div className="flex-1 p-4 space-y-4 overflow-y-auto min-h-0">
+                  {standardKanban.map((qr) => (
+                    <QuoteRequestCard
+                      key={qr.id}
+                      qr={qr}
+                      customers={customers}
+                      labels={labels}
+                      onCardClick={() => setSelectedQuoteId(qr.id)}
+                    />
+                  ))}
+                </div>
+              </div>
 
-          <FormControl size="small" style={{ minWidth: 120 }}>
-            <InputLabel>User</InputLabel>
-            <Select value={selectedUser} onChange={(e) => setSelectedUser(e.target.value)}>
-              <MenuItem value=""><em>All</em></MenuItem>
-              {[...new Set(visibleQuoteRequests.map(qr => qr.user))].map(user => (
-                <MenuItem key={user} value={user}>{user}</MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-
-          <button
-            onClick={() => {
-              setSelectedLabel("");
-              setSelectedCustomer("");
-              setSelectedCountry("");
-              setSelectedUser("");
-            }}
-            className="btn-modern btn-modern-secondary"
-          >
-            Clear Filters
-          </button>
-        </div>
-
-        {/* Kanban Board */}
-        <div className="w-full max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 flex-1">
-          {/* Urgent / Problems Column */}
-          <div className="bg-white rounded-lg shadow border overflow-hidden flex flex-col">
-            <div className="bg-red-50 border-b border-red-200 p-4">
-              <h3 className="font-bold text-red-800">Urgent / Problems</h3>
-              <p className="text-sm text-red-600">{urgentProblemsKanban.length} items</p>
-            </div>
-            <div className="flex-1 p-4 space-y-3 overflow-y-auto max-h-[500px]">
-              {urgentProblemsKanban.length === 0 ? (
-                <div className="text-center text-gray-500 py-8">None</div>
-              ) : (
-                urgentProblemsKanban.map(qr => (
-                  <QuoteRequestCard key={qr.id} qr={qr} customers={customers} labels={labels} onCardClick={() => setSelectedQuoteId(qr.id)} />
-                ))
-              )}
-            </div>
-          </div>
-
-          {/* Standard Column */}
-          <div className="bg-white rounded-lg shadow border overflow-hidden flex flex-col">
-            <div className="bg-blue-50 border-b border-blue-200 p-4">
-              <h3 className="font-bold text-blue-800">Standard</h3>
-              <p className="text-sm text-blue-600">{standardKanban.length} items</p>
-            </div>
-            <div className="flex-1 p-4 space-y-3 overflow-y-auto max-h-[500px]">
-              {standardKanban.length === 0 ? (
-                <div className="text-center text-gray-500 py-8">None</div>
-              ) : (
-                standardKanban.map(qr => (
-                  <QuoteRequestCard key={qr.id} qr={qr} customers={customers} labels={labels} onCardClick={() => setSelectedQuoteId(qr.id)} />
-                ))
-              )}
+              {/* Snoozed */}
+              <div className="bg-white rounded-lg shadow overflow-hidden flex flex-col">
+                <div className="p-4 bg-gray-50 border-b">
+                  <h3 className="font-semibold text-gray-700">Snoozed ({snoozedKanban.length})</h3>
+                </div>
+                <div className="flex-1 p-4 space-y-4 overflow-y-auto min-h-0">
+                  {snoozedKanban.map((qr) => (
+                    <QuoteRequestCard
+                      key={qr.id}
+                      qr={qr}
+                      customers={customers}
+                      labels={labels}
+                      onCardClick={() => setSelectedQuoteId(qr.id)}
+                    />
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* Waiting for Answer Column */}
-          <div className="bg-white rounded-lg shadow border overflow-hidden flex flex-col">
-            <div className="bg-yellow-50 border-b border-yellow-200 p-4">
-              <h3 className="font-bold text-yellow-800">Waiting for Answer</h3>
-              <p className="text-sm text-yellow-600">{waitingKanban.length} items</p>
-            </div>
-            <div className="flex-1 p-4 space-y-3 overflow-y-auto max-h-[500px]">
-              {waitingKanban.length === 0 ? (
-                <div className="text-center text-gray-500 py-8">None</div>
-              ) : (
-                waitingKanban.map(qr => (
-                  <QuoteRequestCard key={qr.id} qr={qr} customers={customers} labels={labels} onCardClick={() => setSelectedQuoteId(qr.id)} />
-                ))
-              )}
-            </div>
+          {/* Right: Messaging Panel */}
+          <div className="w-[400px] border-l bg-white flex flex-col min-h-0 overflow-hidden">
+            {selectedQuoteId ? (
+              <MessagingPanel
+                messages={messages}
+                currentUser={user?.email || ""}
+                currentCountry={userProfile?.countries?.[0] || ""}
+                onSendMessage={handleSendMessage}
+                quoteTitle={quoteRequests.find(qr => qr.id === selectedQuoteId)?.title || selectedQuoteId}
+              />
+            ) : (
+              <div className="flex items-center justify-center h-full text-gray-500">
+                Select a quote request to view messages
+              </div>
+            )}
           </div>
-
-          {/* Snoozed Column */}
-          <div className="bg-white rounded-lg shadow border overflow-hidden flex flex-col">
-            <div className="bg-gray-50 border-b border-gray-200 p-4">
-              <h3 className="font-bold text-gray-800">Snoozed</h3>
-              <p className="text-sm text-gray-600">{snoozedKanban.length} items</p>
-            </div>
-            <div className="flex-1 p-4 space-y-3 overflow-y-auto max-h-[500px]">
-              {snoozedKanban.length === 0 ? (
-                <div className="text-center text-gray-500 py-8">None</div>
-              ) : (
-                snoozedKanban.map(qr => (
-                  <QuoteRequestCard key={qr.id} qr={qr} customers={customers} labels={labels} onCardClick={() => setSelectedQuoteId(qr.id)} />
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Right: Messaging Panel */}
-      <div className="w-[600px] border-l bg-white flex flex-col h-full">
-        <div className="p-6 border-b">
-          <h2 className="text-xl font-bold text-gray-900">Messaging</h2>
-        </div>
-        <div className="flex-1 p-6 overflow-hidden">
-          <MessagingPanel selectedQuoteId={selectedQuoteId} />
         </div>
       </div>
     </div>
