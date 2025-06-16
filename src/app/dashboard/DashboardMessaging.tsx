@@ -2,8 +2,22 @@
 
 import { useState, useEffect } from 'react';
 import { collection, getDocs, addDoc, query, where, orderBy } from 'firebase/firestore';
-import { db } from '../../firebaseClient';
+import { db, storage } from '../../firebaseClient';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import MessagingPanel from '../components/MessagingPanel';
+
+interface Message {
+  id: string;
+  text: string;
+  createdAt: Date;
+  sender: string;
+  senderCountry: string;
+  attachments?: Array<{
+    name: string;
+    url: string;
+    type: string;
+  }>;
+}
 
 interface DashboardMessagingProps {
   selectedQuoteId: string | null;
@@ -24,7 +38,7 @@ export default function DashboardMessaging({
   quoteTitle,
   quoteFiles = []
 }: DashboardMessagingProps) {
-  const [messages, setMessages] = useState<any[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
 
   useEffect(() => {
     if (!selectedQuoteId) {
@@ -51,19 +65,49 @@ export default function DashboardMessaging({
     fetchMessages();
   }, [selectedQuoteId]);
 
-  const handleSendMessage = async (text: string) => {
+  const handleSendMessage = async (text: string, attachments?: File[]) => {
     if (!selectedQuoteId) return;
 
-    const newMessage = {
-      text,
-      quoteRequestId: selectedQuoteId,
-      sender: currentUser,
-      senderCountry: currentCountry,
-      createdAt: new Date(),
-    };
+    try {
+      const uploadedAttachments = [];
 
-    const docRef = await addDoc(collection(db, "messages"), newMessage);
-    setMessages(prev => [...prev, { id: docRef.id, ...newMessage }]);
+      // Upload attachments if any
+      if (attachments && attachments.length > 0) {
+        for (const file of attachments) {
+          try {
+            console.log('Uploading file:', file.name);
+            const storageRef = ref(storage, `messages/${selectedQuoteId}/${Date.now()}_${file.name}`);
+            const snapshot = await uploadBytes(storageRef, file);
+            console.log('File uploaded, getting download URL');
+            const downloadURL = await getDownloadURL(snapshot.ref);
+            console.log('Got download URL:', downloadURL);
+            
+            uploadedAttachments.push({
+              name: file.name,
+              url: downloadURL,
+              type: file.type
+            });
+          } catch (error) {
+            console.error('Error uploading file:', error);
+          }
+        }
+      }
+
+      const newMessage = {
+        text,
+        quoteRequestId: selectedQuoteId,
+        sender: currentUser,
+        senderCountry: currentCountry,
+        createdAt: new Date(),
+        attachments: uploadedAttachments.length > 0 ? uploadedAttachments : undefined
+      };
+
+      console.log('Sending message with attachments:', newMessage);
+      const docRef = await addDoc(collection(db, "messages"), newMessage);
+      setMessages(prev => [...prev, { id: docRef.id, ...newMessage }]);
+    } catch (error) {
+      console.error('Error sending message:', error);
+    }
   };
 
   if (!selectedQuoteId) {
@@ -75,7 +119,7 @@ export default function DashboardMessaging({
   }
 
   return (
-    <div className="w-[400px] border-l bg-white flex flex-col min-h-0">
+    <div className="w-[400px] border-l bg-white h-full flex flex-col">
       <MessagingPanel
         messages={messages}
         currentUser={currentUser}

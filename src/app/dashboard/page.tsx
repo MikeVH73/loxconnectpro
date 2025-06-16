@@ -9,8 +9,7 @@ import { db } from "../../firebaseClient";
 import { Select, MenuItem, InputLabel, FormControl, Checkbox, ListItemText, IconButton } from "@mui/material";
 import ClearIcon from '@mui/icons-material/Clear';
 import Link from "next/link";
-import MessagingPanel from "../components/MessagingPanel";
-import DashboardMessaging from "../components/DashboardMessaging";
+import DashboardMessaging from "./DashboardMessaging";
 
 interface Message {
   id: string;
@@ -33,6 +32,7 @@ export default function DashboardPage() {
   const [selectedUser, setSelectedUser] = useState<string>("");
   const [selectedQuoteId, setSelectedQuoteId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [selectedQuote, setSelectedQuote] = useState<any>(null);
 
   // Utility functions defined at the top
   const getLabelName: (id: string) => string = (id) => labels.find((l: any) => l.id === id)?.name || id;
@@ -71,6 +71,16 @@ export default function DashboardPage() {
     };
     fetchData();
   }, []);
+
+  useEffect(() => {
+    if (!selectedQuoteId) {
+      setSelectedQuote(null);
+      return;
+    }
+
+    const selectedQR = quoteRequests.find(qr => qr.id === selectedQuoteId);
+    setSelectedQuote(selectedQR);
+  }, [selectedQuoteId, quoteRequests]);
 
   useEffect(() => {
     if (!selectedQuoteId) return;
@@ -363,23 +373,13 @@ export default function DashboardPage() {
           </div>
 
           {/* Right: Messaging Panel */}
-          <div className="w-[400px] border-l bg-white flex flex-col min-h-0 overflow-hidden">
-            {selectedQuoteId ? (
-              <DashboardMessaging
-                messages={messages}
-                currentUser={user?.email || ""}
-                currentCountry={userProfile?.countries?.[0] || ""}
-                onSendMessage={handleSendMessage}
-                selectedQuoteId={selectedQuoteId}
-                quoteTitle={quoteRequests.find(qr => qr.id === selectedQuoteId)?.title}
-                quoteFiles={quoteRequests.find(qr => qr.id === selectedQuoteId)?.files || []}
-              />
-            ) : (
-              <div className="flex items-center justify-center h-full text-gray-500">
-                Select a quote request to view messages
-              </div>
-            )}
-          </div>
+          <DashboardMessaging
+            selectedQuoteId={selectedQuoteId}
+            currentUser={user?.email || ""}
+            currentCountry={userProfile?.countries?.[0] || ""}
+            quoteTitle={selectedQuote?.title}
+            quoteFiles={selectedQuote?.attachments || []}
+          />
         </div>
       </div>
     </div>
