@@ -31,13 +31,12 @@ export default function DashboardPage() {
   const [selectedCountry, setSelectedCountry] = useState<string>("");
   const [selectedUser, setSelectedUser] = useState<string>("");
   const [selectedQuoteId, setSelectedQuoteId] = useState<string | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
   const [selectedQuote, setSelectedQuote] = useState<any>(null);
 
   // Utility functions defined at the top
-  const getLabelName: (id: string) => string = (id) => labels.find((l: any) => l.id === id)?.name || id;
-  const getCustomerName: (id: string) => string = (id) => customers.find((c: any) => c.id === id)?.name || id;
-  const getLabelByName: (name: string) => any = (name) => labels.find((l: any) => l.name?.toLowerCase() === name);
+  const getLabelName = (id: string): string => labels.find((l: any) => l.id === id)?.name || id;
+  const getCustomerName = (id: string): string => customers.find((c: any) => c.id === id)?.name || id;
+  const getLabelByName = (name: string): any => labels.find((l: any) => l.name?.toLowerCase() === name);
   
   // Special label names and labels
   const specialLabels = ["urgent", "problems", "waiting for answer", "snooze"];
@@ -53,10 +52,11 @@ export default function DashboardPage() {
   const isStandard = (qr: any) => !isUrgentOrProblems(qr) && !isWaiting(qr) && !isSnoozed(qr);
 
   useEffect(() => {
+    console.log('Auth state:', { user, loading, userProfile });
     if (!loading && !user) {
       router.replace("/login");
     }
-  }, [user, loading, router]);
+  }, [user, loading, userProfile, router]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -82,45 +82,7 @@ export default function DashboardPage() {
     setSelectedQuote(selectedQR);
   }, [selectedQuoteId, quoteRequests]);
 
-  useEffect(() => {
-    if (!selectedQuoteId) return;
 
-    const messagesRef = collection(db, "messages");
-    const q = query(
-      messagesRef,
-      where("quoteRequestId", "==", selectedQuoteId),
-      orderBy("createdAt", "asc")
-    );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const newMessages = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-        createdAt: doc.data().createdAt?.toDate() || new Date(),
-      })) as Message[];
-      setMessages(newMessages);
-    });
-
-    return () => unsubscribe();
-  }, [selectedQuoteId]);
-
-  const handleSendMessage = async (text: string) => {
-    if (!selectedQuoteId || !user) return;
-
-    try {
-      const messagesRef = collection(db, "messages");
-      await addDoc(messagesRef, {
-        text,
-        sender: user.email,
-        senderCountry: userProfile?.countries?.[0] || "Unknown",
-        quoteRequestId: selectedQuoteId,
-        createdAt: serverTimestamp(),
-      });
-    } catch (error) {
-      console.error("Error sending message:", error);
-      alert("Failed to send message. Please try again.");
-    }
-  };
 
   // Filter quoteRequests by user's countries array
   const userCountries = userProfile?.countries || [];
@@ -130,11 +92,11 @@ export default function DashboardPage() {
     ? quoteRequests // SuperAdmin sees all, or if no countries set, show all
     : quoteRequests.filter(qr => {
         // Check if user countries match creator or involved country
-        const creatorMatch = userCountries.some(userCountry => 
+        const creatorMatch = userCountries.some((userCountry: string) => 
           qr.creatorCountry?.toLowerCase().includes(userCountry.toLowerCase()) ||
           userCountry.toLowerCase().includes(qr.creatorCountry?.toLowerCase())
         );
-        const involvedMatch = userCountries.some(userCountry => 
+        const involvedMatch = userCountries.some((userCountry: string) => 
           qr.involvedCountry?.toLowerCase().includes(userCountry.toLowerCase()) ||
           userCountry.toLowerCase().includes(qr.involvedCountry?.toLowerCase())
         );
@@ -155,9 +117,9 @@ export default function DashboardPage() {
   activeRequests.forEach(qr => {
     if (qr.status === "Snoozed") {
       snoozed.push(qr);
-    } else if ((qr.labels || []).some(id => getLabelName(id)?.toLowerCase?.() === "waiting for answer")) {
+    } else if ((qr.labels || []).some((id: string) => getLabelName(id)?.toLowerCase?.() === "waiting for answer")) {
       waiting.push(qr);
-    } else if ((qr.labels || []).some(id => ["urgent", "problems"].includes(getLabelName(id)?.toLowerCase?.()))) {
+    } else if ((qr.labels || []).some((id: string) => ["urgent", "problems"].includes(getLabelName(id)?.toLowerCase?.()))) {
       urgentProblems.push(qr);
     } else {
       standard.push(qr);
@@ -198,7 +160,7 @@ export default function DashboardPage() {
   const userAccessibleCountries = userProfile?.role === "superAdmin" || userCountries.length === 0
     ? allCountries // SuperAdmin sees all countries in filter
     : allCountries.filter(country => 
-        userCountries.some(userCountry => 
+        userCountries.some((userCountry: string) => 
           country.toLowerCase().includes(userCountry.toLowerCase()) ||
           userCountry.toLowerCase().includes(country.toLowerCase())
         )
@@ -214,8 +176,23 @@ export default function DashboardPage() {
     return 0;
   });
 
-  if (loading || !user) {
-    return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+  if (loading || !user || !userProfile) {
+    return <div className="min-h-screen flex items-center justify-center">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto mb-2"></div>
+        <p className="text-gray-600">Loading user data...</p>
+      </div>
+    </div>;
+  }
+
+  const currentCountry = userProfile?.countries?.[0];
+  if (!currentCountry) {
+    return <div className="min-h-screen flex items-center justify-center">
+      <div className="text-center">
+        <p className="text-red-600">No country assigned to your profile.</p>
+        <p className="text-gray-600 mt-2">Please contact an administrator to assign you to a country.</p>
+      </div>
+    </div>;
   }
 
   return (
@@ -375,8 +352,8 @@ export default function DashboardPage() {
           {/* Right: Messaging Panel */}
           <DashboardMessaging
             selectedQuoteId={selectedQuoteId}
-            currentUser={user?.email || ""}
-            currentCountry={userProfile?.countries?.[0] || ""}
+            currentUser={user.email || ""}
+            currentCountry={currentCountry}
             quoteTitle={selectedQuote?.title}
             quoteFiles={selectedQuote?.attachments || []}
           />
@@ -387,8 +364,8 @@ export default function DashboardPage() {
 }
 
 function QuoteRequestCard({ qr, customers, labels, onCardClick }: { qr: any, customers: any[], labels: any[], onCardClick: () => void }) {
-  const getCustomerName = (id: string) => customers.find((c: any) => c.id === id)?.name || id;
-  const getLabelName = (id: string) => labels.find((l: any) => l.id === id)?.name || id;
+  const getCustomerName = (id: string): string => customers.find((c: any) => c.id === id)?.name || id;
+  const getLabelName = (id: string): string => labels.find((l: any) => l.id === id)?.name || id;
 
   return (
     <div className="card-modern border-l-4 border-[#e40115] p-3 min-h-[120px] flex flex-col justify-between relative cursor-pointer" onClick={onCardClick}>
