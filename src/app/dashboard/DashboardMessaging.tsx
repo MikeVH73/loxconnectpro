@@ -1,130 +1,52 @@
 "use client";
 
-import { useEffect, useState } from 'react';
-import { collection, query, where, orderBy, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '@/firebaseClient';
 import { useAuth } from '../AuthProvider';
 import MessagingPanel from '../components/MessagingPanel';
-
-interface Message {
-  id: string;
-  text: string;
-  createdAt: Date;
-  sender: string;
-  senderCountry: string;
-  quoteRequestId: string;
-}
+import { useMessages } from '../hooks/useMessages';
+import { doc, updateDoc } from 'firebase/firestore';
+import { db } from '@/firebaseClient';
 
 interface DashboardMessagingProps {
   selectedQuoteId: string | null;
   quoteTitle?: string;
+  quoteFiles?: any[];
 }
 
 export default function DashboardMessaging({
   selectedQuoteId,
-  quoteTitle
+  quoteTitle,
+  quoteFiles = []
 }: DashboardMessagingProps) {
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const { user, userProfile, loading } = useAuth();
+  const { user, userProfile, loading: authLoading } = useAuth();
+  const { messages, loading: messagesLoading, error, sendMessage } = useMessages(selectedQuoteId);
 
   // Get current user's email and country from auth context
   const currentUser = user?.email || '';
   const currentCountry = userProfile?.businessUnit || '';
 
-  useEffect(() => {
-    if (loading) {
-      console.log('Auth loading, waiting...');
-      return;
-    }
-
-    if (!user || !userProfile) {
-      console.log('No authenticated user or profile');
-      setMessages([]);
-      return;
-    }
-
-    if (!selectedQuoteId) {
-      console.log('No quote selected');
-      setMessages([]);
-      return;
-    }
-
-    console.log('Setting up message listener with:', {
-      quoteId: selectedQuoteId,
-      user: currentUser,
-      country: currentCountry
-    });
-
-    const messagesRef = collection(db, "messages");
-    const q = query(
-      messagesRef,
-      where("quoteRequestId", "==", selectedQuoteId),
-      orderBy("createdAt", "asc")
-    );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      try {
-        const newMessages = snapshot.docs.map(doc => {
-          const data = doc.data();
-          return {
-            id: doc.id,
-            text: data.text || '',
-            createdAt: data.createdAt?.toDate() || new Date(),
-            sender: data.sender || '',
-            senderCountry: data.senderCountry || '',
-            quoteRequestId: data.quoteRequestId || ''
-          } as Message;
-        });
-        console.log('Messages updated:', newMessages.length);
-        setMessages(newMessages);
-        setError(null);
-      } catch (err) {
-        console.error('Error processing messages:', err);
-        setError('Failed to process messages');
-      }
-    }, (err) => {
-      console.error('Error in message listener:', err);
-      setError('Failed to load messages');
-    });
-
-    return () => {
-      console.log('Cleaning up message listener');
-      unsubscribe();
-    };
-  }, [selectedQuoteId, user, userProfile, loading, currentUser, currentCountry]);
-
   const handleSendMessage = async (text: string) => {
-    if (!selectedQuoteId || !currentUser || !currentCountry) {
-      const error = 'Cannot send message: Missing required data';
-      console.error(error, { selectedQuoteId, currentUser, currentCountry });
-      setError(error);
-      throw new Error(error);
+    if (!currentUser || !currentCountry) {
+      throw new Error('Cannot send message: User not authenticated');
     }
+    await sendMessage(text, currentUser, currentCountry);
+  };
 
+  const handleFilesChange = async (files: any[]) => {
+    if (!selectedQuoteId) return;
+    
     try {
-      const messagesRef = collection(db, "messages");
-      
-      const newMessage = {
-        text: text.trim(),
-        quoteRequestId: selectedQuoteId,
-        sender: currentUser,
-        senderCountry: currentCountry,
-        createdAt: serverTimestamp()
-      };
-
-      console.log('Sending message:', newMessage);
-      const docRef = await addDoc(messagesRef, newMessage);
-      console.log('Message sent successfully:', docRef.id);
-      setError(null);
+      const docRef = doc(db, 'quoteRequests', selectedQuoteId);
+      await updateDoc(docRef, {
+        attachments: files,
+        updatedAt: new Date().toISOString()
+      });
     } catch (err) {
-      console.error('Error sending message:', err);
-      setError('Failed to send message');
+      console.error('Error updating files:', err);
       throw err;
     }
   };
 
-  if (loading) {
+  if (authLoading || messagesLoading) {
     return <div>Loading...</div>;
   }
 
@@ -139,6 +61,8 @@ export default function DashboardMessaging({
       currentCountry={currentCountry}
       onSendMessage={handleSendMessage}
       quoteTitle={quoteTitle}
+      quoteRequestFiles={quoteFiles}
+      onFilesChange={handleFilesChange}
     />
   );
 } 

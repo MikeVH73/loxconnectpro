@@ -352,8 +352,6 @@ export default function DashboardPage() {
           {/* Right: Messaging Panel */}
           <DashboardMessaging
             selectedQuoteId={selectedQuoteId}
-            currentUser={user.email || ""}
-            currentCountry={currentCountry}
             quoteTitle={selectedQuote?.title}
             quoteFiles={selectedQuote?.attachments || []}
           />

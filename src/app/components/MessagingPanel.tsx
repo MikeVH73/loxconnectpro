@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef, KeyboardEvent } from "react";
+import { storage } from "@/firebaseClient";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
 interface Message {
   id: string;
@@ -12,6 +14,9 @@ interface QuoteFile {
   name: string;
   url: string;
   type: string;
+  size?: number;
+  uploadedBy?: string;
+  uploadedAt?: Date;
 }
 
 interface MessagingPanelProps {
@@ -22,6 +27,8 @@ interface MessagingPanelProps {
   quoteTitle?: string;
   onBack?: () => void;
   quoteRequestFiles?: QuoteFile[];
+  onFilesChange?: (files: QuoteFile[]) => void;
+  readOnly?: boolean;
 }
 
 export default function MessagingPanel({
@@ -31,13 +38,17 @@ export default function MessagingPanel({
   onSendMessage,
   quoteTitle = "",
   onBack,
-  quoteRequestFiles = []
+  quoteRequestFiles = [],
+  onFilesChange,
+  readOnly = false
 }: MessagingPanelProps) {
   const [messageText, setMessageText] = useState("");
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -78,6 +89,48 @@ export default function MessagingPanel({
       e.preventDefault();
       console.log('Enter key pressed, sending message:', messageText);
       handleSubmit(e);
+    }
+  };
+
+  const handleFileSelect = async (files: FileList | null) => {
+    if (!files || !onFilesChange) return;
+
+    setIsUploading(true);
+    setError(null);
+
+    try {
+      const newFiles: QuoteFile[] = [];
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        if (file.size > 3 * 1024 * 1024) { // 3MB limit
+          throw new Error(`File ${file.name} exceeds 3MB limit`);
+        }
+
+        // Upload to Firebase Storage
+        const storageRef = ref(storage, `quote-files/${Date.now()}-${file.name}`);
+        await uploadBytes(storageRef, file);
+        const url = await getDownloadURL(storageRef);
+
+        newFiles.push({
+          name: file.name,
+          url,
+          type: file.type,
+          size: file.size,
+          uploadedBy: currentUser,
+          uploadedAt: new Date()
+        });
+      }
+
+      onFilesChange([...quoteRequestFiles, ...newFiles]);
+    } catch (err: any) {
+      console.error('Error uploading files:', err);
+      setError(err.message || 'Failed to upload files');
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
   };
 
@@ -221,16 +274,40 @@ export default function MessagingPanel({
               onKeyPress={handleKeyPress}
               placeholder="Type a message..."
               className="flex-1 p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              disabled={isSending}
+              disabled={isSending || readOnly}
             />
             <button
               type="submit"
               className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-              disabled={isSending || !messageText.trim()}
+              disabled={isSending || !messageText.trim() || readOnly}
             >
               {isSending ? 'Sending...' : 'Send'}
             </button>
           </div>
+          {!readOnly && onFilesChange && (
+            <div className="flex items-center gap-2">
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                className="hidden"
+                onChange={(e) => handleFileSelect(e.target.files)}
+                accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isUploading}
+                className="flex items-center gap-2 px-3 py-1 border border-gray-300 rounded text-sm hover:bg-gray-50 disabled:opacity-50"
+              >
+                <span>📎</span>
+                {isUploading ? 'Processing...' : 'Attach Files'}
+              </button>
+              <span className="text-xs text-gray-500">
+                Images, PDF, Word, Excel • Max 3MB each
+              </span>
+            </div>
+          )}
         </form>
       </div>
 
