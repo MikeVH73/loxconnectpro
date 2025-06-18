@@ -4,11 +4,7 @@ import "./globals.css";
 import { Inter } from "next/font/google";
 import AuthProvider from "./AuthProvider";
 import { ConditionalLayout } from "./ConditionalLayout";
-import dynamic from 'next/dynamic';
-
-const ErrorBoundary = dynamic(() => import('./components/ErrorBoundary'), {
-  ssr: false
-});
+import ClientLayout from "./components/ClientLayout";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -40,13 +36,13 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${inter.variable} antialiased`}
       >
-        <ErrorBoundary>
+        <ClientLayout>
           <AuthProvider>
             <ConditionalLayout>
               {children}
             </ConditionalLayout>
           </AuthProvider>
-        </ErrorBoundary>
+        </ClientLayout>
       </body>
     </html>
   );
