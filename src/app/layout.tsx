@@ -4,6 +4,7 @@ import "./globals.css";
 import { Inter } from "next/font/google";
 import AuthProvider from "./AuthProvider";
 import { ConditionalLayout } from "./ConditionalLayout";
+import ErrorBoundary from "./components/ErrorBoundary";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -35,11 +36,13 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${inter.variable} antialiased`}
       >
-        <AuthProvider>
-          <ConditionalLayout>
-            {children}
-          </ConditionalLayout>
-        </AuthProvider>
+        <ErrorBoundary>
+          <AuthProvider>
+            <ConditionalLayout>
+              {children}
+            </ConditionalLayout>
+          </AuthProvider>
+        </ErrorBoundary>
       </body>
     </html>
   );
