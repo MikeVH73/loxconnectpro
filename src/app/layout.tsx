@@ -4,7 +4,11 @@ import "./globals.css";
 import { Inter } from "next/font/google";
 import AuthProvider from "./AuthProvider";
 import { ConditionalLayout } from "./ConditionalLayout";
-import ErrorBoundary from "./components/ErrorBoundary";
+import dynamic from 'next/dynamic';
+
+const ErrorBoundary = dynamic(() => import('./components/ErrorBoundary'), {
+  ssr: false
+});
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
