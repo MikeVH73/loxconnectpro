@@ -1,68 +1,86 @@
 "use client";
 
+import { useEffect, useState } from 'react';
+import { collection, query, where, orderBy, onSnapshot, DocumentData } from 'firebase/firestore';
+import { db } from '@/firebaseClient';
 import { useAuth } from '../AuthProvider';
 import MessagingPanel from '../components/MessagingPanel';
-import { useMessages } from '../hooks/useMessages';
-import { doc, updateDoc } from 'firebase/firestore';
-import { db } from '@/firebaseClient';
 
-interface DashboardMessagingProps {
-  selectedQuoteId: string | null;
-  quoteTitle?: string;
-  quoteFiles?: any[];
+interface Message {
+  id: string;
+  text: string;
+  createdAt: Date;
+  sender: string;
+  senderCountry: string;
 }
 
-export default function DashboardMessaging({
-  selectedQuoteId,
-  quoteTitle,
-  quoteFiles = []
-}: DashboardMessagingProps) {
-  const { user, userProfile, loading: authLoading } = useAuth();
-  const { messages, loading: messagesLoading, error, sendMessage } = useMessages(selectedQuoteId);
+export default function DashboardMessaging() {
+  const { user } = useAuth();
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Get current user's email and country from auth context
-  const currentUser = user?.email || '';
-  const currentCountry = userProfile?.businessUnit || '';
-
-  const handleSendMessage = async (text: string) => {
-    if (!currentUser || !currentCountry) {
-      throw new Error('Cannot send message: User not authenticated');
+  useEffect(() => {
+    if (!user || !db) {
+      setLoading(false);
+      return;
     }
-    await sendMessage(text, currentUser, currentCountry);
-  };
 
-  const handleFilesChange = async (files: any[]) => {
-    if (!selectedQuoteId) return;
-    
     try {
-      const docRef = doc(db, 'quoteRequests', selectedQuoteId);
-      await updateDoc(docRef, {
-        attachments: files,
-        updatedAt: new Date().toISOString()
-      });
-    } catch (err) {
-      console.error('Error updating files:', err);
-      throw err;
-    }
-  };
+      const q = query(
+        collection(db, 'messages'),
+        where('participants', 'array-contains', user.uid),
+        orderBy('createdAt', 'desc')
+      );
 
-  if (authLoading || messagesLoading) {
-    return <div>Loading...</div>;
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        const newMessages = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as Message[];
+        setMessages(newMessages);
+        setLoading(false);
+      }, (err) => {
+        console.error('Error fetching messages:', err);
+        setError(err.message);
+        setLoading(false);
+      });
+
+      return () => unsubscribe();
+    } catch (err: any) {
+      console.error('Error setting up messages listener:', err);
+      setError(err.message);
+      setLoading(false);
+    }
+  }, [user]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-gray-900"></div>
+      </div>
+    );
   }
 
-  if (!user || !userProfile) {
-    return <div>Please log in to access messaging.</div>;
+  if (error) {
+    return (
+      <div className="text-red-500 p-4">
+        Error loading messages: {error}
+      </div>
+    );
   }
 
   return (
-    <MessagingPanel
-      messages={messages}
-      currentUser={currentUser}
-      currentCountry={currentCountry}
-      onSendMessage={handleSendMessage}
-      quoteTitle={quoteTitle}
-      quoteRequestFiles={quoteFiles}
-      onFilesChange={handleFilesChange}
-    />
+    <div className="h-full">
+      <MessagingPanel
+        messages={messages}
+        currentUser={user?.email || ''}
+        currentCountry="Global"
+        onSendMessage={async (text) => {
+          // Implementation of message sending
+          console.log('Sending message:', text);
+        }}
+      />
+    </div>
   );
 } 

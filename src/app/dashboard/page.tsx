@@ -32,6 +32,7 @@ export default function DashboardPage() {
   const [selectedUser, setSelectedUser] = useState<string>("");
   const [selectedQuoteId, setSelectedQuoteId] = useState<string | null>(null);
   const [selectedQuote, setSelectedQuote] = useState<any>(null);
+  const [isClient, setIsClient] = useState(false);
 
   // Utility functions defined at the top
   const getLabelName = (id: string): string => labels.find((l: any) => l.id === id)?.name || id;
@@ -82,7 +83,28 @@ export default function DashboardPage() {
     setSelectedQuote(selectedQR);
   }, [selectedQuoteId, quoteRequests]);
 
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
+  if (!isClient || loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-32 w-32 border-t-2 border-b-2 border-gray-900"></div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold mb-4">Access Denied</h1>
+          <p>Please log in to access the dashboard.</p>
+        </div>
+      </div>
+    );
+  }
 
   // Filter quoteRequests by user's countries array
   const userCountries = userProfile?.countries || [];
@@ -175,15 +197,6 @@ export default function DashboardPage() {
     if (!aUrgent && bUrgent) return 1;
     return 0;
   });
-
-  if (loading || !user || !userProfile) {
-    return <div className="min-h-screen flex items-center justify-center">
-      <div className="text-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto mb-2"></div>
-        <p className="text-gray-600">Loading user data...</p>
-      </div>
-    </div>;
-  }
 
   const currentCountry = userProfile?.countries?.[0];
   if (!currentCountry) {
