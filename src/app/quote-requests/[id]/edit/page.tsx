@@ -2,7 +2,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { doc, getDoc, updateDoc, collection, getDocs, query, where, serverTimestamp, addDoc } from "firebase/firestore";
-import { db } from "../../../../firebaseClient";
+import { db } from "@/firebaseClient";
 import { useAuth } from "../../../AuthProvider";
 import FileUpload from "../../../components/FileUpload";
 import FileUploadSimple from "../../../components/FileUploadSimple";
@@ -12,6 +12,10 @@ import MessagingPanel from '@/app/components/MessagingPanel';
 import { useMessages } from '@/app/hooks/useMessages';
 import Link from "next/link";
 import { debounce } from "lodash";
+
+if (!db) {
+  throw new Error("Firestore is not initialized");
+}
 
 const statuses = ["In Progress", "Snoozed", "Won", "Lost", "Cancelled"];
 const GEOCODING_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
@@ -41,16 +45,15 @@ export default function EditQuoteRequestPage() {
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
+      if (!db) {
+        setError("Database not initialized");
+        setLoading(false);
+        return;
+      }
       const docRef = doc(db, "quoteRequests", params.id as string);
       const snap = await getDoc(docRef);
       if (snap.exists()) {
-        const data: any = { ...snap.data(), id: snap.id };
-        // Ensure both involvedCountry and targetCountry are set
-        if (data.involvedCountry && !data.targetCountry) {
-          data.targetCountry = data.involvedCountry;
-        } else if (data.targetCountry && !data.involvedCountry) {
-          data.involvedCountry = data.targetCountry;
-        }
+        const data = { ...snap.data(), id: snap.id };
         setForm(data);
         setOriginal(data);
         setAttachments(data.attachments || []);
@@ -184,6 +187,9 @@ export default function EditQuoteRequestPage() {
         const coordinates = `${lat.toFixed(6)}° N, ${lng.toFixed(6)}° E`;
         console.log('Setting coordinates:', coordinates);
         handleChange("gpsCoordinates", coordinates);
+      } else if (data.status === "REQUEST_DENIED" && data.error_message?.includes("API keys with no restrictions")) {
+        console.error('API key needs to be configured with restrictions:', data.error_message);
+        setGeocodingError("Please configure API key restrictions in Google Cloud Console");
       } else {
         console.error('Geocoding failed:', data.status, data.error_message);
         setGeocodingError(data.error_message || "Could not get coordinates for this address");
@@ -204,6 +210,10 @@ export default function EditQuoteRequestPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!db) {
+      setError("Database not initialized");
+      return;
+    }
     setSaving(true);
     setError("");
     // Date validation
