@@ -218,22 +218,29 @@ export default function EditQuoteRequestPage() {
     setGeocodingError("");
     
     try {
-      const response = await fetch(
-        `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}`
-      );
-      
-      const data = await response.json();
-      console.log('Geocoding response:', data);
-      
-      if (data.status === "OK" && data.results?.[0]?.geometry?.location) {
-        const { lat, lng } = data.results[0].geometry.location;
-        handleChange("gpsCoordinates", `${lat.toFixed(6)}° N, ${lng.toFixed(6)}° E`);
-      } else {
-        setGeocodingError("Could not get coordinates for this address");
+      // Check if Google Maps is loaded
+      if (typeof window.google === 'undefined') {
+        throw new Error('Google Maps not loaded');
       }
+
+      const geocoder = new window.google.maps.Geocoder();
+      
+      const result = await new Promise((resolve, reject) => {
+        geocoder.geocode({ address }, (results, status) => {
+          if (status === google.maps.GeocoderStatus.OK && results?.[0]) {
+            resolve(results[0]);
+          } else {
+            reject(status);
+          }
+        });
+      });
+
+      const location = result.geometry.location;
+      const coordinates = `${location.lat().toFixed(6)}° N, ${location.lng().toFixed(6)}° E`;
+      handleChange("gpsCoordinates", coordinates);
     } catch (error) {
       console.error('Error:', error);
-      setGeocodingError("Failed to get coordinates");
+      setGeocodingError("Failed to get coordinates. Please try again or enter manually.");
     } finally {
       setIsGeocoding(false);
     }

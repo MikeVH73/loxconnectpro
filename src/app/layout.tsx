@@ -5,6 +5,7 @@ import { Inter } from "next/font/google";
 import AuthProvider from "./AuthProvider";
 import ConditionalLayout from "./ConditionalLayout";
 import ClientLayout from "./components/ClientLayout";
+import Script from "next/script";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -32,8 +33,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <body className={`${geistSans.variable} ${geistMono.variable} ${inter.variable} antialiased`}>
+    <html lang="en" className={`${geistSans.variable} ${geistMono.variable} ${inter.variable} antialiased`}>
+      <head>
+        <Script
+          src={`https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places`}
+          strategy="beforeInteractive"
+        />
+      </head>
+      <body>
         <ClientLayout>
           <AuthProvider>
             <ConditionalLayout>
