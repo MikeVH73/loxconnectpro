@@ -17,7 +17,16 @@ import Script from "next/script";
 // Add Google Maps types
 declare global {
   interface Window {
-    google: typeof google;
+    google: {
+      maps: {
+        Geocoder: new () => {
+          geocode: (request: { address: string }, callback: (results: any[], status: string) => void) => void;
+        };
+        GeocoderStatus: {
+          OK: string;
+        };
+      };
+    };
   }
 }
 
@@ -210,37 +219,31 @@ export default function EditQuoteRequestPage() {
   };
 
   const handleAddressChange = async (address: string) => {
-    handleChange("jobsiteAddress", address);
-    
-    if (address.length < 5) return;
+    if (!address || address.length < 5) return;
     
     setIsGeocoding(true);
     setGeocodingError("");
     
     try {
-      // Check if Google Maps is loaded
-      if (typeof window.google === 'undefined') {
-        throw new Error('Google Maps not loaded');
-      }
-
-      const geocoder = new window.google.maps.Geocoder();
+      const response = await fetch(
+        `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}`
+      );
       
-      const result = await new Promise((resolve, reject) => {
-        geocoder.geocode({ address }, (results, status) => {
-          if (status === google.maps.GeocoderStatus.OK && results?.[0]) {
-            resolve(results[0]);
-          } else {
-            reject(status);
-          }
-        });
-      });
-
-      const location = result.geometry.location;
-      const coordinates = `${location.lat().toFixed(6)}° N, ${location.lng().toFixed(6)}° E`;
-      handleChange("gpsCoordinates", coordinates);
+      const data = await response.json();
+      console.log('Geocoding response:', data);
+      
+      if (data.status === "OK" && data.results?.[0]?.geometry?.location) {
+        const { lat, lng } = data.results[0].geometry.location;
+        const coordinates = `${lat.toFixed(6)}° N, ${lng.toFixed(6)}° E`;
+        console.log('Setting coordinates:', coordinates);
+        handleChange("gpsCoordinates", coordinates);
+      } else {
+        console.error('Geocoding failed:', data);
+        setGeocodingError("Could not get coordinates for this address");
+      }
     } catch (error) {
       console.error('Error:', error);
-      setGeocodingError("Failed to get coordinates. Please try again or enter manually.");
+      setGeocodingError("Failed to get coordinates");
     } finally {
       setIsGeocoding(false);
     }
@@ -537,48 +540,31 @@ export default function EditQuoteRequestPage() {
                       <div>
                         <label className="block mb-1 font-medium">Jobsite Address</label>
                         <input
-                          ref={addressInputRef}
                           type="text"
                           value={form.jobsiteAddress || ""}
-                          onChange={(e) => handleChange("jobsiteAddress", e.target.value)}
+                          onChange={(e) => {
+                            const address = e.target.value;
+                            handleChange("jobsiteAddress", address);
+                            handleAddressChange(address);
+                          }}
                           placeholder="Enter a complete address including street, number, city, and country"
                           className="w-full p-2 border rounded"
                           disabled={isReadOnly}
                         />
+                        {isGeocoding && <div className="text-sm text-gray-500 mt-1">Getting coordinates...</div>}
+                        {geocodingError && <div className="text-sm text-red-500 mt-1">{geocodingError}</div>}
                       </div>
 
-                      <div className="space-y-2">
+                      <div>
                         <label className="block mb-1 font-medium">GPS Coordinates</label>
-                        <div className="text-xs text-gray-500 mb-2">
-                          {isGeocoding ? (
-                            <span className="text-blue-500">Getting coordinates...</span>
-                          ) : geocodingError ? (
-                            <span className="text-red-500">{geocodingError}</span>
-                          ) : (
-                            "Coordinates will auto-fill when you enter an address, or you can enter them manually"
-                          )}
-                        </div>
-                        <div className="flex gap-2 items-center">
-                          <input
-                            type="text"
-                            value={form.gpsCoordinates || ""}
-                            onChange={(e) => handleChange("gpsCoordinates", e.target.value)}
-                            disabled={isReadOnly || isGeocoding}
-                            className="w-full p-2 border rounded"
-                            placeholder="e.g. 51.922925° N, 4.429714° E"
-                          />
-                          {!isReadOnly && form.gpsCoordinates && (
-                            <a
-                              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(form.gpsCoordinates)}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="shrink-0 px-3 py-2 text-sm bg-blue-500 text-white rounded hover:bg-blue-600"
-                              title="View on Google Maps"
-                            >
-                              View on Map
-                            </a>
-                          )}
-                        </div>
+                        <input
+                          type="text"
+                          value={form.gpsCoordinates || ""}
+                          onChange={(e) => handleChange("gpsCoordinates", e.target.value)}
+                          placeholder="Coordinates will auto-fill when you enter an address"
+                          className="w-full p-2 border rounded"
+                          disabled={isReadOnly}
+                        />
                       </div>
 
                       <div>
