@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { doc, getDoc, updateDoc, collection, getDocs, query, where, serverTimestamp, addDoc } from "firebase/firestore";
 import { db } from "@/firebaseClient";
@@ -50,6 +50,7 @@ export default function EditQuoteRequestPage() {
   const [isGeocoding, setIsGeocoding] = useState(false);
   const [geocodingError, setGeocodingError] = useState("");
   const [isGoogleMapsLoaded, setIsGoogleMapsLoaded] = useState(false);
+  const addressInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -126,6 +127,38 @@ export default function EditQuoteRequestPage() {
     }
   }, []);
 
+  useEffect(() => {
+    // Load Google Maps script
+    const script = document.createElement("script");
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places`;
+    script.async = true;
+    script.onload = () => {
+      // Initialize Places Autocomplete
+      if (addressInputRef.current) {
+        const autocomplete = new google.maps.places.Autocomplete(addressInputRef.current, {
+          types: ['address'],
+          fields: ['geometry', 'formatted_address']
+        });
+
+        autocomplete.addListener('place_changed', () => {
+          const place = autocomplete.getPlace();
+          if (place.geometry?.location) {
+            const lat = place.geometry.location.lat();
+            const lng = place.geometry.location.lng();
+            const coordinates = `${lat.toFixed(6)}° N, ${lng.toFixed(6)}° E`;
+            handleChange("gpsCoordinates", coordinates);
+            handleChange("jobsiteAddress", place.formatted_address);
+          }
+        });
+      }
+    };
+    document.head.appendChild(script);
+
+    return () => {
+      document.head.removeChild(script);
+    };
+  }, []);
+
   const handleChange = (field: string, value: any) => {
     setForm((prev: any) => ({ ...prev, [field]: value }));
   };
@@ -179,32 +212,28 @@ export default function EditQuoteRequestPage() {
   const handleAddressChange = async (address: string) => {
     handleChange("jobsiteAddress", address);
     
-    // Clear previous error
-    setGeocodingError("");
-    
-    // Don't geocode if the address is too short or Maps isn't loaded
-    if (address.length < 5 || !isGoogleMapsLoaded || !window.google) return;
+    if (address.length < 5) return;
     
     setIsGeocoding(true);
+    setGeocodingError("");
+    
     try {
-      const geocoder = new window.google.maps.Geocoder();
+      const response = await fetch(
+        `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}`
+      );
       
-      const result = await new Promise<google.maps.GeocoderResult>((resolve, reject) => {
-        geocoder.geocode({ address }, (results, status) => {
-          if (status === 'OK' && results?.[0]) {
-            resolve(results[0]);
-          } else {
-            reject(status);
-          }
-        });
-      });
-
-      const location = result.geometry.location;
-      const coordinates = `${location.lat().toFixed(6)}° N, ${location.lng().toFixed(6)}° E`;
-      handleChange("gpsCoordinates", coordinates);
+      const data = await response.json();
+      console.log('Geocoding response:', data);
+      
+      if (data.status === "OK" && data.results?.[0]?.geometry?.location) {
+        const { lat, lng } = data.results[0].geometry.location;
+        handleChange("gpsCoordinates", `${lat.toFixed(6)}° N, ${lng.toFixed(6)}° E`);
+      } else {
+        setGeocodingError("Could not get coordinates for this address");
+      }
     } catch (error) {
-      console.error('Geocoding error:', error);
-      setGeocodingError("Failed to get GPS coordinates. Please try again or enter manually.");
+      console.error('Error:', error);
+      setGeocodingError("Failed to get coordinates");
     } finally {
       setIsGeocoding(false);
     }
@@ -213,7 +242,7 @@ export default function EditQuoteRequestPage() {
   // Add a debounced version of handleAddressChange
   const debouncedHandleAddressChange = useCallback(
     debounce((address: string) => handleAddressChange(address), 1000),
-    [isGoogleMapsLoaded]
+    []
   );
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -498,21 +527,16 @@ export default function EditQuoteRequestPage() {
                     </div>
 
                     <div className="space-y-6">
-                      <div className="space-y-2">
+                      <div>
                         <label className="block mb-1 font-medium">Jobsite Address</label>
-                        <div className="text-xs text-gray-500 mb-2">
-                          Enter a complete address including street, number, city, and country
-                        </div>
                         <input
+                          ref={addressInputRef}
                           type="text"
                           value={form.jobsiteAddress || ""}
-                          onChange={(e) => {
-                            handleChange("jobsiteAddress", e.target.value);
-                            debouncedHandleAddressChange(e.target.value);
-                          }}
-                          disabled={isReadOnly}
+                          onChange={(e) => handleChange("jobsiteAddress", e.target.value)}
+                          placeholder="Enter a complete address including street, number, city, and country"
                           className="w-full p-2 border rounded"
-                          placeholder="e.g. Schuttevaerweg 19 3044BA Rotterdam, Netherlands"
+                          disabled={isReadOnly}
                         />
                       </div>
 
