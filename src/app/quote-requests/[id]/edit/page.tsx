@@ -13,6 +13,7 @@ import { useMessages } from '@/app/hooks/useMessages';
 import Link from "next/link";
 
 const statuses = ["In Progress", "Snoozed", "Won", "Lost", "Cancelled"];
+const GEOCODING_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 
 export default function EditQuoteRequestPage() {
   const params = useParams();
@@ -33,6 +34,8 @@ export default function EditQuoteRequestPage() {
   const [attachments, setAttachments] = useState<any[]>([]);
   const [newNote, setNewNote] = useState("");
   const { messages, loading: messagesLoading, error: messagesError, sendMessage } = useMessages(params.id as string);
+  const [isGeocoding, setIsGeocoding] = useState(false);
+  const [geocodingError, setGeocodingError] = useState("");
 
   useEffect(() => {
     const fetchData = async () => {
@@ -139,6 +142,35 @@ export default function EditQuoteRequestPage() {
     setForm((prev: any) => ({ ...prev, jobsiteContactId: docRef.id }));
     setShowNewContact(false);
     setNewContact({ name: "", phone: "" });
+  };
+
+  const handleAddressChange = async (address: string) => {
+    handleChange("jobsiteAddress", address);
+    
+    // Clear previous error
+    setGeocodingError("");
+    
+    // Don't geocode if the address is too short
+    if (address.length < 5) return;
+    
+    setIsGeocoding(true);
+    try {
+      const response = await fetch(
+        `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${GEOCODING_API_KEY}`
+      );
+      const data = await response.json();
+      
+      if (data.status === "OK" && data.results[0]?.geometry?.location) {
+        const { lat, lng } = data.results[0].geometry.location;
+        const coordinates = `${lat.toFixed(6)}° N, ${lng.toFixed(6)}° E`;
+        handleChange("gpsCoordinates", coordinates);
+      }
+    } catch (error) {
+      console.error("Geocoding error:", error);
+      setGeocodingError("Could not get GPS coordinates automatically");
+    } finally {
+      setIsGeocoding(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -413,27 +445,53 @@ export default function EditQuoteRequestPage() {
                 </div>
 
                 <div className="space-y-6">
-                  <div>
+                  <div className="space-y-2">
                     <label className="block mb-1 font-medium">Jobsite Address</label>
+                    <div className="text-xs text-gray-500 mb-2">
+                      Enter a complete address including street, number, city, and country
+                    </div>
                     <input
                       type="text"
                       value={form.jobsiteAddress || ""}
-                      onChange={(e) => handleChange("jobsiteAddress", e.target.value)}
+                      onChange={(e) => handleAddressChange(e.target.value)}
                       disabled={isReadOnly}
                       className="w-full p-2 border rounded"
+                      placeholder="e.g. Schuttevaerweg 19 3044BA Rotterdam, Netherlands"
                     />
                   </div>
 
-                  <div>
+                  <div className="space-y-2">
                     <label className="block mb-1 font-medium">GPS Coordinates</label>
-                    <input
-                      type="text"
-                      value={form.gpsCoordinates || ""}
-                      onChange={(e) => handleChange("gpsCoordinates", e.target.value)}
-                      disabled={isReadOnly}
-                      className="w-full p-2 border rounded"
-                      placeholder="e.g. 52.3676° N, 4.9041° E"
-                    />
+                    <div className="text-xs text-gray-500 mb-2">
+                      {isGeocoding ? (
+                        <span className="text-blue-500">Getting coordinates...</span>
+                      ) : geocodingError ? (
+                        <span className="text-red-500">{geocodingError}</span>
+                      ) : (
+                        "Coordinates will auto-fill when you enter an address, or you can enter them manually"
+                      )}
+                    </div>
+                    <div className="flex gap-2 items-center">
+                      <input
+                        type="text"
+                        value={form.gpsCoordinates || ""}
+                        onChange={(e) => handleChange("gpsCoordinates", e.target.value)}
+                        disabled={isReadOnly || isGeocoding}
+                        className="w-full p-2 border rounded"
+                        placeholder="e.g. 51.922925° N, 4.429714° E"
+                      />
+                      {!isReadOnly && form.gpsCoordinates && (
+                        <a
+                          href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(form.gpsCoordinates)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="shrink-0 px-3 py-2 text-sm bg-blue-500 text-white rounded hover:bg-blue-600"
+                          title="View on Google Maps"
+                        >
+                          View on Map
+                        </a>
+                      )}
+                    </div>
                   </div>
 
                   <div>
