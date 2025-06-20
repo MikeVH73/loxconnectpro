@@ -41,6 +41,12 @@ export default function EditQuoteRequestPage() {
       const snap = await getDoc(docRef);
       if (snap.exists()) {
         const data: any = { ...snap.data(), id: snap.id };
+        // Ensure both involvedCountry and targetCountry are set
+        if (data.involvedCountry && !data.targetCountry) {
+          data.targetCountry = data.involvedCountry;
+        } else if (data.targetCountry && !data.involvedCountry) {
+          data.involvedCountry = data.targetCountry;
+        }
         setForm(data);
         setOriginal(data);
         setAttachments(data.attachments || []);
@@ -295,8 +301,11 @@ export default function EditQuoteRequestPage() {
                   <div>
                     <label className="block mb-1 font-medium">Target Country</label>
                     <CountrySelect
-                      value={form.targetCountry || ""}
-                      onChange={(value) => handleChange("targetCountry", value)}
+                      value={form.involvedCountry || form.targetCountry || ""}
+                      onChange={(value) => {
+                        handleChange("involvedCountry", value);
+                        handleChange("targetCountry", value);
+                      }}
                       disabled={isReadOnly}
                     />
                   </div>
@@ -412,6 +421,18 @@ export default function EditQuoteRequestPage() {
                       onChange={(e) => handleChange("jobsiteAddress", e.target.value)}
                       disabled={isReadOnly}
                       className="w-full p-2 border rounded"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block mb-1 font-medium">GPS Coordinates</label>
+                    <input
+                      type="text"
+                      value={form.gpsCoordinates || ""}
+                      onChange={(e) => handleChange("gpsCoordinates", e.target.value)}
+                      disabled={isReadOnly}
+                      className="w-full p-2 border rounded"
+                      placeholder="e.g. 52.3676° N, 4.9041° E"
                     />
                   </div>
 
