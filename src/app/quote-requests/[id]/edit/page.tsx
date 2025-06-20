@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { doc, getDoc, updateDoc, collection, getDocs, query, where, serverTimestamp, addDoc } from "firebase/firestore";
 import { db } from "../../../../firebaseClient";
@@ -11,6 +11,7 @@ import CountrySelect from "../../../components/CountrySelect";
 import MessagingPanel from '@/app/components/MessagingPanel';
 import { useMessages } from '@/app/hooks/useMessages';
 import Link from "next/link";
+import { debounce } from "lodash";
 
 const statuses = ["In Progress", "Snoozed", "Won", "Lost", "Cancelled"];
 const GEOCODING_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
@@ -155,23 +156,51 @@ export default function EditQuoteRequestPage() {
     
     setIsGeocoding(true);
     try {
+      // Use encodeURIComponent for proper URL encoding of the address
+      const encodedAddress = encodeURIComponent(address);
+      const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+      
+      if (!apiKey) {
+        console.error('Google Maps API key is not configured');
+        setGeocodingError("Geocoding service is not configured");
+        return;
+      }
+
+      console.log('Fetching coordinates for address:', address);
+      
       const response = await fetch(
-        `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${GEOCODING_API_KEY}`
+        `https://maps.googleapis.com/maps/api/geocode/json?address=${encodedAddress}&key=${apiKey}`
       );
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
       const data = await response.json();
+      console.log('Geocoding response:', data);
       
       if (data.status === "OK" && data.results[0]?.geometry?.location) {
         const { lat, lng } = data.results[0].geometry.location;
         const coordinates = `${lat.toFixed(6)}° N, ${lng.toFixed(6)}° E`;
+        console.log('Setting coordinates:', coordinates);
         handleChange("gpsCoordinates", coordinates);
+      } else {
+        console.error('Geocoding failed:', data.status, data.error_message);
+        setGeocodingError(data.error_message || "Could not get coordinates for this address");
       }
     } catch (error) {
-      console.error("Geocoding error:", error);
-      setGeocodingError("Could not get GPS coordinates automatically");
+      console.error('Geocoding error:', error);
+      setGeocodingError("Failed to get GPS coordinates. Please try again or enter manually.");
     } finally {
       setIsGeocoding(false);
     }
   };
+
+  // Add a debounced version of handleAddressChange to prevent too many API calls
+  const debouncedHandleAddressChange = useCallback(
+    debounce((address: string) => handleAddressChange(address), 1000),
+    []
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -453,7 +482,10 @@ export default function EditQuoteRequestPage() {
                     <input
                       type="text"
                       value={form.jobsiteAddress || ""}
-                      onChange={(e) => handleAddressChange(e.target.value)}
+                      onChange={(e) => {
+                        handleChange("jobsiteAddress", e.target.value);
+                        debouncedHandleAddressChange(e.target.value);
+                      }}
                       disabled={isReadOnly}
                       className="w-full p-2 border rounded"
                       placeholder="e.g. Schuttevaerweg 19 3044BA Rotterdam, Netherlands"
