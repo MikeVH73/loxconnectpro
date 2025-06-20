@@ -34,15 +34,11 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${geistSans.variable} ${geistMono.variable} ${inter.variable} antialiased`}>
-        <div className="transform scale-[0.85] origin-top-left min-h-[120vh]">
-          <ClientLayout>
-            <AuthProvider>
-              <ConditionalLayout>
-                {children}
-              </ConditionalLayout>
-            </AuthProvider>
-          </ClientLayout>
-        </div>
+        <ClientLayout>
+          <AuthProvider>
+            {children}
+          </AuthProvider>
+        </ClientLayout>
       </body>
     </html>
   );
