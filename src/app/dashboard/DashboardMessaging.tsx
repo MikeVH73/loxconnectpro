@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import { collection, query, where, orderBy, onSnapshot, DocumentData, addDoc, getDoc, doc, Firestore } from 'firebase/firestore';
+import { collection, query, where, orderBy, onSnapshot, DocumentData, addDoc, getDoc, doc, Firestore, serverTimestamp, Timestamp, updateDoc } from 'firebase/firestore';
 import { db } from '@/firebaseClient';
 import { useAuth } from '../AuthProvider';
 import MessagingPanel from '../components/MessagingPanel';
@@ -9,7 +9,7 @@ import MessagingPanel from '../components/MessagingPanel';
 interface Message {
   id: string;
   text: string;
-  createdAt: Date;
+  createdAt: any; // We'll handle the timestamp conversion in the component
   sender: string;
   senderCountry: string;
   quoteRequestId?: string;
@@ -37,6 +37,24 @@ export default function DashboardMessaging({ quoteRequestId, onClose }: Dashboar
   const [quoteRequest, setQuoteRequest] = useState<QuoteRequest | null>(null);
 
   useEffect(() => {
+    if (!user || !db || !quoteRequestId) return;
+
+    // Mark messages as read whenever the component mounts or quoteRequestId changes
+    const markAsRead = async () => {
+      try {
+        const quoteRef = doc(db, 'quoteRequests', quoteRequestId);
+        await updateDoc(quoteRef, {
+          hasUnreadMessages: false
+        });
+      } catch (err) {
+        console.error('Error marking messages as read:', err);
+      }
+    };
+
+    markAsRead();
+  }, [user, db, quoteRequestId]);
+
+  useEffect(() => {
     if (!user || !db || !quoteRequestId) {
       setLoading(false);
       return;
@@ -44,11 +62,18 @@ export default function DashboardMessaging({ quoteRequestId, onClose }: Dashboar
 
     const firestore = db;
 
-    // Fetch quote request details
+    // Fetch quote request details and mark as read
     const fetchQuoteRequest = async () => {
       try {
-        const quoteDoc = await getDoc(doc(firestore, 'quoteRequests', quoteRequestId));
+        const quoteRef = doc(firestore, 'quoteRequests', quoteRequestId);
+        const quoteDoc = await getDoc(quoteRef);
+        
         if (quoteDoc.exists()) {
+          // Mark as read immediately when opening
+          await updateDoc(quoteRef, {
+            hasUnreadMessages: false
+          });
+          
           setQuoteRequest({
             id: quoteDoc.id,
             ...quoteDoc.data()
@@ -62,28 +87,29 @@ export default function DashboardMessaging({ quoteRequestId, onClose }: Dashboar
     fetchQuoteRequest();
 
     try {
+      // Set up messages listener
+      const messagesRef = collection(firestore, 'messages');
       const q = query(
-        collection(firestore, 'messages'),
+        messagesRef,
         where('quoteRequestId', '==', quoteRequestId),
-        orderBy('createdAt', 'desc')
+        orderBy('createdAt', 'asc')
       );
 
       const unsubscribe = onSnapshot(q, (snapshot) => {
-        const newMessages = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        })) as Message[];
+        // Convert messages and reverse to show oldest first
+        const newMessages = snapshot.docs
+          .map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+          }))
+          .reverse() as Message[];
+
         setMessages(newMessages);
         setLoading(false);
         setError(null);
-        setIndexError(null);
       }, (err) => {
         console.error('Error fetching messages:', err);
-        if (err.message.includes('requires an index')) {
-          setIndexError(err.message);
-        } else {
-          setError(err.message);
-        }
+        setError(err.message);
         setLoading(false);
       });
 
@@ -93,7 +119,27 @@ export default function DashboardMessaging({ quoteRequestId, onClose }: Dashboar
       setError(err.message);
       setLoading(false);
     }
-  }, [user, quoteRequestId]);
+  }, [user, db, quoteRequestId]);
+
+  const handleSendMessage = async (text: string) => {
+    if (!user?.email || !userProfile?.businessUnit || !db) {
+      throw new Error('User not authenticated or database not initialized');
+    }
+    try {
+      const messagesRef = collection(db, 'messages');
+      await addDoc(messagesRef, {
+        text,
+        sender: user.email,
+        senderCountry: userProfile.businessUnit,
+        createdAt: serverTimestamp(),
+        quoteRequestId,
+        participants: [user.uid]
+      });
+    } catch (err: any) {
+      console.error('Error sending message:', err);
+      throw new Error('Failed to send message');
+    }
+  };
 
   if (loading) {
     return (
@@ -114,19 +160,23 @@ export default function DashboardMessaging({ quoteRequestId, onClose }: Dashboar
               </svg>
             </div>
             <div className="ml-3">
-              <h3 className="text-sm font-medium text-yellow-800">Setting up message indexing</h3>
+              <h3 className="text-sm font-medium text-yellow-800">One-time setup needed</h3>
               <div className="mt-2 text-sm text-yellow-700">
-                <p>We're creating an index to optimize message loading. This may take a few minutes. Please refresh the page in a moment.</p>
-                <p className="mt-2">
-                  <a
-                    href={indexError.split('create it here: ')[1]}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-yellow-800 underline hover:text-yellow-900"
-                  >
-                    Click here to check index creation status
-                  </a>
-                </p>
+                <p>We need to create a database index to optimize message loading. This only needs to be done once:</p>
+                <ol className="mt-2 list-decimal list-inside space-y-1">
+                  <li>Click the link below to open Firebase Console</li>
+                  <li>Sign in with your Firebase account if needed</li>
+                  <li>Click the "Create Index" button</li>
+                  <li>Return here and refresh the page</li>
+                </ol>
+                <a
+                  href={indexError}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-3 inline-block text-yellow-800 underline hover:text-yellow-900"
+                >
+                  Create Index in Firebase Console →
+                </a>
               </div>
             </div>
           </div>
@@ -157,25 +207,7 @@ export default function DashboardMessaging({ quoteRequestId, onClose }: Dashboar
         messages={messages}
         currentUser={user?.email || ''}
         currentCountry={userProfile?.businessUnit || ''}
-        onSendMessage={async (text) => {
-          if (!user?.email || !userProfile?.businessUnit || !db) {
-            throw new Error('User not authenticated or database not initialized');
-          }
-          try {
-            const messagesRef = collection(db, 'messages');
-            await addDoc(messagesRef, {
-              text,
-              sender: user.email,
-              senderCountry: userProfile.businessUnit,
-              createdAt: new Date(),
-              quoteRequestId,
-              participants: [user.uid]
-            });
-          } catch (err: any) {
-            console.error('Error sending message:', err);
-            throw new Error('Failed to send message');
-          }
-        }}
+        onSendMessage={handleSendMessage}
         quoteTitle={quoteRequest ? `${quoteRequest.title} (${quoteRequest.creatorCountry} → ${quoteRequest.targetCountry})` : ''}
         onBack={onClose}
         quoteRequestFiles={quoteRequest?.attachments || []}

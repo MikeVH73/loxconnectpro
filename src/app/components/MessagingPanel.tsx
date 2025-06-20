@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef, KeyboardEvent } from "react";
 import { storage } from "@/firebaseClient";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import type { FirebaseStorage } from "firebase/storage";
+import type { Timestamp } from "firebase/firestore";
 
 interface Message {
   id: string;
   text: string;
-  createdAt: Date;
+  createdAt: Timestamp;
   sender: string;
   senderCountry: string;
 }
@@ -93,7 +95,7 @@ export default function MessagingPanel({
   };
 
   const handleFileSelect = async (files: FileList | null) => {
-    if (!files || !onFilesChange) return;
+    if (!files || !onFilesChange || !storage) return;
 
     setIsUploading(true);
     setError(null);
@@ -108,7 +110,7 @@ export default function MessagingPanel({
         }
 
         // Upload to Firebase Storage
-        const storageRef = ref(storage, `quote-files/${Date.now()}-${file.name}`);
+        const storageRef = ref(storage as FirebaseStorage, `quote-files/${Date.now()}-${file.name}`);
         await uploadBytes(storageRef, file);
         const url = await getDownloadURL(storageRef);
 
@@ -143,7 +145,7 @@ export default function MessagingPanel({
   }
 
   return (
-    <div className="flex flex-col h-full w-[400px] bg-white">
+    <div className="flex flex-col h-full bg-white">
       {/* Headers */}
       <div className="flex-none">
         <div className="h-12 border-b flex items-center justify-between px-4">
@@ -260,7 +262,7 @@ export default function MessagingPanel({
         </div>
       </div>
 
-      {/* Message Input */}
+      {/* Message Input - Fixed at bottom */}
       <div className="flex-none border-t">
         <form onSubmit={handleSubmit} className="p-3 flex flex-col gap-2">
           {error && (
@@ -278,7 +280,7 @@ export default function MessagingPanel({
             />
             <button
               type="submit"
-              className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="shrink-0 whitespace-nowrap px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
               disabled={isSending || !messageText.trim() || readOnly}
             >
               {isSending ? 'Sending...' : 'Send'}

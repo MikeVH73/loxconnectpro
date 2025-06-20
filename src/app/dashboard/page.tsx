@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "../AuthProvider";
 import { signOut } from "firebase/auth";
 import { auth } from "../../firebaseClient";
-import { collection, getDocs, addDoc, query, where, orderBy, onSnapshot, serverTimestamp } from "firebase/firestore";
+import { collection, getDocs, addDoc, query, where, orderBy, onSnapshot, serverTimestamp, limit, doc, updateDoc } from "firebase/firestore";
 import { db } from "../../firebaseClient";
 import { Select, MenuItem, InputLabel, FormControl, Checkbox, ListItemText, IconButton } from "@mui/material";
 import ClearIcon from '@mui/icons-material/Clear';
@@ -39,6 +39,11 @@ interface QuoteRequest {
   creatorCountry: string;
   targetCountry: string;
   status: string;
+  lastMessageAt?: string | null;
+  hasUnreadMessages?: boolean;
+  jobsite?: string;
+  involvedCountry?: string;
+  notes?: string;
 }
 
 interface QuoteRequestCardProps {
@@ -46,6 +51,8 @@ interface QuoteRequestCardProps {
   customers: Customer[];
   labels: Label[];
   onCardClick: () => void;
+  getCustomerName: (id: string) => string;
+  getLabelName: (id: string) => string;
 }
 
 export default function DashboardPage() {
@@ -95,11 +102,10 @@ export default function DashboardPage() {
       }
 
       try {
-        const firestore = db as Firestore;
         const [qrSnap, labelSnap, customerSnap] = await Promise.all([
-          getDocs(collection(firestore, "quoteRequests")),
-          getDocs(collection(firestore, "labels")),
-          getDocs(collection(firestore, "customers")),
+          getDocs(collection(db, "quoteRequests")),
+          getDocs(collection(db, "labels")),
+          getDocs(collection(db, "customers")),
         ]);
         setQuoteRequests(qrSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
         setLabels(labelSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
@@ -109,7 +115,7 @@ export default function DashboardPage() {
       }
     };
     fetchData();
-  }, []);
+  }, [db]);
 
   useEffect(() => {
     if (!selectedQuoteId) {
@@ -124,6 +130,42 @@ export default function DashboardPage() {
   useEffect(() => {
     setIsClient(true);
   }, []);
+
+  useEffect(() => {
+    if (!user || !db) return;
+
+    try {
+      // Listen for new messages
+      const messagesRef = collection(db, 'messages');
+      const messagesQuery = query(
+        messagesRef,
+        orderBy('createdAt', 'desc'),
+        limit(1)
+      );
+
+      const unsubscribe = onSnapshot(messagesQuery, (snapshot) => {
+        snapshot.docChanges().forEach((change) => {
+          if (change.type === 'added') {
+            const message = change.doc.data();
+            const quoteRequestId = message.quoteRequestId;
+            
+            // Update the quote request's lastMessageAt
+            if (quoteRequestId) {
+              const quoteRef = doc(db, 'quoteRequests', quoteRequestId);
+              updateDoc(quoteRef, {
+                lastMessageAt: message.createdAt,
+                hasUnreadMessages: true
+              }).catch(console.error);
+            }
+          }
+        });
+      });
+
+      return () => unsubscribe();
+    } catch (err) {
+      console.error('Error setting up message listener:', err);
+    }
+  }, [user, db]);
 
   if (!isClient || loading) {
     return (
@@ -145,23 +187,43 @@ export default function DashboardPage() {
   }
 
   // Filter quoteRequests by user's countries array
-  const userCountries = userProfile?.countries || [];
+  const userCountries: string[] = userProfile?.countries || [];
+  console.log("[Dashboard] User Profile:", {
+    email: userProfile?.email,
+    role: userProfile?.role,
+    countries: userCountries,
+    businessUnit: userProfile?.businessUnit
+  });
   
-  // More lenient filtering - also check if user has superAdmin role or if countries array is empty
-  const visibleQuoteRequests = userProfile?.role === "superAdmin" || userCountries.length === 0
-    ? quoteRequests // SuperAdmin sees all, or if no countries set, show all
+  // Filter quote requests by user's countries, regardless of role
+  const visibleQuoteRequests = userCountries.length === 0
+    ? quoteRequests // If no countries set, show all
     : quoteRequests.filter(qr => {
-        // Check if user countries match creator or involved country
-        const creatorMatch = userCountries.some((userCountry: string) => 
-          qr.creatorCountry?.toLowerCase().includes(userCountry.toLowerCase()) ||
-          userCountry.toLowerCase().includes(qr.creatorCountry?.toLowerCase())
+        // Debug log each quote request's countries
+        const isVisible = userCountries.some((userCountry: string) => 
+          userCountry === qr.creatorCountry || userCountry === qr.involvedCountry
         );
-        const involvedMatch = userCountries.some((userCountry: string) => 
-          qr.involvedCountry?.toLowerCase().includes(userCountry.toLowerCase()) ||
-          userCountry.toLowerCase().includes(qr.involvedCountry?.toLowerCase())
-        );
-        return creatorMatch || involvedMatch;
+        
+        console.log("[Dashboard] Quote Request Visibility Check:", {
+          id: qr.id,
+          title: qr.title,
+          creatorCountry: qr.creatorCountry,
+          involvedCountry: qr.involvedCountry,
+          userCountries,
+          isVisible,
+          hasNoCountries: userCountries.length === 0
+        });
+
+        return isVisible;
       });
+
+  console.log("[Dashboard] Filtered Quote Requests:", visibleQuoteRequests.map(qr => ({
+    id: qr.id,
+    title: qr.title,
+    creatorCountry: qr.creatorCountry,
+    involvedCountry: qr.involvedCountry,
+    status: qr.status
+  })));
 
   const inProgressCount = visibleQuoteRequests.filter(qr => qr.status === "In Progress").length;
 
@@ -191,7 +253,9 @@ export default function DashboardPage() {
   const filteredRequests = inProgressRequests.filter(qr => {
     const labelMatch = selectedLabel ? (qr.labels || []).includes(selectedLabel) : true;
     const customerMatch = selectedCustomer ? qr.customer === selectedCustomer : true;
-    const countryMatch = selectedCountry ? (qr.creatorCountry === selectedCountry || qr.involvedCountry === selectedCountry) : true;
+    const countryMatch = selectedCountry 
+      ? qr.creatorCountry === selectedCountry || qr.involvedCountry === selectedCountry
+      : true;
     const userMatch = selectedUser ? qr.user === selectedUser : true;
     return labelMatch && customerMatch && countryMatch && userMatch;
   });
@@ -217,14 +281,9 @@ export default function DashboardPage() {
   
   // Filter countries to only show user's accessible countries for the dropdown
   const allCountries = Object.keys(countryCounts);
-  const userAccessibleCountries = userProfile?.role === "superAdmin" || userCountries.length === 0
-    ? allCountries // SuperAdmin sees all countries in filter
-    : allCountries.filter(country => 
-        userCountries.some((userCountry: string) => 
-          country.toLowerCase().includes(userCountry.toLowerCase()) ||
-          userCountry.toLowerCase().includes(country.toLowerCase())
-        )
-      );
+  const userAccessibleCountries = userCountries.length === 0
+    ? allCountries // If no countries set, show all countries in filter
+    : allCountries.filter(country => userCountries.includes(country));
   const maxCountryCount = Math.max(1, ...Object.values(countryCounts));
 
   // Sort: Urgent at top
@@ -336,6 +395,8 @@ export default function DashboardPage() {
                   customers={customers}
                   labels={labels}
                   onCardClick={() => setSelectedQuoteId(qr.id)}
+                  getCustomerName={getCustomerName}
+                  getLabelName={getLabelName}
                 />
               ))}
             </div>
@@ -354,6 +415,8 @@ export default function DashboardPage() {
                   customers={customers}
                   labels={labels}
                   onCardClick={() => setSelectedQuoteId(qr.id)}
+                  getCustomerName={getCustomerName}
+                  getLabelName={getLabelName}
                 />
               ))}
             </div>
@@ -372,6 +435,8 @@ export default function DashboardPage() {
                   customers={customers}
                   labels={labels}
                   onCardClick={() => setSelectedQuoteId(qr.id)}
+                  getCustomerName={getCustomerName}
+                  getLabelName={getLabelName}
                 />
               ))}
             </div>
@@ -390,6 +455,8 @@ export default function DashboardPage() {
                   customers={customers}
                   labels={labels}
                   onCardClick={() => setSelectedQuoteId(qr.id)}
+                  getCustomerName={getCustomerName}
+                  getLabelName={getLabelName}
                 />
               ))}
             </div>
@@ -410,10 +477,7 @@ export default function DashboardPage() {
   );
 }
 
-function QuoteRequestCard({ qr, customers, labels, onCardClick }: QuoteRequestCardProps) {
-  const getCustomerName = (customerId: string): string => customers.find(c => c.id === customerId)?.name || customerId;
-  const getLabelName = (labelId: string): string => labels.find(l => l.id === labelId)?.name || labelId;
-
+function QuoteRequestCard({ qr, customers, labels, onCardClick, getCustomerName, getLabelName }: QuoteRequestCardProps) {
   return (
     <div className="card-modern border-l-4 border-[#e40115] p-3 min-h-[120px] flex flex-col justify-between relative cursor-pointer" onClick={onCardClick}>
       <Link
@@ -431,7 +495,6 @@ function QuoteRequestCard({ qr, customers, labels, onCardClick }: QuoteRequestCa
         {qr.title}
       </div>
       <div className="text-xs text-gray-500 mb-1">{getCustomerName(qr.customer)}</div>
-      <div className="text-xs text-gray-500 mb-1">Jobsite: {qr.jobsite?.address || <span className='italic text-gray-300'>No jobsite</span>}</div>
       <div className="text-xs text-gray-400 mb-1">{qr.creatorCountry} → {qr.involvedCountry}</div>
       <div className="flex flex-wrap gap-1 mt-1">
         {(qr.labels || []).map(id => {
@@ -454,6 +517,14 @@ function QuoteRequestCard({ qr, customers, labels, onCardClick }: QuoteRequestCa
       {Array.isArray(qr.notes) && qr.notes.length > 0 && (
         <div className="text-xs text-gray-400 italic mt-1 truncate" title={qr.notes[qr.notes.length-1].text}>
           Last note: {qr.notes[qr.notes.length-1].text}
+        </div>
+      )}
+      {qr.hasUnreadMessages && (
+        <div className="absolute top-2 right-8 w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
+      )}
+      {qr.lastMessageAt && (
+        <div className="text-xs text-gray-500 mt-1">
+          Last message: {new Date(qr.lastMessageAt).toLocaleString()}
         </div>
       )}
     </div>

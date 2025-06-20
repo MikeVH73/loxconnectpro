@@ -47,16 +47,8 @@ export default function QuoteRequestsPage() {
       // More lenient filtering - also check if user has superAdmin role or if countries array is empty
       if (userProfile?.role !== "superAdmin" && userCountries.length > 0) {
         allRequests = allRequests.filter(qr => {
-          // Check if user countries match creator or involved country
-          const creatorMatch = userCountries.some((userCountry: string) => 
-            qr.creatorCountry?.toLowerCase().includes(userCountry.toLowerCase()) ||
-            userCountry.toLowerCase().includes(qr.creatorCountry?.toLowerCase())
-          );
-          const involvedMatch = userCountries.some((userCountry: string) => 
-            qr.involvedCountry?.toLowerCase().includes(userCountry.toLowerCase()) ||
-            userCountry.toLowerCase().includes(qr.involvedCountry?.toLowerCase())
-          );
-          return creatorMatch || involvedMatch;
+          // Simple exact match - show if user's country matches either creator or involved country
+          return userCountries.includes(qr.creatorCountry) || userCountries.includes(qr.involvedCountry);
         });
       }
       
