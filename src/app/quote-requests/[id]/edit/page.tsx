@@ -205,325 +205,328 @@ export default function EditQuoteRequestPage() {
   if (!form) return null;
 
   return (
-    <div className="transform scale-[0.85] origin-top-left w-[118%]">
-      <div className="p-6">
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="flex items-center gap-4 mb-6">
-            <h1 className="text-2xl font-semibold text-gray-900 flex items-center gap-2">
-              <Link href="/quote-requests" className="text-gray-400 hover:text-gray-600">
-                Edit Quote Request
-              </Link>
-              <span className="text-gray-400">/</span>
-              {form.creatorCountry}
-              {form.targetCountry && (
-                <>
-                  <span className="text-gray-400">→</span>
-                  {form.targetCountry}
-                </>
-              )}
-            </h1>
-          </div>
-
-          <div className="flex flex-wrap gap-4 items-center">
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="waitingForAnswer"
-                checked={form.waitingForAnswer}
-                onChange={(e) => handleChange("waitingForAnswer", e.target.checked)}
-                disabled={isReadOnly}
-                className="h-5 w-5 text-blue-600"
-              />
-              <label htmlFor="waitingForAnswer" className="text-sm text-gray-700">
-                Waiting for Answer
-              </label>
+    <div className="flex h-full">
+      {/* Main content with scaling */}
+      <div className="flex-1 transform scale-[0.85] origin-top-left min-h-screen">
+        <div className="p-6">
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="flex items-center gap-4 mb-6">
+              <h1 className="text-2xl font-semibold text-gray-900 flex items-center gap-2">
+                <Link href="/quote-requests" className="text-gray-400 hover:text-gray-600">
+                  Edit Quote Request
+                </Link>
+                <span className="text-gray-400">/</span>
+                {form.creatorCountry}
+                {form.targetCountry && (
+                  <>
+                    <span className="text-gray-400">→</span>
+                    {form.targetCountry}
+                  </>
+                )}
+              </h1>
             </div>
 
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="urgent"
-                checked={form.urgent}
-                onChange={(e) => handleChange("urgent", e.target.checked)}
-                disabled={isReadOnly}
-                className="h-5 w-5 text-red-600"
-              />
-              <label htmlFor="urgent" className="text-sm text-gray-700">
-                Urgent
-              </label>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="problems"
-                checked={form.problems}
-                onChange={(e) => handleChange("problems", e.target.checked)}
-                disabled={isReadOnly}
-                className="h-5 w-5 text-yellow-600"
-              />
-              <label htmlFor="problems" className="text-sm text-gray-700">
-                Problems
-              </label>
-            </div>
-          </div>
-
-          <div className="p-6">
-            <div className="grid grid-cols-[1fr_2fr_1fr] gap-6">
-              <div className="space-y-6">
-                <div>
-                  <label className="block mb-1 font-medium">Title</label>
-                  <input
-                    type="text"
-                    value={form.title || ""}
-                    onChange={(e) => handleChange("title", e.target.value)}
-                    disabled={isReadOnly}
-                    className="w-full p-2 border rounded"
-                  />
-                </div>
-                <div>
-                  <label className="block mb-1 font-medium">Creator Country</label>
-                  <input
-                    type="text"
-                    value={form.creatorCountry || ""}
-                    disabled
-                    className="w-full p-2 border rounded bg-gray-50"
-                  />
-                </div>
-                <div>
-                  <label className="block mb-1 font-medium">Target Country</label>
-                  <CountrySelect
-                    value={form.targetCountry || ""}
-                    onChange={(value) => handleChange("targetCountry", value)}
-                    disabled={isReadOnly}
-                  />
-                </div>
-                <div>
-                  <label className="block mb-1 font-medium">Customer</label>
-                  <select
-                    value={form.customer || ""}
-                    onChange={(e) => handleChange("customer", e.target.value)}
-                    disabled={isReadOnly}
-                    className="w-full p-2 border rounded"
-                  >
-                    <option value="">Select customer...</option>
-                    {customers.map(customer => (
-                      <option key={customer.id} value={customer.id}>
-                        {customer.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+            <div className="flex flex-wrap gap-4 items-center">
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="waitingForAnswer"
+                  checked={form.waitingForAnswer}
+                  onChange={(e) => handleChange("waitingForAnswer", e.target.checked)}
+                  disabled={isReadOnly}
+                  className="h-5 w-5 text-blue-600"
+                />
+                <label htmlFor="waitingForAnswer" className="text-sm text-gray-700">
+                  Waiting for Answer
+                </label>
               </div>
 
-              <div className="space-y-6">
-                <div>
-                  <label className="block mb-1 font-medium">Products</label>
-                  {form.products?.map((product: any, idx: number) => (
-                    <div key={idx} className="flex gap-2 mb-2">
-                      <input
-                        type="text"
-                        value={product.catClass || ""}
-                        onChange={(e) => handleProductChange(idx, "catClass", e.target.value)}
-                        placeholder="Cat. Class"
-                        className="w-[150px] p-2 border rounded"
-                        disabled={isReadOnly}
-                      />
-                      <input
-                        type="text"
-                        value={product.description || ""}
-                        onChange={(e) => handleProductChange(idx, "description", e.target.value)}
-                        placeholder="Description"
-                        className="flex-1 p-2 border rounded"
-                        disabled={isReadOnly}
-                      />
-                      <input
-                        type="number"
-                        value={product.quantity || ""}
-                        onChange={(e) => handleProductChange(idx, "quantity", parseInt(e.target.value))}
-                        placeholder="Qty"
-                        className="w-20 p-2 border rounded"
-                        disabled={isReadOnly}
-                      />
-                      {!isReadOnly && (
-                        <button
-                          type="button"
-                          onClick={() => removeProduct(idx)}
-                          className="text-red-500 hover:text-red-700"
-                        >
-                          ×
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                  {!isReadOnly && (
-                    <button
-                      type="button"
-                      onClick={addProduct}
-                      className="text-blue-500 hover:text-blue-700"
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="urgent"
+                  checked={form.urgent}
+                  onChange={(e) => handleChange("urgent", e.target.checked)}
+                  disabled={isReadOnly}
+                  className="h-5 w-5 text-red-600"
+                />
+                <label htmlFor="urgent" className="text-sm text-gray-700">
+                  Urgent
+                </label>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="problems"
+                  checked={form.problems}
+                  onChange={(e) => handleChange("problems", e.target.checked)}
+                  disabled={isReadOnly}
+                  className="h-5 w-5 text-yellow-600"
+                />
+                <label htmlFor="problems" className="text-sm text-gray-700">
+                  Problems
+                </label>
+              </div>
+            </div>
+
+            <div className="p-6">
+              <div className="grid grid-cols-[1fr_2fr_1fr] gap-6">
+                <div className="space-y-6">
+                  <div>
+                    <label className="block mb-1 font-medium">Title</label>
+                    <input
+                      type="text"
+                      value={form.title || ""}
+                      onChange={(e) => handleChange("title", e.target.value)}
+                      disabled={isReadOnly}
+                      className="w-full p-2 border rounded"
+                    />
+                  </div>
+                  <div>
+                    <label className="block mb-1 font-medium">Creator Country</label>
+                    <input
+                      type="text"
+                      value={form.creatorCountry || ""}
+                      disabled
+                      className="w-full p-2 border rounded bg-gray-50"
+                    />
+                  </div>
+                  <div>
+                    <label className="block mb-1 font-medium">Target Country</label>
+                    <CountrySelect
+                      value={form.targetCountry || ""}
+                      onChange={(value) => handleChange("targetCountry", value)}
+                      disabled={isReadOnly}
+                    />
+                  </div>
+                  <div>
+                    <label className="block mb-1 font-medium">Customer</label>
+                    <select
+                      value={form.customer || ""}
+                      onChange={(e) => handleChange("customer", e.target.value)}
+                      disabled={isReadOnly}
+                      className="w-full p-2 border rounded"
                     >
-                      + Add Product
-                    </button>
-                  )}
+                      <option value="">Select customer...</option>
+                      {customers.map(customer => (
+                        <option key={customer.id} value={customer.id}>
+                          {customer.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block mb-1 font-medium">Notes</label>
-                  <div className="space-y-2">
-                    {form.notes?.map((note: any) => (
-                      <div key={note.dateTime} className="text-sm bg-gray-50 p-2 rounded">
-                        <div className="text-gray-500">
-                          {note.user} on {new Date(note.dateTime).toLocaleString()}
-                        </div>
-                        <div>{note.text}</div>
+                <div className="space-y-6">
+                  <div>
+                    <label className="block mb-1 font-medium">Products</label>
+                    {form.products?.map((product: any, idx: number) => (
+                      <div key={idx} className="flex gap-2 mb-2">
+                        <input
+                          type="text"
+                          value={product.catClass || ""}
+                          onChange={(e) => handleProductChange(idx, "catClass", e.target.value)}
+                          placeholder="Cat. Class"
+                          className="w-[150px] p-2 border rounded"
+                          disabled={isReadOnly}
+                        />
+                        <input
+                          type="text"
+                          value={product.description || ""}
+                          onChange={(e) => handleProductChange(idx, "description", e.target.value)}
+                          placeholder="Description"
+                          className="flex-1 p-2 border rounded"
+                          disabled={isReadOnly}
+                        />
+                        <input
+                          type="number"
+                          value={product.quantity || ""}
+                          onChange={(e) => handleProductChange(idx, "quantity", parseInt(e.target.value))}
+                          placeholder="Qty"
+                          className="w-20 p-2 border rounded"
+                          disabled={isReadOnly}
+                        />
+                        {!isReadOnly && (
+                          <button
+                            type="button"
+                            onClick={() => removeProduct(idx)}
+                            className="text-red-500 hover:text-red-700"
+                          >
+                            ×
+                          </button>
+                        )}
                       </div>
                     ))}
                     {!isReadOnly && (
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          value={newNote}
-                          onChange={(e) => setNewNote(e.target.value)}
-                          placeholder="Add a note..."
-                          className="flex-1 p-2 border rounded"
-                        />
-                        <button
-                          type="button"
-                          onClick={addNote}
-                          disabled={!newNote.trim()}
-                          className="px-4 py-2 bg-blue-500 text-white rounded disabled:opacity-50"
-                        >
-                          Add
-                        </button>
-                      </div>
+                      <button
+                        type="button"
+                        onClick={addProduct}
+                        className="text-blue-500 hover:text-blue-700"
+                      >
+                        + Add Product
+                      </button>
                     )}
                   </div>
-                </div>
-              </div>
 
-              <div className="space-y-6">
-                <div>
-                  <label className="block mb-1 font-medium">Jobsite Address</label>
-                  <input
-                    type="text"
-                    value={form.jobsiteAddress || ""}
-                    onChange={(e) => handleChange("jobsiteAddress", e.target.value)}
-                    disabled={isReadOnly}
-                    className="w-full p-2 border rounded"
-                  />
+                  <div>
+                    <label className="block mb-1 font-medium">Notes</label>
+                    <div className="space-y-2">
+                      {form.notes?.map((note: any) => (
+                        <div key={note.dateTime} className="text-sm bg-gray-50 p-2 rounded">
+                          <div className="text-gray-500">
+                            {note.user} on {new Date(note.dateTime).toLocaleString()}
+                          </div>
+                          <div>{note.text}</div>
+                        </div>
+                      ))}
+                      {!isReadOnly && (
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={newNote}
+                            onChange={(e) => setNewNote(e.target.value)}
+                            placeholder="Add a note..."
+                            className="flex-1 p-2 border rounded"
+                          />
+                          <button
+                            type="button"
+                            onClick={addNote}
+                            disabled={!newNote.trim()}
+                            className="px-4 py-2 bg-blue-500 text-white rounded disabled:opacity-50"
+                          >
+                            Add
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block mb-1 font-medium">Jobsite Contact</label>
-                  <select
-                    value={form.jobsiteContactId || ""}
-                    onChange={(e) => handleChange("jobsiteContactId", e.target.value)}
-                    disabled={isReadOnly || !form.customer}
-                    className="w-full p-2 border rounded"
-                  >
-                    <option value="">Select contact...</option>
-                    {contacts.map(contact => (
-                      <option key={contact.id} value={contact.id}>
-                        {contact.name} ({contact.phone})
-                      </option>
-                    ))}
-                  </select>
-                  {!isReadOnly && form.customer && (
-                    <button
-                      type="button"
-                      onClick={() => setShowNewContact(true)}
-                      className="mt-2 text-blue-500 hover:text-blue-700"
+                <div className="space-y-6">
+                  <div>
+                    <label className="block mb-1 font-medium">Jobsite Address</label>
+                    <input
+                      type="text"
+                      value={form.jobsiteAddress || ""}
+                      onChange={(e) => handleChange("jobsiteAddress", e.target.value)}
+                      disabled={isReadOnly}
+                      className="w-full p-2 border rounded"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block mb-1 font-medium">Jobsite Contact</label>
+                    <select
+                      value={form.jobsiteContactId || ""}
+                      onChange={(e) => handleChange("jobsiteContactId", e.target.value)}
+                      disabled={isReadOnly || !form.customer}
+                      className="w-full p-2 border rounded"
                     >
-                      + Add New Contact
-                    </button>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block mb-1 font-medium">Status</label>
-                  <select
-                    value={form.status || ""}
-                    onChange={(e) => handleChange("status", e.target.value)}
-                    disabled={isReadOnly}
-                    className="w-full p-2 border rounded"
-                  >
-                    {statuses.map(status => (
-                      <option key={status} value={status}>
-                        {status}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block mb-1 font-medium">Labels</label>
-                  <div className="flex flex-wrap gap-2">
-                    {labels.map(label => (
-                      <label
-                        key={label.id}
-                        className={`px-3 py-1 rounded-full border cursor-pointer select-none ${
-                          form.labels?.includes(label.id)
-                            ? 'bg-[#e40115] text-white border-[#e40115]'
-                            : 'bg-gray-100 text-gray-800 border-gray-300'
-                        }`}
-                        style={{
-                          opacity:
-                            form.labels?.length >= 4 && !form.labels?.includes(label.id)
-                              ? 0.5
-                              : 1,
-                        }}
+                      <option value="">Select contact...</option>
+                      {contacts.map(contact => (
+                        <option key={contact.id} value={contact.id}>
+                          {contact.name} ({contact.phone})
+                        </option>
+                      ))}
+                    </select>
+                    {!isReadOnly && form.customer && (
+                      <button
+                        type="button"
+                        onClick={() => setShowNewContact(true)}
+                        className="mt-2 text-blue-500 hover:text-blue-700"
                       >
-                        <input
-                          type="checkbox"
-                          className="hidden"
-                          checked={form.labels?.includes(label.id)}
-                          onChange={() => handleLabelToggle(label.id)}
-                          disabled={
-                            isReadOnly ||
-                            (!form.labels?.includes(label.id) &&
-                              (form.labels?.length || 0) >= 4)
-                          }
-                        />
-                        {label.name}
-                      </label>
-                    ))}
+                        + Add New Contact
+                      </button>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block mb-1 font-medium">Status</label>
+                    <select
+                      value={form.status || ""}
+                      onChange={(e) => handleChange("status", e.target.value)}
+                      disabled={isReadOnly}
+                      className="w-full p-2 border rounded"
+                    >
+                      {statuses.map(status => (
+                        <option key={status} value={status}>
+                          {status}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block mb-1 font-medium">Labels</label>
+                    <div className="flex flex-wrap gap-2">
+                      {labels.map(label => (
+                        <label
+                          key={label.id}
+                          className={`px-3 py-1 rounded-full border cursor-pointer select-none ${
+                            form.labels?.includes(label.id)
+                              ? 'bg-[#e40115] text-white border-[#e40115]'
+                              : 'bg-gray-100 text-gray-800 border-gray-300'
+                          }`}
+                          style={{
+                            opacity:
+                              form.labels?.length >= 4 && !form.labels?.includes(label.id)
+                                ? 0.5
+                                : 1,
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            className="hidden"
+                            checked={form.labels?.includes(label.id)}
+                            onChange={() => handleLabelToggle(label.id)}
+                            disabled={
+                              isReadOnly ||
+                              (!form.labels?.includes(label.id) &&
+                                (form.labels?.length || 0) >= 4)
+                            }
+                          />
+                          {label.name}
+                        </label>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
 
-            <div>
-              <label className="block mb-1 font-medium">Attachments</label>
-              <FileUpload
-                files={attachments}
-                onFilesChange={files => handleChange('attachments', files)}
-                disabled={isReadOnly}
-              />
-            </div>
-
-            {!isReadOnly && (
-              <div className="flex gap-4 mt-8">
-                <button
-                  type="submit"
-                  className="bg-[#e40115] text-white px-8 py-3 rounded text-lg font-semibold hover:bg-red-700 transition"
-                  disabled={saving}
-                >
-                  {saving ? "Saving..." : "Save Changes"}
-                </button>
-                <button
-                  type="button"
-                  className="bg-gray-200 text-gray-700 px-8 py-3 rounded text-lg font-semibold hover:bg-gray-300 transition"
-                  onClick={() => router.push("/quote-requests")}
-                  disabled={saving}
-                >
-                  Cancel
-                </button>
+              <div>
+                <label className="block mb-1 font-medium">Attachments</label>
+                <FileUpload
+                  files={attachments}
+                  onFilesChange={files => handleChange('attachments', files)}
+                  disabled={isReadOnly}
+                />
               </div>
-            )}
 
-            {error && <div className="text-red-600 text-sm mt-4">{error}</div>}
-          </div>
-        </form>
+              {!isReadOnly && (
+                <div className="flex gap-4 mt-8">
+                  <button
+                    type="submit"
+                    className="bg-[#e40115] text-white px-8 py-3 rounded text-lg font-semibold hover:bg-red-700 transition"
+                    disabled={saving}
+                  >
+                    {saving ? "Saving..." : "Save Changes"}
+                  </button>
+                  <button
+                    type="button"
+                    className="bg-gray-200 text-gray-700 px-8 py-3 rounded text-lg font-semibold hover:bg-gray-300 transition"
+                    onClick={() => router.push("/quote-requests")}
+                    disabled={saving}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+
+              {error && <div className="text-red-600 text-sm mt-4">{error}</div>}
+            </div>
+          </form>
+        </div>
       </div>
 
       {/* Right: Messaging Panel */}

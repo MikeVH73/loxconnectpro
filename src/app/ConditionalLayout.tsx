@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Sidebar from "./Sidebar";
 import Header from "./Header";
 
-export function ConditionalLayout({ children }: { children: React.ReactNode }) {
+export default function ConditionalLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [isClient, setIsClient] = useState(false);
   
@@ -17,13 +17,15 @@ export function ConditionalLayout({ children }: { children: React.ReactNode }) {
     return <>{children}</>;
   }
   
-  const showSidebar = !pathname.startsWith("/login");
+  const showSidebar = !pathname.includes('/login');
 
   if (showSidebar) {
     return (
-      <div className="flex h-screen overflow-hidden">
-        <Sidebar />
-        <div className="flex flex-col flex-1 overflow-hidden">
+      <div className="flex h-screen">
+        <div className="w-64 flex-none bg-white border-r">
+          <Sidebar />
+        </div>
+        <div className="flex-1 overflow-auto">
           <Header />
           <main className="flex-1 bg-gray-50 overflow-auto">
             {children}
