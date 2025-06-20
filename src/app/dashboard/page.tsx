@@ -10,6 +10,7 @@ import { Select, MenuItem, InputLabel, FormControl, Checkbox, ListItemText, Icon
 import ClearIcon from '@mui/icons-material/Clear';
 import Link from "next/link";
 import DashboardMessaging from "./DashboardMessaging";
+import { Firestore } from 'firebase/firestore';
 
 interface Message {
   id: string;
@@ -18,6 +19,33 @@ interface Message {
   sender: string;
   senderCountry: string;
   quoteRequestId: string;
+}
+
+interface Customer {
+  id: string;
+  name: string;
+}
+
+interface Label {
+  id: string;
+  name: string;
+}
+
+interface QuoteRequest {
+  id: string;
+  title: string;
+  customer: string;
+  labels: string[];
+  creatorCountry: string;
+  targetCountry: string;
+  status: string;
+}
+
+interface QuoteRequestCardProps {
+  qr: QuoteRequest;
+  customers: Customer[];
+  labels: Label[];
+  onCardClick: () => void;
 }
 
 export default function DashboardPage() {
@@ -36,7 +64,7 @@ export default function DashboardPage() {
 
   // Utility functions defined at the top
   const getLabelName = (id: string): string => labels.find((l: any) => l.id === id)?.name || id;
-  const getCustomerName = (id: string): string => customers.find((c: any) => c.id === id)?.name || id;
+  const getCustomerName = (id: string): string => customers.find((c) => c.id === id)?.name || id;
   const getLabelByName = (name: string): any => labels.find((l: any) => l.name?.toLowerCase() === name);
   
   // Special label names and labels
@@ -61,14 +89,24 @@ export default function DashboardPage() {
 
   useEffect(() => {
     const fetchData = async () => {
-      const [qrSnap, labelSnap, customerSnap] = await Promise.all([
-        getDocs(collection(db, "quoteRequests")),
-        getDocs(collection(db, "labels")),
-        getDocs(collection(db, "customers")),
-      ]);
-      setQuoteRequests(qrSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      setLabels(labelSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      setCustomers(customerSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      if (!db) {
+        console.error('Firebase database not initialized');
+        return;
+      }
+
+      try {
+        const firestore = db as Firestore;
+        const [qrSnap, labelSnap, customerSnap] = await Promise.all([
+          getDocs(collection(firestore, "quoteRequests")),
+          getDocs(collection(firestore, "labels")),
+          getDocs(collection(firestore, "customers")),
+        ]);
+        setQuoteRequests(qrSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        setLabels(labelSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        setCustomers(customerSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      } catch (err) {
+        console.error('Error fetching data:', err);
+      }
     };
     fetchData();
   }, []);
@@ -209,174 +247,172 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden">
-      {/* Main Content */}
-      <div className="flex-1 min-h-0 overflow-hidden">
-        <div className="h-full flex overflow-hidden">
-          {/* Left: Kanban Board */}
-          <div className="flex-1 px-4 py-6 flex flex-col min-h-0 overflow-hidden">
-            {/* Filters */}
-            <div className="flex gap-4 mb-6 flex-shrink-0">
-              <FormControl size="small" className="w-[300px]">
-                <InputLabel>Filter by Label</InputLabel>
-                <Select
-                  value={selectedLabel}
-                  label="Filter by Label"
-                  onChange={(e) => setSelectedLabel(e.target.value)}
-                >
-                  <MenuItem value="">
-                    <em>None</em>
-                  </MenuItem>
-                  {labels.map((label) => (
-                    <MenuItem key={label.id} value={label.id}>
-                      {label.name}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+    <div className="flex flex-col lg:flex-row h-screen">
+      {/* Main Dashboard Content */}
+      <div className="flex-1 overflow-auto p-6">
+        {/* Filters */}
+        <div className="mb-6 flex flex-wrap gap-4">
+          <FormControl size="small" className="w-[300px]">
+            <InputLabel>Filter by Label</InputLabel>
+            <Select
+              value={selectedLabel}
+              label="Filter by Label"
+              onChange={(e) => setSelectedLabel(e.target.value)}
+            >
+              <MenuItem value="">
+                <em>None</em>
+              </MenuItem>
+              {labels.map((label) => (
+                <MenuItem key={label.id} value={label.id}>
+                  {label.name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
 
-              <FormControl size="small" className="w-[300px]">
-                <InputLabel>Filter by Customer</InputLabel>
-                <Select
-                  value={selectedCustomer}
-                  label="Filter by Customer"
-                  onChange={(e) => setSelectedCustomer(e.target.value)}
-                >
-                  <MenuItem value="">
-                    <em>None</em>
-                  </MenuItem>
-                  {customers.map((customer) => (
-                    <MenuItem key={customer.id} value={customer.id}>
-                      {customer.name}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+          <FormControl size="small" className="w-[300px]">
+            <InputLabel>Filter by Customer</InputLabel>
+            <Select
+              value={selectedCustomer}
+              label="Filter by Customer"
+              onChange={(e) => setSelectedCustomer(e.target.value)}
+            >
+              <MenuItem value="">
+                <em>None</em>
+              </MenuItem>
+              {customers.map((customer) => (
+                <MenuItem key={customer.id} value={customer.id}>
+                  {customer.name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
 
-              <FormControl size="small" className="w-[300px]">
-                <InputLabel>Filter by Country</InputLabel>
-                <Select
-                  value={selectedCountry}
-                  label="Filter by Country"
-                  onChange={(e) => setSelectedCountry(e.target.value)}
-                >
-                  <MenuItem value="">
-                    <em>None</em>
-                  </MenuItem>
-                  {userAccessibleCountries.map((country) => (
-                    <MenuItem key={country} value={country}>
-                      {country}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+          <FormControl size="small" className="w-[300px]">
+            <InputLabel>Filter by Country</InputLabel>
+            <Select
+              value={selectedCountry}
+              label="Filter by Country"
+              onChange={(e) => setSelectedCountry(e.target.value)}
+            >
+              <MenuItem value="">
+                <em>None</em>
+              </MenuItem>
+              {userAccessibleCountries.map((country) => (
+                <MenuItem key={country} value={country}>
+                  {country}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
 
-              {selectedLabel || selectedCustomer || selectedCountry || selectedUser ? (
-                <IconButton
-                  onClick={() => {
-                    setSelectedLabel("");
-                    setSelectedCustomer("");
-                    setSelectedCountry("");
-                    setSelectedUser("");
-                  }}
-                  size="small"
-                >
-                  <ClearIcon />
-                </IconButton>
-              ) : null}
-            </div>
+          {selectedLabel || selectedCustomer || selectedCountry || selectedUser ? (
+            <IconButton
+              onClick={() => {
+                setSelectedLabel("");
+                setSelectedCustomer("");
+                setSelectedCountry("");
+                setSelectedUser("");
+              }}
+              size="small"
+            >
+              <ClearIcon />
+            </IconButton>
+          ) : null}
+        </div>
 
-            {/* Kanban Board */}
-            <div className="grid grid-cols-4 gap-4 min-h-0 flex-1 overflow-hidden">
-              {/* Urgent & Problems */}
-              <div className="bg-white rounded-lg shadow overflow-hidden flex flex-col">
-                <div className="p-4 bg-red-50 border-b">
-                  <h3 className="font-semibold text-red-700">Urgent & Problems ({urgentProblemsKanban.length})</h3>
-                </div>
-                <div className="flex-1 p-4 space-y-4 overflow-y-auto min-h-0">
-                  {urgentProblemsKanban.map((qr) => (
-                    <QuoteRequestCard
-                      key={qr.id}
-                      qr={qr}
-                      customers={customers}
-                      labels={labels}
-                      onCardClick={() => setSelectedQuoteId(qr.id)}
-                    />
-                  ))}
-                </div>
-              </div>
-
-              {/* Waiting for Answer */}
-              <div className="bg-white rounded-lg shadow overflow-hidden flex flex-col">
-                <div className="p-4 bg-yellow-50 border-b">
-                  <h3 className="font-semibold text-yellow-700">Waiting ({waitingKanban.length})</h3>
-                </div>
-                <div className="flex-1 p-4 space-y-4 overflow-y-auto min-h-0">
-                  {waitingKanban.map((qr) => (
-                    <QuoteRequestCard
-                      key={qr.id}
-                      qr={qr}
-                      customers={customers}
-                      labels={labels}
-                      onCardClick={() => setSelectedQuoteId(qr.id)}
-                    />
-                  ))}
-                </div>
-              </div>
-
-              {/* Standard */}
-              <div className="bg-white rounded-lg shadow overflow-hidden flex flex-col">
-                <div className="p-4 bg-green-50 border-b">
-                  <h3 className="font-semibold text-green-700">Standard ({standardKanban.length})</h3>
-                </div>
-                <div className="flex-1 p-4 space-y-4 overflow-y-auto min-h-0">
-                  {standardKanban.map((qr) => (
-                    <QuoteRequestCard
-                      key={qr.id}
-                      qr={qr}
-                      customers={customers}
-                      labels={labels}
-                      onCardClick={() => setSelectedQuoteId(qr.id)}
-                    />
-                  ))}
-                </div>
-              </div>
-
-              {/* Snoozed */}
-              <div className="bg-white rounded-lg shadow overflow-hidden flex flex-col">
-                <div className="p-4 bg-gray-50 border-b">
-                  <h3 className="font-semibold text-gray-700">Snoozed ({snoozedKanban.length})</h3>
-                </div>
-                <div className="flex-1 p-4 space-y-4 overflow-y-auto min-h-0">
-                  {snoozedKanban.map((qr) => (
-                    <QuoteRequestCard
-                      key={qr.id}
-                      qr={qr}
-                      customers={customers}
-                      labels={labels}
-                      onCardClick={() => setSelectedQuoteId(qr.id)}
-                    />
-                  ))}
-                </div>
-              </div>
+        {/* Kanban Board */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {/* Urgent & Problems Column */}
+          <div className="bg-red-50 p-4 rounded-lg">
+            <h2 className="text-lg font-semibold mb-4 text-red-700">
+              Urgent & Problems ({urgentProblemsKanban.length})
+            </h2>
+            <div className="space-y-4">
+              {urgentProblemsKanban.map((qr) => (
+                <QuoteRequestCard
+                  key={qr.id}
+                  qr={qr}
+                  customers={customers}
+                  labels={labels}
+                  onCardClick={() => setSelectedQuoteId(qr.id)}
+                />
+              ))}
             </div>
           </div>
 
-          {/* Right: Messaging Panel */}
-          <DashboardMessaging
-            selectedQuoteId={selectedQuoteId}
-            quoteTitle={selectedQuote?.title}
-            quoteFiles={selectedQuote?.attachments || []}
-          />
+          {/* Waiting Column */}
+          <div className="bg-yellow-50 p-4 rounded-lg">
+            <h2 className="text-lg font-semibold mb-4 text-yellow-700">
+              Waiting ({waitingKanban.length})
+            </h2>
+            <div className="space-y-4">
+              {waitingKanban.map((qr) => (
+                <QuoteRequestCard
+                  key={qr.id}
+                  qr={qr}
+                  customers={customers}
+                  labels={labels}
+                  onCardClick={() => setSelectedQuoteId(qr.id)}
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* Standard Column */}
+          <div className="bg-green-50 p-4 rounded-lg">
+            <h2 className="text-lg font-semibold mb-4 text-green-700">
+              Standard ({standardKanban.length})
+            </h2>
+            <div className="space-y-4">
+              {standardKanban.map((qr) => (
+                <QuoteRequestCard
+                  key={qr.id}
+                  qr={qr}
+                  customers={customers}
+                  labels={labels}
+                  onCardClick={() => setSelectedQuoteId(qr.id)}
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* Snoozed Column */}
+          <div className="bg-gray-50 p-4 rounded-lg">
+            <h2 className="text-lg font-semibold mb-4 text-gray-700">
+              Snoozed ({snoozedKanban.length})
+            </h2>
+            <div className="space-y-4">
+              {snoozedKanban.map((qr) => (
+                <QuoteRequestCard
+                  key={qr.id}
+                  qr={qr}
+                  customers={customers}
+                  labels={labels}
+                  onCardClick={() => setSelectedQuoteId(qr.id)}
+                />
+              ))}
+            </div>
+          </div>
         </div>
       </div>
+
+      {/* Messaging Panel */}
+      {selectedQuoteId && (
+        <div className="w-full lg:w-[400px] h-[600px] lg:h-auto bg-white border-l">
+          <DashboardMessaging
+            quoteRequestId={selectedQuoteId}
+            onClose={() => setSelectedQuoteId(null)}
+          />
+        </div>
+      )}
     </div>
   );
 }
 
-function QuoteRequestCard({ qr, customers, labels, onCardClick }: { qr: any, customers: any[], labels: any[], onCardClick: () => void }) {
-  const getCustomerName = (id: string): string => customers.find((c: any) => c.id === id)?.name || id;
-  const getLabelName = (id: string): string => labels.find((l: any) => l.id === id)?.name || id;
+function QuoteRequestCard({ qr, customers, labels, onCardClick }: QuoteRequestCardProps) {
+  const getCustomerName = (customerId: string): string => customers.find(c => c.id === customerId)?.name || customerId;
+  const getLabelName = (labelId: string): string => labels.find(l => l.id === labelId)?.name || labelId;
 
   return (
     <div className="card-modern border-l-4 border-[#e40115] p-3 min-h-[120px] flex flex-col justify-between relative cursor-pointer" onClick={onCardClick}>
