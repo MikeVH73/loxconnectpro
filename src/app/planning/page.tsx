@@ -15,7 +15,9 @@ import {
   isSameMonth,
   startOfWeek,
   endOfWeek,
-  addDays
+  addDays,
+  differenceInDays,
+  isSameDay
 } from 'date-fns';
 
 interface QuoteRequest {
@@ -94,12 +96,12 @@ export default function PlanningPage() {
     end: endOfWeek(endOfMonth(currentDate))
   });
 
-  const getQuoteRequestsForDay = (date: Date) => {
+  // Get quote requests that start in this week
+  const getQuoteRequestsStartingInWeek = (weekStart: Date) => {
+    const weekEnd = addDays(weekStart, 6);
     return quoteRequests.filter(request => {
       const startDate = parseISO(request.startDate);
-      const endDate = request.endDate ? parseISO(request.endDate) : addDays(startDate, 1); // If no end date, show for one day
-
-      return isWithinInterval(date, { start: startDate, end: endDate });
+      return isWithinInterval(startDate, { start: weekStart, end: weekEnd });
     });
   };
 
@@ -129,6 +131,17 @@ export default function PlanningPage() {
       )}
     </div>
   );
+
+  // Group calendar days by weeks
+  const weeks: Date[][] = [];
+  let currentWeek: Date[] = [];
+  calendarDays.forEach((day, index) => {
+    currentWeek.push(day);
+    if (currentWeek.length === 7) {
+      weeks.push(currentWeek);
+      currentWeek = [];
+    }
+  });
 
   return (
     <div className="p-4 max-w-7xl mx-auto">
@@ -166,51 +179,69 @@ export default function PlanningPage() {
               {day}
             </div>
           ))}
-          
-          {calendarDays.map((date: Date, index: number) => {
-            const dayQuotes = getQuoteRequestsForDay(date);
-            const isToday = format(date, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd');
-            const isCurrentMonth = isSameMonth(date, currentDate);
-            
-            return (
-              <div
-                key={date.toISOString()}
-                className={`relative bg-white p-2 min-h-[120px] border-t ${
-                  !isCurrentMonth ? 'bg-gray-50' : ''
-                } ${isToday ? 'bg-blue-50' : ''}`}
-              >
-                <div className={`font-medium text-sm mb-1 ${
-                  !isCurrentMonth ? 'text-gray-400' : 'text-gray-700'
-                }`}>
-                  {format(date, 'd')}
-                </div>
-                <div className="space-y-1">
-                  {dayQuotes.map(quote => {
-                    const startDate = parseISO(quote.startDate);
-                    const endDate = quote.endDate ? parseISO(quote.endDate) : addDays(startDate, 1);
-                    const isStart = format(date, 'yyyy-MM-dd') === format(startDate, 'yyyy-MM-dd');
-                    const isEnd = format(date, 'yyyy-MM-dd') === format(endDate, 'yyyy-MM-dd');
-                    
-                    return (
-                      <Link
-                        key={quote.id}
-                        href={`/quote-requests/${quote.id}`}
-                        className={`
-                          block p-1 text-xs rounded truncate hover:bg-red-200 transition-colors
-                          ${isStart ? 'rounded-l-md' : ''}
-                          ${isEnd ? 'rounded-r-md' : ''}
-                          bg-red-100 text-red-700
-                        `}
-                        title={`${quote.title} (${format(startDate, 'MMM d')} - ${format(endDate, 'MMM d')})`}
-                      >
-                        {quote.title}
-                      </Link>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
+        </div>
+
+        <div className="divide-y">
+          {weeks.map((week, weekIndex) => (
+            <div key={weekIndex} className="grid grid-cols-7 relative min-h-[120px]">
+              {/* Render the date numbers */}
+              {week.map((date) => {
+                const isToday = isSameDay(date, new Date());
+                const isCurrentMonth = isSameMonth(date, currentDate);
+                
+                return (
+                  <div
+                    key={date.toISOString()}
+                    className={`relative p-2 ${
+                      !isCurrentMonth ? 'bg-gray-50' : 'bg-white'
+                    } ${isToday ? 'bg-blue-50' : ''}`}
+                  >
+                    <div className={`font-medium text-sm mb-1 ${
+                      !isCurrentMonth ? 'text-gray-400' : 'text-gray-700'
+                    }`}>
+                      {format(date, 'd')}
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Render the quote request bars */}
+              {getQuoteRequestsStartingInWeek(week[0]).map((quote) => {
+                const startDate = parseISO(quote.startDate);
+                const endDate = quote.endDate ? parseISO(quote.endDate) : addDays(startDate, 1);
+                const startDayIndex = week.findIndex(day => isSameDay(day, startDate));
+                
+                // Skip if the quote doesn't start in this week
+                if (startDayIndex === -1) return null;
+
+                // Calculate how many days the bar should span
+                const daysInWeek = Math.min(
+                  7 - startDayIndex,
+                  differenceInDays(endDate, startDate) + 1
+                );
+
+                return (
+                  <Link
+                    key={quote.id}
+                    href={`/quote-requests/${quote.id}`}
+                    className={`
+                      absolute z-10 p-1 text-xs rounded-md
+                      bg-red-100 text-red-700 hover:bg-red-200 transition-colors
+                      overflow-hidden text-ellipsis whitespace-nowrap
+                    `}
+                    style={{
+                      top: `${3 + Math.random() * 2}rem`,
+                      left: `calc(${startDayIndex} * 100% / 7)`,
+                      width: `calc(${daysInWeek} * 100% / 7 - 4px)`,
+                    }}
+                    title={`${quote.title} (${format(startDate, 'MMM d')} - ${format(endDate, 'MMM d')})`}
+                  >
+                    {quote.title}
+                  </Link>
+                );
+              })}
+            </div>
+          ))}
         </div>
       </div>
     </div>
