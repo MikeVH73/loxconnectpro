@@ -14,14 +14,12 @@ import CountrySelect from "../../components/CountrySelect";
 import MessagingPanel from '@/app/components/MessagingPanel';
 import { useMessages } from '@/app/hooks/useMessages';
 import { debounce } from "lodash";
+import { loadGoogleMaps, geocodeAddress, type Coordinates } from '../../utils/maps';
 
 // Type definitions
 interface Jobsite {
   address: string;
-  coordinates: {
-    lat: number;
-    lng: number;
-  } | null;
+  coordinates: Coordinates | null;
 }
 
 interface Product {
@@ -95,7 +93,7 @@ export default function NewQuoteRequestPage() {
     { catClass: "", description: "", quantity: 1 },
   ]);
   const [jobsiteAddress, setJobsiteAddress] = useState("");
-  const [jobsiteCoords, setJobsiteCoords] = useState<{ lat: number | null; lng: number | null }>({ lat: null, lng: null });
+  const [jobsiteCoords, setJobsiteCoords] = useState<Coordinates | null>(null);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [customerDecidesEnd, setCustomerDecidesEnd] = useState(false);
@@ -118,82 +116,79 @@ export default function NewQuoteRequestPage() {
   const [isGeocoding, setIsGeocoding] = useState(false);
   const [geocodingError, setGeocodingError] = useState("");
   const [isGoogleMapsLoaded, setIsGoogleMapsLoaded] = useState(false);
-  const googleMapsScriptRef = useRef<HTMLScriptElement | null>(null);
-  const geocodingTimeoutRef = useRef<NodeJS.Timeout>();
 
-  // Combine all initialization effects into one
+  // Initialize Google Maps
   useEffect(() => {
-    const initializeData = async () => {
-      if (!db || !isMounted.current) return;
-
-      try {
-        // Load all data in parallel
-        const [customersSnapshot, labelsSnapshot] = await Promise.all([
-          getDocs(collection(db as Firestore, "customers")),
-          getDocs(collection(db as Firestore, "labels"))
-        ]);
-
-        if (isMounted.current) {
-          setCustomers(customersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-          setLabels(labelsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-          setLoading(false);
-        }
-      } catch (err) {
-        console.error("Error initializing data:", err);
-        if (isMounted.current) {
-          setError("Failed to load initial data");
-          setLoading(false);
+    const initMaps = async () => {
+      if (!window.google) {
+        try {
+          await loadGoogleMaps();
+          if (isMounted.current) {
+            setIsGoogleMapsLoaded(true);
+            console.log('Google Maps loaded successfully');
+          }
+        } catch (error) {
+          console.error('Error loading Google Maps:', error);
+          if (isMounted.current) {
+            setError("Failed to load Google Maps");
+            setGeocodingError("Failed to load Google Maps API");
+          }
         }
       }
     };
 
-    // Initialize Google Maps
-    if (!window.google && !googleMapsScriptRef.current) {
-      const script = document.createElement('script');
-      const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
-      script.async = true;
-      script.defer = true;
-      script.onload = () => {
-        if (isMounted.current) {
-          setIsGoogleMapsLoaded(true);
-        }
-      };
-      script.onerror = () => {
-        if (isMounted.current) {
-          setError("Failed to load Google Maps");
-        }
-      };
-      document.head.appendChild(script);
-      googleMapsScriptRef.current = script;
-    }
+    initMaps();
 
-    initializeData();
-
-    // Cleanup function
     return () => {
       isMounted.current = false;
-      if (geocodingTimeoutRef.current) {
-        clearTimeout(geocodingTimeoutRef.current);
-      }
-      if (googleMapsScriptRef.current && googleMapsScriptRef.current.parentNode) {
-        googleMapsScriptRef.current.parentNode.removeChild(googleMapsScriptRef.current);
-      }
     };
-  }, []); // Empty dependency array since this should only run once
+  }, []);
 
-  // Debug logging for country mismatch
-  useEffect(() => {
-    if (userProfile && isMounted.current) {
-      console.log("[NewQuoteRequest] User Profile Debug:", {
-        country: userProfile.country,
-        businessUnit: userProfile.businessUnit,
-        countries: userProfile.countries,
-        role: userProfile.role,
-        calculatedCreatorCountry: creatorCountry
-      });
+  // Handle address changes and geocoding
+  const handleAddressChange = useCallback(async (address: string) => {
+    if (!address) {
+      setJobsiteCoords(null);
+      setGeocodingError("");
+      return;
     }
-  }, [userProfile, creatorCountry]);
+
+    setIsGeocoding(true);
+    setGeocodingError("");
+
+    try {
+      const coordinates = await geocodeAddress(address);
+      
+      if (isMounted.current) {
+        console.log('Geocoding result:', { address, ...coordinates });
+        setJobsiteCoords(coordinates);
+        setJobsiteAddress(address);
+        setGeocodingError("");
+      }
+    } catch (err) {
+      console.error("Geocoding error:", err);
+      if (isMounted.current) {
+        setGeocodingError("Failed to get coordinates. Please check the address and try again.");
+        setJobsiteCoords(null);
+      }
+    } finally {
+      if (isMounted.current) {
+        setIsGeocoding(false);
+      }
+    }
+  }, [isMounted]);
+
+  // Debounce the address change handler
+  const debouncedHandleAddressChange = useCallback(
+    debounce((address: string) => handleAddressChange(address), 1000),
+    [handleAddressChange]
+  );
+
+  // Update jobsite address input
+  const handleJobsiteAddressChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const address = e.target.value;
+    setJobsiteAddress(address);
+    debouncedHandleAddressChange(address);
+  };
 
   // Fetch contacts when customer changes
   useEffect(() => {
@@ -205,7 +200,9 @@ export default function NewQuoteRequestPage() {
         const contactsSnapshot = await getDocs(contactsRef);
         
         if (isMounted.current) {
-          setContacts(contactsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+          const fetchedContacts = contactsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          setContacts(fetchedContacts);
+          console.log('Fetched contacts:', fetchedContacts);
         }
       } catch (err) {
         console.error("Error fetching contacts:", err);
@@ -218,162 +215,79 @@ export default function NewQuoteRequestPage() {
     fetchContacts();
   }, [customerId]);
 
-  // Geocoding handler with debounce
-  const handleAddressChange = useCallback((address: string) => {
-    if (!address || !window.google || !isMounted.current) return;
+  // Handle customer selection
+  const handleCustomerChange = useCallback(async (selectedCustomerId: string) => {
+    setCustomerId(selectedCustomerId);
+    setJobsiteContactId(""); // Reset contact when customer changes
 
-    setIsGeocoding(true);
-    setGeocodingError("");
-
-    const geocodeAddress = async () => {
-      try {
-        const geocoder = new window.google.maps.Geocoder();
-        const result = await new Promise((resolve, reject) => {
-          geocoder.geocode({ address }, (results, status) => {
-            if (status === "OK" && results && results[0]) {
-              resolve(results[0]);
-            } else {
-              reject(new Error("Geocoding failed"));
-            }
-          });
-        });
-
-        if (isMounted.current) {
-          const location = (result as any).geometry.location;
-          setJobsiteCoords({
-            lat: location.lat(),
-            lng: location.lng()
-          });
-          setJobsiteAddress(address);
-        }
-      } catch (err) {
-        console.error("Geocoding error:", err);
-        if (isMounted.current) {
-          setGeocodingError("Failed to get coordinates for address");
-        }
-      } finally {
-        if (isMounted.current) {
-          setIsGeocoding(false);
-        }
-      }
-    };
-
-    // Clear any existing timeout
-    if (geocodingTimeoutRef.current) {
-      clearTimeout(geocodingTimeoutRef.current);
-    }
-
-    // Set new timeout
-    geocodingTimeoutRef.current = setTimeout(geocodeAddress, 1000);
-  }, [isMounted, setIsGeocoding, setGeocodingError, setJobsiteCoords, setJobsiteAddress]);
-
-  // Add effect to update archived state based on status
-  useEffect(() => {
-    setIsArchived(status !== "In Progress");
-  }, [status]);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!db || !isMounted.current) return;
-    
-    if (isMounted.current) {
-      setSubmitting(true);
-      setError("");
-      setSuccess("");
-    }
+    if (!selectedCustomerId || !db) return;
 
     try {
-      // Required field validation
-      if (!title || !creatorCountry || !involvedCountry || !customerId || products.length === 0) {
-        if (isMounted.current) {
-          setError("Please fill in all required fields: Title, Creator Country, Involved Country, Customer, and at least one Product.");
-          setSubmitting(false);
-        }
-        return;
+      // Fetch customer details
+      const customerDoc = await getDoc(doc(db as Firestore, "customers", selectedCustomerId));
+      if (customerDoc.exists()) {
+        const customerData = customerDoc.data();
+        setCustomerDetails(customerData);
+        console.log('Fetched customer details:', customerData);
       }
 
-      // Add date validation
-      if (!customerDecidesEnd && startDate && endDate && new Date(endDate) < new Date(startDate)) {
-        if (isMounted.current) {
-          setError("End Date cannot be before Start Date.");
-          setSubmitting(false);
-        }
-        return;
-      }
+      // Fetch customer contacts
+      const contactsRef = collection(db as Firestore, `customers/${selectedCustomerId}/contacts`);
+      const contactsSnapshot = await getDocs(contactsRef);
+      const fetchedContacts = contactsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setContacts(fetchedContacts);
+      console.log('Fetched contacts for customer:', fetchedContacts);
+    } catch (err) {
+      console.error("Error fetching customer details:", err);
+      setError("Failed to fetch customer details");
+    }
+  }, [db]);
 
-      console.log("[QuoteRequest] Starting Firestore write...");
-      
-      // Sanitize all fields to avoid undefined
-      const sanitize = (value: any) => value === undefined ? null : value;
-      const sanitizedProducts = (products || []).map(p => ({
-        catClass: sanitize(p.catClass),
-        description: sanitize(p.description),
-        quantity: sanitize(p.quantity)
-      }));
-      const sanitizedNotes = (notes || []).map(n => ({ ...n, createdAt: new Date().toISOString() }));
-      
-      // Ensure jobsite coordinates are properly formatted
-      const jobsiteData = {
-        address: sanitize(jobsiteAddress),
-        coordinates: jobsiteCoords.lat !== null && jobsiteCoords.lng !== null ? {
-          lat: jobsiteCoords.lat,
-          lng: jobsiteCoords.lng
-        } : null
-      };
-      
-      console.log("Saving jobsite data:", jobsiteData);
-      
-      const quoteData = {
-        title: sanitize(title),
-        creatorCountry: sanitize(creatorCountry),
-        involvedCountry: sanitize(involvedCountry),
-        customer: sanitize(customerId),
-        status: sanitize(status),
-        products: sanitizedProducts,
-        jobsite: jobsiteData,
-        startDate: sanitize(startDate),
-        endDate: customerDecidesEnd ? null : sanitize(endDate),
-        customerDecidesEnd: !!customerDecidesEnd,
-        jobsiteContactId: showNewContact ? null : sanitize(jobsiteContactId),
-        jobsiteContact: showNewContact ? newContact : null,
-        labels: selectedLabels || [],
-        notes: sanitizedNotes,
-        attachments: [], // Will be updated after moving files
+  // Form submission handler
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (submitting || !db || !isMounted.current) return;
+
+    setSubmitting(true);
+    setError("");
+
+    try {
+      const quoteRequestData = {
+        title,
+        creatorCountry,
+        involvedCountry,
+        customerId,
+        status,
+        isArchived,
+        products,
+        jobsite: {
+          address: jobsiteAddress,
+          coordinates: jobsiteCoords
+        },
+        startDate,
+        endDate: customerDecidesEnd ? null : endDate,
+        customerDecidesEnd,
+        jobsiteContactId,
+        labels: selectedLabels,
+        notes,
+        attachments,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
+        createdBy: user?.email || "",
+        lastUpdatedBy: user?.email || ""
       };
 
-      console.log("[QuoteRequest] Attempting to write to Firestore:", quoteData);
-      
-      // First create the quote request
-      const quoteRequestsCollection = collection(db as Firestore, "quoteRequests");
-      const docRef = await addDoc(quoteRequestsCollection, quoteData);
-
-      // Handle file uploads if any
-      if (attachments.length > 0) {
-        const movedFiles = await moveFilesToQuoteRequest(attachments, docRef.id);
-        // Update the quote request with the file references
-        await updateDoc(doc(db as Firestore, "quoteRequests", docRef.id), {
-          attachments: movedFiles.map(file => ({
-            id: file.id,
-            name: file.name,
-            url: file.url,
-            type: file.type,
-            size: file.size,
-            uploadedAt: file.uploadedAt,
-            uploadedBy: file.uploadedBy
-          }))
-        });
-      }
+      console.log('Submitting quote request:', quoteRequestData);
+      const docRef = await addDoc(collection(db as Firestore, "quoteRequests"), quoteRequestData);
 
       if (isMounted.current) {
         setSuccess("Quote request created successfully!");
+        router.push(`/quote-requests/${docRef.id}`);
       }
-      router.push(`/quote-requests/${docRef.id}`);
-    } catch (error) {
-      console.error("[QuoteRequest] Error creating quote request:", error);
+    } catch (err) {
+      console.error("Error creating quote request:", err);
       if (isMounted.current) {
-        setError("Failed to create quote request. Please try again.");
+        setError("Failed to create quote request");
       }
     } finally {
       if (isMounted.current) {
@@ -381,6 +295,11 @@ export default function NewQuoteRequestPage() {
       }
     }
   };
+
+  // Add effect to update archived state based on status
+  useEffect(() => {
+    setIsArchived(status !== "In Progress");
+  }, [status]);
 
   const handleProductChange = (idx: number, field: string, value: string | number) => {
     setProducts((prev) =>
@@ -437,24 +356,37 @@ export default function NewQuoteRequestPage() {
 
   const handleRemoveNote = (idx: number) => setNotes(prev => prev.filter((_, i) => i !== idx));
 
-  const handleAddNewContact = async () => {
-    if (!db || !customerId || !newContact.name || !newContact.phone) return;
-    try {
-      const contactsCollection = collection(db as Firestore, "contacts");
-      const contactRef = await addDoc(contactsCollection, {
-        ...newContact,
-        customer: customerId,
-        createdAt: serverTimestamp(),
-      });
-      const newContactData = { id: contactRef.id, ...newContact };
-      setContacts(prev => [...prev, newContactData]);
-      setJobsiteContactId(contactRef.id);
-      setShowNewContact(false);
-      setNewContact({ name: "", phone: "" });
-    } catch (error) {
-      console.error("Error adding contact:", error);
+  const handleAddNewContact = useCallback(async () => {
+    if (!customerId || !db || !newContact.name || !newContact.phone) {
+      setError("Please fill in all required contact fields");
+      return;
     }
-  };
+
+    try {
+      const contactsRef = collection(db as Firestore, `customers/${customerId}/contacts`);
+      const contactData = {
+        name: newContact.name,
+        phone: newContact.phone,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      };
+
+      const docRef = await addDoc(contactsRef, contactData);
+      console.log('Created new contact:', { id: docRef.id, ...contactData });
+
+      // Refresh contacts list
+      const contactsSnapshot = await getDocs(contactsRef);
+      const fetchedContacts = contactsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setContacts(fetchedContacts);
+
+      // Reset form and close modal
+      setNewContact({ name: "", phone: "" });
+      setShowNewContact(false);
+    } catch (err) {
+      console.error("Error creating new contact:", err);
+      setError("Failed to create new contact");
+    }
+  }, [customerId, db, newContact.name, newContact.phone]);
 
   const handleCustomerClick = async (customerId: string) => {
     if (!db) return;
@@ -489,478 +421,358 @@ export default function NewQuoteRequestPage() {
 
   return (
     <div className="w-full p-8 bg-white mt-8">
-      {/* Header row with labels/urgent */}
-      <div className="flex items-center gap-6 mb-6 border-b pb-2 min-h-[56px] flex-wrap md:flex-nowrap">
-        <h1 className="text-2xl font-bold text-[#e40115] whitespace-nowrap">New Quote Request</h1>
-        <div className="flex items-center gap-2 text-lg font-medium whitespace-nowrap">
-          <span>{creatorCountry}</span>
-          <span>&rarr;</span>
-          <span>{involvedCountry || "..."}</span>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap ml-2">
-          {labels.length === 0 ? (
-            <span className="text-gray-400">No labels found.</span>
-          ) : labels.map(label => (
-            <label key={label.id} className={`px-3 py-1 rounded-full border cursor-pointer select-none ${selectedLabels.includes(label.id) ? 'bg-[#e40115] text-white border-[#e40115]' : 'bg-gray-100 text-gray-800 border-gray-300'}`}
-              style={{ opacity: selectedLabels.length >= 4 && !selectedLabels.includes(label.id) ? 0.5 : 1 }}
-            >
-              <input
-                type="checkbox"
-                className="mr-2"
-                checked={selectedLabels.includes(label.id)}
-                onChange={() => handleLabelToggle(label.id)}
-                disabled={!selectedLabels.includes(label.id) && selectedLabels.length >= 4}
-              />
-              {label.name || label.id}
-            </label>
-          ))}
-        </div>
-        <div className="flex items-center gap-2 ml-auto">
-          <button
-            type="button"
-            onClick={handleSubmit}
-            className="bg-[#e40115] text-white px-6 py-2 rounded text-base font-semibold hover:bg-red-700 transition whitespace-nowrap"
-            disabled={loading || submitting || userProfile?.role === "readOnly"}
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Status */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700">Status</label>
+          <select
+            value={status}
+            onChange={(e) => setStatus(e.target.value as StatusType)}
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
           >
-            {submitting ? "Saving..." : "Create (save changed) Quote Request"}
-          </button>
+            {statuses.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-sm text-gray-500">Only the creator country can change the status.</p>
+        </div>
+
+        {/* Title */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700">
+            Title <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            required
+          />
+        </div>
+
+        {/* Creator Country */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700">
+            Creator Country <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="text"
+            value={creatorCountry}
+            disabled
+            className="mt-1 block w-full rounded-md border-gray-300 bg-gray-100 shadow-sm"
+          />
+        </div>
+
+        {/* Involved Country */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700">
+            Involved Country <span className="text-red-500">*</span>
+          </label>
+          <select
+            value={involvedCountry}
+            onChange={(e) => setInvolvedCountry(e.target.value)}
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            required
+          >
+            <option value="">Select a country</option>
+            {/* Add your country options here */}
+          </select>
+        </div>
+
+        {/* Customer */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700">
+            Customer <span className="text-red-500">*</span>
+          </label>
+          <div className="mt-1 flex gap-2">
+            <select
+              value={customerId}
+              onChange={(e) => handleCustomerChange(e.target.value)}
+              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              required
+            >
+              <option value="">Select a customer</option>
+              {customers.map((customer) => (
+                <option key={customer.id} value={customer.id}>
+                  {customer.name}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={() => setShowNewCustomer(true)}
+              className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+            >
+              New
+            </button>
+          </div>
+        </div>
+
+        {/* Products */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Products <span className="text-red-500">*</span>
+          </label>
+          {products.map((product, idx) => (
+            <div key={idx} className="flex gap-2 mb-2">
+              <input
+                type="text"
+                value={product.catClass}
+                onChange={(e) => handleProductChange(idx, "catClass", e.target.value)}
+                placeholder="Cat. Class"
+                className="block w-1/4 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              />
+              <input
+                type="text"
+                value={product.description}
+                onChange={(e) => handleProductChange(idx, "description", e.target.value)}
+                placeholder="Description"
+                className="block w-1/2 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              />
+              <input
+                type="number"
+                value={product.quantity}
+                onChange={(e) => handleProductChange(idx, "quantity", parseInt(e.target.value))}
+                placeholder="Qty"
+                className="block w-1/6 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              />
+              <button
+                type="button"
+                onClick={() => removeProduct(idx)}
+                className="px-3 py-2 bg-red-500 text-white rounded-md hover:bg-red-600"
+              >
+                ×
+              </button>
+            </div>
+          ))}
           <button
             type="button"
-            className="bg-gray-200 text-gray-700 px-6 py-2 rounded text-base font-semibold hover:bg-gray-300 transition whitespace-nowrap"
-            onClick={() => router.push("/quote-requests")}
-            disabled={loading}
+            onClick={addProduct}
+            className="mt-2 px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600"
+          >
+            Add Product
+          </button>
+        </div>
+
+        {/* Jobsite Address */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700">Jobsite Address</label>
+          <input
+            type="text"
+            value={jobsiteAddress}
+            onChange={handleJobsiteAddressChange}
+            placeholder="Enter full address (street, number, postal code, city, country)"
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+          />
+          <p className="mt-1 text-sm text-gray-500">
+            Please enter the full address in one line, without commas or special characters.
+          </p>
+          {isGeocoding && (
+            <p className="mt-1 text-sm text-blue-500">Getting coordinates...</p>
+          )}
+          {geocodingError && (
+            <p className="mt-1 text-sm text-red-500">{geocodingError}</p>
+          )}
+          {jobsiteCoords && jobsiteCoords.lat !== null && jobsiteCoords.lng !== null && (
+            <p className="mt-1 text-sm text-green-500">
+              Coordinates found: {jobsiteCoords.lat.toFixed(6)}, {jobsiteCoords.lng.toFixed(6)}
+            </p>
+          )}
+        </div>
+
+        {/* Jobsite Contact */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700">Jobsite Contact</label>
+          <div className="mt-1 flex gap-2">
+            <select
+              value={jobsiteContactId}
+              onChange={(e) => setJobsiteContactId(e.target.value)}
+              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            >
+              <option value="">Select a contact</option>
+              {contacts.map((contact) => (
+                <option key={contact.id} value={contact.id}>
+                  {contact.name} ({contact.phone})
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={() => setShowNewContact(true)}
+              className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600"
+            >
+              New Contact
+            </button>
+          </div>
+        </div>
+
+        {/* Dates */}
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700">
+              Start Date <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">End Date</label>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              disabled={customerDecidesEnd}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 disabled:bg-gray-100"
+            />
+            <div className="mt-2">
+              <label className="inline-flex items-center">
+                <input
+                  type="checkbox"
+                  checked={customerDecidesEnd}
+                  onChange={(e) => setCustomerDecidesEnd(e.target.checked)}
+                  className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                />
+                <span className="ml-2 text-sm text-gray-600">Customer decides end date</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        {/* Submit Button */}
+        <div className="flex justify-end gap-4">
+          <button
+            type="button"
+            onClick={() => router.back()}
+            className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
           >
             Cancel
           </button>
+          <button
+            type="submit"
+            disabled={submitting}
+            className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+          >
+            {submitting ? "Creating..." : "Create Quote Request"}
+          </button>
         </div>
-      </div>
-      {error && (
-        <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded text-center font-semibold">
-          {error}
-        </div>
-      )}
-      {success && (
-        <div className="mb-4 p-3 bg-green-100 border border-green-400 text-green-700 rounded text-center font-semibold">
-          {success}
-        </div>
-      )}
-      {submitting && (
-        <div className="mb-4 p-2 text-blue-600 text-center font-medium">Submitting Quote Request...</div>
-      )}
-      <form onSubmit={handleSubmit} className="grid grid-cols-[2fr_2fr] gap-8 w-full items-start">
-        {/* Left column: form fields */}
-        <div className="space-y-6 bg-white p-6 rounded shadow border">
-          <div>
-            <label className="block mb-1 font-medium">Status</label>
-            <select
-              className="w-full border rounded px-3 py-2"
-              value={status}
-              onChange={e => setStatus(e.target.value as StatusType)}
-              disabled={userProfile?.country !== creatorCountry}
-            >
-              {statuses.map(s => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
-            {userProfile?.country !== creatorCountry && (
-              <div className="text-xs text-gray-400 mt-1">Only the creator country can change the status.</div>
-            )}
+
+        {error && (
+          <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-md">
+            <p className="text-sm text-red-600">{error}</p>
           </div>
-          <div>
-            <label className="block mb-1 font-medium">Title <span className="text-red-500">*</span></label>
-            <input
-              className="w-full border rounded px-3 py-2"
-              value={title}
-              onChange={e => setTitle(e.target.value)}
-              required
-            />
-          </div>
-          <div>
-            <label className="block mb-1 font-medium">Creator Country</label>
-            <input
-              className="w-full border rounded px-3 py-2 bg-gray-100"
-              value={creatorCountry}
-              disabled
-              readOnly
-            />
-          </div>
-          <div>
-            <label className="block mb-1 font-medium">Involved Country <span className="text-red-500">*</span></label>
-            <CountrySelect
-              value={involvedCountry}
-              onChange={setInvolvedCountry}
-              required
-              placeholder="Select country"
-            />
-          </div>
-          <div>
-            <label className="block mb-1 font-medium">Customer <span className="text-red-500">*</span></label>
-            <div className="flex gap-2 items-end">
-              <select
-                className="flex-1 border rounded px-3 py-2"
-                value={customerId}
-                onChange={e => {
-                  setCustomerId(e.target.value);
-                  setShowNewCustomer(e.target.value === "__new");
-                }}
-                disabled={showNewCustomer}
-                required={!showNewCustomer}
-              >
-                <option value="">Select customer</option>
-                {customers.map(c => (
-                  <option key={c.id} value={c.id}>{c.name} ({c.address})</option>
-                ))}
-                <option value="__new">+ Add new customer</option>
-              </select>
-              {customerId && !showNewCustomer && (
-                <button
-                  type="button"
-                  onClick={() => handleCustomerClick(customerId)}
-                  className="bg-[#e40115] text-white px-3 py-2 rounded hover:bg-red-700 transition text-sm"
-                  style={{ whiteSpace: 'nowrap' }}
-                >
-                  View details
-                </button>
-              )}
-            </div>
-          </div>
-          {/* Modal for new customer */}
-          {showNewCustomer && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-30">
-              <div className="bg-white p-6 rounded shadow-lg w-full max-w-md relative">
-                <h2 className="text-lg font-bold mb-4">Add New Customer</h2>
-                <div className="space-y-2">
-                  <input
-                    className="w-full border rounded px-3 py-2"
-                    placeholder="Name"
-                    value={newCustomer.name}
-                    onChange={e => setNewCustomer({ ...newCustomer, name: e.target.value })}
-                    required
-                  />
-                  <input
-                    className="w-full border rounded px-3 py-2"
-                    placeholder="Address"
-                    value={newCustomer.address}
-                    onChange={e => setNewCustomer({ ...newCustomer, address: e.target.value })}
-                    required
-                  />
-                  <input
-                    className="w-full border rounded px-3 py-2"
-                    placeholder="Contact"
-                    value={newCustomer.contact}
-                    onChange={e => setNewCustomer({ ...newCustomer, contact: e.target.value })}
-                    required
-                  />
-                  <input
-                    className="w-full border rounded px-3 py-2"
-                    placeholder="Phone"
-                    value={newCustomer.phone}
-                    onChange={e => setNewCustomer({ ...newCustomer, phone: e.target.value })}
-                    required
-                  />
-                  <input
-                    className="w-full border rounded px-3 py-2"
-                    placeholder="Email"
-                    type="email"
-                    value={newCustomer.email}
-                    onChange={e => setNewCustomer({ ...newCustomer, email: e.target.value })}
-                    required
-                  />
-                </div>
-                <div className="flex gap-2 mt-4">
-                  <button
-                    type="button"
-                    className="bg-[#e40115] text-white px-4 py-2 rounded hover:bg-red-700"
-                    onClick={handleAddNewCustomer}
-                    title="Save new customer"
-                  >
-                    Save
-                  </button>
-                  <button
-                    type="button"
-                    className="bg-gray-200 text-gray-700 px-4 py-2 rounded hover:bg-gray-300"
-                    onClick={() => {
-                      setShowNewCustomer(false);
-                      setNewCustomer({ name: "", address: "", contact: "", phone: "", email: "" });
-                    }}
-                    title="Cancel new customer"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-          {showCustomerModal && customerDetails && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-30">
-              <div className="bg-white p-6 rounded shadow-lg w-full max-w-2xl relative">
-                <h2 className="text-xl font-bold mb-4">Customer Details</h2>
-                <div className="grid grid-cols-2 gap-4 mb-4">
-                  <div><strong>Name:</strong> {customerDetails.name}</div>
-                  <div><strong>Address:</strong> {customerDetails.address}</div>
-                  <div><strong>Phone:</strong> {customerDetails.phone}</div>
-                  <div><strong>Email:</strong> {customerDetails.email}</div>
-                </div>
-                <h3 className="text-lg font-semibold mb-2">Contacts</h3>
-                {customerContacts.length === 0 ? (
-                  <div className="mb-2 text-gray-500">No contacts found.</div>
-                ) : customerContacts.map(contact => (
-                  <div key={contact.id} className="flex items-center gap-4 bg-gray-50 rounded p-2 mb-2">
-                    <div className="flex-1">
-                      <div><strong>Name:</strong> {contact.name}</div>
-                      <div><strong>Phone:</strong> {contact.phone}</div>
-                      <div><strong>Email:</strong> {contact.email}</div>
-                      <div><strong>Type:</strong> {contact.type}</div>
-                    </div>
-                  </div>
-                ))}
-                <button
-                  type="button"
-                  className="mt-4 bg-gray-200 text-gray-700 px-4 py-2 rounded hover:bg-gray-300"
-                  onClick={() => setShowCustomerModal(false)}
-                >
-                  Close
-                </button>
-              </div>
-            </div>
-          )}
-          <div>
-            <label className="block mb-1 font-medium">Jobsite Address</label>
-            <input
-              className="w-full border rounded px-3 py-2"
-              value={jobsiteAddress}
-              onChange={e => {
-                const address = e.target.value;
-                setJobsiteAddress(address);
-                handleAddressChange(address);
-              }}
-            />
-            <div className="text-xs text-gray-400">Please enter the full address (street, number, postal code, city, country) in one line, without commas, dashes, or special characters.</div>
-            {isGeocoding && <div className="text-sm text-gray-500 mt-1">Getting coordinates...</div>}
-            {geocodingError && <div className="text-sm text-red-500 mt-1">{geocodingError}</div>}
-            <div className="flex gap-4 mt-2">
-              <div className="flex-1">
-                <label className="block text-xs text-gray-500">Latitude</label>
-                <input
-                  className="w-full border rounded px-3 py-2 bg-gray-100"
-                  value={jobsiteCoords.lat ?? ""}
-                  readOnly
-                  disabled
-                />
-              </div>
-              <div className="flex-1">
-                <label className="block text-xs text-gray-500">Longitude</label>
-                <input
-                  className="w-full border rounded px-3 py-2 bg-gray-100"
-                  value={jobsiteCoords.lng ?? ""}
-                  readOnly
-                  disabled
-                />
-              </div>
-            </div>
-          </div>
-          <div>
-            <label className="block mb-1 font-medium">Jobsite Contact</label>
-            <div className="flex gap-2 items-end">
-              <select
-                className="flex-1 border rounded px-3 py-2"
-                value={jobsiteContactId}
-                onChange={e => {
-                  setJobsiteContactId(e.target.value);
-                  setShowNewContact(e.target.value === "__new");
-                }}
-                disabled={showNewContact}
-                required={!showNewContact}
-              >
-                <option value="">Select contact</option>
-                {contacts.map(c => (
-                  <option key={c.id} value={c.id}>{c.name} ({c.phone})</option>
-                ))}
-                <option value="__new">+ Add new contact</option>
-              </select>
-            </div>
-            {/* Modal for new contact */}
-            {showNewContact && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-30">
-                <div className="bg-white p-6 rounded shadow-lg w-full max-w-md relative">
-                  <h2 className="text-lg font-bold mb-4">Add New Jobsite Contact</h2>
-                  <div className="space-y-2">
-                    <input
-                      className="w-full border rounded px-3 py-2"
-                      placeholder="Name"
-                      value={newContact.name}
-                      onChange={e => setNewContact({ ...newContact, name: e.target.value })}
-                      required
-                    />
-                    <input
-                      className="w-full border rounded px-3 py-2"
-                      placeholder="Phone"
-                      value={newContact.phone}
-                      onChange={e => setNewContact({ ...newContact, phone: e.target.value })}
-                      required
-                    />
-                  </div>
-                  <div className="flex gap-2 mt-4">
-                    <button
-                      type="button"
-                      className="bg-[#e40115] text-white px-4 py-2 rounded hover:bg-red-700"
-                      onClick={handleAddNewContact}
-                      title="Save new contact"
-                    >
-                      Save
-                    </button>
-                    <button
-                      type="button"
-                      className="bg-gray-200 text-gray-700 px-4 py-2 rounded hover:bg-gray-300"
-                      onClick={() => {
-                        setShowNewContact(false);
-                        setNewContact({ name: "", phone: "" });
-                      }}
-                      title="Cancel new contact"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-        {/* Right column: products, notes, dates, messaging */}
-        <div className="space-y-6 bg-white p-6 rounded shadow border">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block mb-1 font-medium">Start Date <span className="text-red-500">*</span></label>
+        )}
+      </form>
+
+      {/* New Customer Modal */}
+      {showNewCustomer && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+          <div className="bg-white p-6 rounded-lg w-96">
+            <h3 className="text-lg font-medium mb-4">Add New Customer</h3>
+            <div className="space-y-4">
               <input
-                type="date"
-                className="w-full border rounded px-3 py-2"
-                value={startDate || ""}
-                onChange={e => setStartDate(e.target.value)}
-                required
+                type="text"
+                value={newCustomer.name}
+                onChange={(e) => setNewCustomer({ ...newCustomer, name: e.target.value })}
+                placeholder="Customer Name"
+                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              />
+              <input
+                type="text"
+                value={newCustomer.address}
+                onChange={(e) => setNewCustomer({ ...newCustomer, address: e.target.value })}
+                placeholder="Address"
+                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              />
+              <input
+                type="text"
+                value={newCustomer.contact}
+                onChange={(e) => setNewCustomer({ ...newCustomer, contact: e.target.value })}
+                placeholder="Contact Person"
+                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              />
+              <input
+                type="tel"
+                value={newCustomer.phone}
+                onChange={(e) => setNewCustomer({ ...newCustomer, phone: e.target.value })}
+                placeholder="Phone"
+                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              />
+              <input
+                type="email"
+                value={newCustomer.email}
+                onChange={(e) => setNewCustomer({ ...newCustomer, email: e.target.value })}
+                placeholder="Email"
+                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
               />
             </div>
-            <div>
-              <label className="block mb-1 font-medium">End Date{!customerDecidesEnd && <span className="text-red-500">*</span>}</label>
-              <input
-                type="date"
-                className="w-full border rounded px-3 py-2"
-                value={endDate || ""}
-                onChange={e => setEndDate(e.target.value)}
-                required={!customerDecidesEnd}
-                disabled={customerDecidesEnd}
-              />
-            </div>
-          </div>
-          <div className="text-xs text-gray-500 mt-1">
-            Tip: Use the arrow keys or click to select year/month/day. Tabbing may not work in all browsers.
-          </div>
-          <div className="flex items-center gap-2 mb-2">
-            <input
-              type="checkbox"
-              id="customerDecidesEnd"
-              checked={customerDecidesEnd}
-              onChange={e => setCustomerDecidesEnd(e.target.checked)}
-            />
-            <label htmlFor="customerDecidesEnd" className="text-sm">Customer decides end date</label>
-          </div>
-          <div>
-            <label className="block mb-1 font-medium">Products</label>
-            <div className="space-y-2">
-              {products.map((product, idx) => (
-                <div key={idx} className="flex gap-2 items-end">
-                  <div className="flex-1">
-                    <input
-                      className="w-full border rounded px-3 py-2"
-                      placeholder="Cat-Class"
-                      value={product.catClass}
-                      onChange={e => handleProductChange(idx, "catClass", e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div className="flex-2">
-                    <input
-                      className="w-full border rounded px-3 py-2"
-                      placeholder="Description"
-                      value={product.description}
-                      onChange={e => handleProductChange(idx, "description", e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div className="w-24">
-                    <input
-                      type="number"
-                      min={1}
-                      className="w-full border rounded px-3 py-2"
-                      placeholder="Qty"
-                      value={product.quantity}
-                      onChange={e => handleProductChange(idx, "quantity", Number(e.target.value))}
-                      required
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    className="text-red-600 font-bold px-2"
-                    onClick={() => removeProduct(idx)}
-                    disabled={products.length === 1}
-                    title="Remove product"
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
+            <div className="mt-6 flex justify-end gap-4">
               <button
                 type="button"
-                className="mt-2 px-4 py-1 bg-[#bbbdbe] text-[#e40115] rounded hover:bg-[#cccdce]"
-                onClick={addProduct}
+                onClick={() => setShowNewCustomer(false)}
+                className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50"
               >
-                + Add Product
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleAddNewCustomer}
+                className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600"
+              >
+                Add Customer
               </button>
             </div>
           </div>
-          <div>
-            <label className="block mb-1 font-medium">Notes</label>
-            <div className="flex gap-2">
+        </div>
+      )}
+
+      {/* New Contact Modal */}
+      {showNewContact && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+          <div className="bg-white p-6 rounded-lg w-96">
+            <h3 className="text-lg font-medium mb-4">Add New Contact</h3>
+            <div className="space-y-4">
               <input
-                className="w-full border rounded px-3 py-2"
-                placeholder="Add a note..."
-                value={noteText}
-                onChange={e => setNoteText(e.target.value)}
+                type="text"
+                value={newContact.name}
+                onChange={(e) => setNewContact({ ...newContact, name: e.target.value })}
+                placeholder="Contact Name"
+                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
               />
-              <button type="button" className="bg-[#e40115] text-white px-4 py-2 rounded" onClick={handleAddNote}>+</button>
+              <input
+                type="tel"
+                value={newContact.phone}
+                onChange={(e) => setNewContact({ ...newContact, phone: e.target.value })}
+                placeholder="Phone Number"
+                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              />
             </div>
-            <ul className="mt-2 space-y-1">
-              {notes.map((note, idx) => (
-                <li key={idx} className="flex items-center justify-between text-xs bg-gray-100 rounded px-2 py-1">
-                  <span>{note.text} <span className="text-gray-400 italic">({note.author})</span></span>
-                  <button type="button" className="text-gray-400 hover:text-[#e40115] ml-2" onClick={() => handleRemoveNote(idx)}>&times;</button>
-                </li>
-              ))}
-            </ul>
-          </div>
-          {/* File upload section */}
-          <div>
-            <label className="block mb-1 font-medium">Attachments</label>
-            <StorageTest />
-            <div className="mt-4">
-              <FileUploadSimple
-              quoteRequestId="new" // Temporary ID for new quote requests
-              files={attachments}
-              onFilesChange={setAttachments}
-              currentUser={userProfile?.name || "User"}
-              readOnly={false}
-            />
-            </div>
-          </div>
-          {/* Messaging container below notes, read-only, for archived messages */}
-          <div className="w-full bg-white border rounded shadow p-6 flex flex-col min-h-[200px]">
-            <h2 className="text-lg font-semibold mb-2">Messaging (Archived)</h2>
-            <div className="flex-1 overflow-y-auto mb-2">
-              {/* Only show archived messages, if any (for now, empty) */}
-              <div className="text-gray-400 text-sm">No archived messages for this request yet.</div>
+            <div className="mt-6 flex justify-end gap-4">
+              <button
+                type="button"
+                onClick={() => setShowNewContact(false)}
+                className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleAddNewContact}
+                className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600"
+              >
+                Add Contact
+              </button>
             </div>
           </div>
         </div>
-      </form>
+      )}
     </div>
   );
 } 
