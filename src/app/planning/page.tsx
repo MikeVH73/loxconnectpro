@@ -6,21 +6,22 @@ import { db } from '../../firebaseClient';
 import { useAuth } from '../AuthProvider';
 import Link from 'next/link';
 import {
-  startOfMonth,
-  endOfMonth,
+  startOfWeek,
+  endOfWeek,
   eachDayOfInterval,
   format,
   parseISO,
   isWithinInterval,
-  isSameMonth,
-  startOfWeek,
-  endOfWeek,
+  addWeeks,
+  subWeeks,
+  isSameDay,
   addDays,
   differenceInDays,
-  isSameDay,
   isAfter,
-  isBefore
+  isBefore,
+  getWeek
 } from 'date-fns';
+import { enGB } from 'date-fns/locale';
 
 interface QuoteRequest {
   id: string;
@@ -44,12 +45,16 @@ export default function PlanningPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  // Get the current week's days (Monday to Sunday)
+  const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 }); // 1 = Monday
+  const weekEnd = endOfWeek(currentDate, { weekStartsOn: 1 });
+  const weekDays = eachDayOfInterval({ start: weekStart, end: weekEnd });
+
   useEffect(() => {
     const fetchQuoteRequests = async () => {
       if (!db || !userProfile) return;
 
       try {
-        // Get the user's assigned countries
         const userCountries = userProfile.countries || [];
         console.log("[Planning] User Profile:", {
           email: userProfile?.email,
@@ -64,7 +69,6 @@ export default function PlanningPage() {
           return;
         }
 
-        // Fetch all "In Progress" quote requests
         const quotesRef = collection(db as Firestore, "quoteRequests");
         const q = query(
           quotesRef,
@@ -77,7 +81,6 @@ export default function PlanningPage() {
           ...doc.data()
         } as QuoteRequest));
 
-        // Filter quote requests based on user's countries
         requests = requests.filter(qr => 
           userCountries.includes(qr.creatorCountry) || 
           userCountries.includes(qr.involvedCountry)
@@ -96,27 +99,12 @@ export default function PlanningPage() {
     fetchQuoteRequests();
   }, [userProfile]);
 
-  // Get all days for the calendar view (including days from adjacent months)
-  const calendarDays = eachDayOfInterval({
-    start: startOfWeek(startOfMonth(currentDate)),
-    end: endOfWeek(endOfMonth(currentDate))
-  });
-
-  // Get quote requests that start in this week
-  const getQuoteRequestsStartingInWeek = (weekStart: Date) => {
-    const weekEnd = addDays(weekStart, 6);
-    return quoteRequests.filter(request => {
-      const startDate = parseISO(request.startDate);
-      return isWithinInterval(startDate, { start: weekStart, end: weekEnd });
-    });
+  const previousWeek = () => {
+    setCurrentDate(prev => subWeeks(prev, 1));
   };
 
-  const previousMonth = () => {
-    setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth() - 1));
-  };
-
-  const nextMonth = () => {
-    setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth() + 1));
+  const nextWeek = () => {
+    setCurrentDate(prev => addWeeks(prev, 1));
   };
 
   const goToToday = () => {
@@ -125,7 +113,7 @@ export default function PlanningPage() {
 
   if (loading) return (
     <div className="flex items-center justify-center h-screen">
-      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-500"></div>
     </div>
   );
   
@@ -138,163 +126,142 @@ export default function PlanningPage() {
     </div>
   );
 
-  // Group calendar days by weeks
-  const weeks: Date[][] = [];
-  let currentWeek: Date[] = [];
-  calendarDays.forEach((day, index) => {
-    currentWeek.push(day);
-    if (currentWeek.length === 7) {
-      weeks.push(currentWeek);
-      currentWeek = [];
-    }
+  // Get all quotes that appear in this week
+  const weekQuotes = quoteRequests.filter(quote => {
+    const startDate = parseISO(quote.startDate);
+    const endDate = quote.endDate ? parseISO(quote.endDate) : addDays(startDate, 1);
+    return weekDays.some(day => 
+      isWithinInterval(day, { start: startDate, end: endDate })
+    );
   });
 
+  // Position quotes to avoid overlaps
+  const positionedQuotes: PositionedQuoteRequest[] = [];
+  weekQuotes.forEach(quote => {
+    const startDate = parseISO(quote.startDate);
+    const endDate = quote.endDate ? parseISO(quote.endDate) : addDays(startDate, 1);
+    
+    let row = 0;
+    while (positionedQuotes.some(pQuote => {
+      const pStartDate = parseISO(pQuote.startDate);
+      const pEndDate = pQuote.endDate ? parseISO(pQuote.endDate) : addDays(pStartDate, 1);
+      return pQuote.row === row && (
+        isWithinInterval(startDate, { start: pStartDate, end: pEndDate }) ||
+        isWithinInterval(endDate, { start: pStartDate, end: pEndDate }) ||
+        isWithinInterval(pStartDate, { start: startDate, end: endDate })
+      );
+    })) {
+      row++;
+    }
+    
+    positionedQuotes.push({ ...quote, row });
+  });
+
+  // Calculate height based on number of rows
+  const maxRow = Math.max(...positionedQuotes.map(q => q.row), 0);
+  const rowHeight = 40; // Increased height for better visibility
+  const padding = 16; // Increased padding
+  const minHeight = 200; // Increased minimum height
+  const calculatedHeight = Math.max(minHeight, (maxRow + 1) * rowHeight + padding * 2);
+
+  const currentWeekNumber = getWeek(currentDate, { weekStartsOn: 1, firstWeekContainsDate: 4 });
+
   return (
-    <div className="flex flex-col h-screen p-4">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Planning</h1>
-        <div className="flex gap-4 items-center">
+    <div className="flex flex-col h-screen p-6 bg-gray-50">
+      <div className="flex justify-between items-center mb-8">
+        <h1 className="text-3xl font-bold text-gray-900">Planning</h1>
+        <div className="flex items-center gap-6">
           <button
-            onClick={previousMonth}
-            className="px-3 py-1 border rounded-md hover:bg-gray-100 transition-colors"
+            onClick={previousWeek}
+            className="px-4 py-2 text-gray-600 hover:text-gray-900 transition-colors"
           >
             ←
           </button>
+          <div className="flex flex-col items-center min-w-[200px]">
+            <span className="text-lg font-medium text-gray-900">
+              Week {currentWeekNumber}
+            </span>
+            <span className="text-sm text-gray-500">
+              {format(weekStart, 'd MMM')} - {format(weekEnd, 'd MMM yyyy')}
+            </span>
+          </div>
           <button
-            onClick={goToToday}
-            className="px-3 py-1 border rounded-md hover:bg-gray-100 transition-colors text-sm"
-          >
-            Today
-          </button>
-          <span className="text-lg font-medium min-w-[140px] text-center">
-            {format(currentDate, 'MMMM yyyy')}
-          </span>
-          <button
-            onClick={nextMonth}
-            className="px-3 py-1 border rounded-md hover:bg-gray-100 transition-colors"
+            onClick={nextWeek}
+            className="px-4 py-2 text-gray-600 hover:text-gray-900 transition-colors"
           >
             →
+          </button>
+          <button
+            onClick={goToToday}
+            className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors shadow-sm"
+          >
+            Today
           </button>
         </div>
       </div>
 
-      <div className="flex-1 bg-white rounded-lg shadow overflow-hidden flex flex-col min-h-0">
-        <div className="grid grid-cols-7 gap-px bg-gray-200">
-          {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-            <div key={day} className="bg-gray-50 py-3 text-center text-sm font-medium text-gray-700">
-              {day}
+      <div className="flex-1 bg-white rounded-xl shadow-lg overflow-hidden flex flex-col min-h-0">
+        <div className="grid grid-cols-7 border-b">
+          {weekDays.map(day => (
+            <div 
+              key={day.toISOString()} 
+              className={`py-4 text-center border-r last:border-r-0 ${
+                isSameDay(day, new Date()) ? 'bg-red-50' : ''
+              }`}
+            >
+              <div className="text-sm font-medium text-gray-500 mb-1">
+                {format(day, 'EEE', { locale: enGB })}
+              </div>
+              <div className={`text-2xl font-semibold ${
+                isSameDay(day, new Date()) ? 'text-red-600' : 'text-gray-900'
+              }`}>
+                {format(day, 'd')}
+              </div>
             </div>
           ))}
         </div>
 
-        <div className="flex-1 divide-y overflow-auto">
-          {weeks.map((week, weekIndex) => {
-            // Get all quotes that appear in this week
-            const weekQuotes = quoteRequests.filter(quote => {
-              const startDate = parseISO(quote.startDate);
-              const endDate = quote.endDate ? parseISO(quote.endDate) : addDays(startDate, 1);
-              return week.some(day => 
-                isWithinInterval(day, { start: startDate, end: endDate })
-              );
-            });
+        <div className="flex-1 relative" style={{ height: calculatedHeight }}>
+          {positionedQuotes.map((quote) => {
+            const startDate = parseISO(quote.startDate);
+            const endDate = quote.endDate ? parseISO(quote.endDate) : addDays(startDate, 1);
+            
+            let startDayIndex = weekDays.findIndex(day => 
+              isSameDay(day, startDate) || 
+              (isAfter(startDate, day) && isBefore(startDate, addDays(day, 1)))
+            );
+            if (startDayIndex === -1) startDayIndex = 0;
 
-            // Position quotes to avoid overlaps
-            const positionedQuotes: PositionedQuoteRequest[] = [];
-            weekQuotes.forEach(quote => {
-              const startDate = parseISO(quote.startDate);
-              const endDate = quote.endDate ? parseISO(quote.endDate) : addDays(startDate, 1);
-              
-              // Find the first available row where this quote doesn't overlap
-              let row = 0;
-              while (positionedQuotes.some(pQuote => {
-                const pStartDate = parseISO(pQuote.startDate);
-                const pEndDate = pQuote.endDate ? parseISO(pQuote.endDate) : addDays(pStartDate, 1);
-                return pQuote.row === row && (
-                  isWithinInterval(startDate, { start: pStartDate, end: pEndDate }) ||
-                  isWithinInterval(endDate, { start: pStartDate, end: pEndDate }) ||
-                  isWithinInterval(pStartDate, { start: startDate, end: endDate })
-                );
-              })) {
-                row++;
-              }
-              
-              positionedQuotes.push({ ...quote, row });
-            });
-
-            // Calculate required height based on number of rows
-            const maxRow = Math.max(...positionedQuotes.map(q => q.row), 0);
-            const rowHeight = 32; // Increased height for each quote bar
-            const padding = 12; // Increased padding
-            const minHeight = 150; // Increased minimum height
-            const calculatedHeight = Math.max(minHeight, (maxRow + 1) * rowHeight + padding * 2);
+            const daysInWeek = Math.min(
+              7 - startDayIndex,
+              differenceInDays(
+                isBefore(endDate, addDays(weekDays[6], 1)) ? endDate : addDays(weekDays[6], 1),
+                isSameDay(startDate, weekDays[startDayIndex]) ? startDate : weekDays[startDayIndex]
+              ) + 1
+            );
 
             return (
-              <div key={weekIndex} className="grid grid-cols-7 relative" style={{ minHeight: calculatedHeight }}>
-                {/* Render the date numbers */}
-                {week.map((date) => {
-                  const isToday = isSameDay(date, new Date());
-                  const isCurrentMonth = isSameMonth(date, currentDate);
-                  
-                  return (
-                    <div
-                      key={date.toISOString()}
-                      className={`relative p-3 ${
-                        !isCurrentMonth ? 'bg-gray-50' : 'bg-white'
-                      } ${isToday ? 'bg-blue-50' : ''}`}
-                    >
-                      <div className={`font-medium text-base mb-2 ${
-                        !isCurrentMonth ? 'text-gray-400' : 'text-gray-700'
-                      }`}>
-                        {format(date, 'd')}
-                      </div>
-                    </div>
-                  );
-                })}
-
-                {/* Render the quote request bars */}
-                {positionedQuotes.map((quote) => {
-                  const startDate = parseISO(quote.startDate);
-                  const endDate = quote.endDate ? parseISO(quote.endDate) : addDays(startDate, 1);
-                  
-                  // Calculate the start position within this week
-                  let startDayIndex = week.findIndex(day => 
-                    isSameDay(day, startDate) || 
-                    (isAfter(startDate, day) && isBefore(startDate, addDays(day, 1)))
-                  );
-                  if (startDayIndex === -1) startDayIndex = 0;
-
-                  // Calculate how many days the bar should span in this week
-                  const daysInWeek = Math.min(
-                    7 - startDayIndex,
-                    differenceInDays(
-                      isBefore(endDate, addDays(week[6], 1)) ? endDate : addDays(week[6], 1),
-                      isSameDay(startDate, week[startDayIndex]) ? startDate : week[startDayIndex]
-                    ) + 1
-                  );
-
-                  return (
-                    <Link
-                      key={quote.id}
-                      href={`/quote-requests/${quote.id}`}
-                      className={`
-                        absolute z-10 px-2 py-1.5 text-sm rounded-md
-                        bg-red-100 text-red-700 hover:bg-red-200 transition-colors
-                        overflow-hidden text-ellipsis whitespace-nowrap
-                        border border-red-200
-                      `}
-                      style={{
-                        top: `${padding + quote.row * rowHeight}px`,
-                        left: `calc(${startDayIndex} * 100% / 7 + 4px)`,
-                        width: `calc(${daysInWeek} * 100% / 7 - 8px)`,
-                        height: `${rowHeight - 4}px`,
-                      }}
-                      title={`${quote.title} (${format(startDate, 'MMM d')} - ${format(endDate, 'MMM d')})`}
-                    >
-                      {quote.title}
-                    </Link>
-                  );
-                })}
-              </div>
+              <Link
+                key={quote.id}
+                href={`/quote-requests/${quote.id}`}
+                className={`
+                  absolute z-10 px-3 py-2 text-sm rounded-lg
+                  bg-red-50 text-red-700 hover:bg-red-100 
+                  transition-all duration-200 ease-in-out
+                  overflow-hidden text-ellipsis whitespace-nowrap
+                  border border-red-200 shadow-sm
+                  hover:shadow-md hover:-translate-y-0.5
+                `}
+                style={{
+                  top: `${padding + quote.row * rowHeight}px`,
+                  left: `calc(${startDayIndex} * 100% / 7 + 8px)`,
+                  width: `calc(${daysInWeek} * 100% / 7 - 16px)`,
+                  height: `${rowHeight - 8}px`,
+                }}
+                title={`${quote.title} (${format(startDate, 'MMM d')} - ${format(endDate, 'MMM d')})`}
+              >
+                {quote.title}
+              </Link>
             );
           })}
         </div>
