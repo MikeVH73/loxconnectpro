@@ -51,25 +51,40 @@ export default function MessagingPanel({
   const [error, setError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const isMounted = useRef(true);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
   };
 
   useEffect(() => {
-    console.log('Messages updated:', messages);
-    console.log('Current user:', currentUser);
-    console.log('Current country:', currentCountry);
-    scrollToBottom();
+    if (isMounted.current) {
+      console.log('Messages updated:', messages);
+      console.log('Current user:', currentUser);
+      console.log('Current country:', currentCountry);
+      scrollToBottom();
+    }
   }, [messages, currentUser, currentCountry]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isSending || !messageText.trim()) return;
+    if (isSending || !messageText.trim() || !isMounted.current) return;
 
     try {
-      setIsSending(true);
-      setError(null);
+      if (isMounted.current) {
+        setIsSending(true);
+        setError(null);
+      }
+      
       console.log('Submitting message:', {
         text: messageText,
         user: currentUser,
@@ -77,12 +92,18 @@ export default function MessagingPanel({
       });
       
       await onSendMessage(messageText);
-      setMessageText("");
+      if (isMounted.current) {
+        setMessageText("");
+      }
     } catch (err) {
       console.error('Error sending message:', err);
-      setError('Failed to send message. Please try again.');
+      if (isMounted.current) {
+        setError('Failed to send message. Please try again.');
+      }
     } finally {
-      setIsSending(false);
+      if (isMounted.current) {
+        setIsSending(false);
+      }
     }
   };
 
@@ -95,15 +116,19 @@ export default function MessagingPanel({
   };
 
   const handleFileSelect = async (files: FileList | null) => {
-    if (!files || !onFilesChange || !storage) return;
+    if (!files || !onFilesChange || !storage || !isMounted.current) return;
 
-    setIsUploading(true);
-    setError(null);
+    if (isMounted.current) {
+      setIsUploading(true);
+      setError(null);
+    }
 
     try {
       const newFiles: QuoteFile[] = [];
 
       for (let i = 0; i < files.length; i++) {
+        if (!isMounted.current) break;
+
         const file = files[i];
         if (file.size > 3 * 1024 * 1024) { // 3MB limit
           throw new Error(`File ${file.name} exceeds 3MB limit`);
@@ -124,14 +149,20 @@ export default function MessagingPanel({
         });
       }
 
-      onFilesChange([...quoteRequestFiles, ...newFiles]);
+      if (isMounted.current && onFilesChange) {
+        onFilesChange([...quoteRequestFiles, ...newFiles]);
+      }
     } catch (err: any) {
       console.error('Error uploading files:', err);
-      setError(err.message || 'Failed to upload files');
+      if (isMounted.current) {
+        setError(err.message || 'Failed to upload files');
+      }
     } finally {
-      setIsUploading(false);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
+      if (isMounted.current) {
+        setIsUploading(false);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
       }
     }
   };
@@ -229,89 +260,64 @@ export default function MessagingPanel({
       )}
 
       {/* Messages Section */}
-      <div className="flex-1 overflow-y-auto min-h-0">
-        <div className="p-4 space-y-4">
-          {messages.length === 0 ? (
-            <div className="text-center text-gray-500">
-              No messages yet. Start the conversation!
-            </div>
-          ) : (
-            messages.map((message) => (
-              <div
-                key={message.id}
-                className={`flex ${
-                  message.sender === currentUser ? "justify-end" : "justify-start"
-                }`}
-              >
-                <div
-                  className={`max-w-[70%] rounded-lg p-3 ${
-                    message.sender === currentUser
-                      ? "bg-blue-500 text-white"
-                      : "bg-gray-100 text-gray-800"
-                  }`}
-                >
-                  <div className="text-xs opacity-75 mb-1">
-                    {message.sender} ({message.senderCountry})
-                  </div>
-                  <div className="break-words">{message.text}</div>
-                </div>
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {messages.map((message) => (
+          <div
+            key={message.id}
+            className={`flex ${
+              message.sender === currentUser ? "justify-end" : "justify-start"
+            }`}
+          >
+            <div
+              className={`max-w-[70%] rounded-lg p-3 ${
+                message.sender === currentUser
+                  ? "bg-blue-500 text-white"
+                  : "bg-gray-100"
+              }`}
+            >
+              <div className="text-xs text-gray-500 mb-1">
+                {message.sender} ({message.senderCountry})
               </div>
-            ))
-          )}
-          <div ref={messagesEndRef} />
-        </div>
+              <div className="break-words">{message.text}</div>
+              <div className="text-xs mt-1 text-right">
+                {message.createdAt.toDate().toLocaleTimeString()}
+              </div>
+            </div>
+          </div>
+        ))}
+        <div ref={messagesEndRef} />
       </div>
 
-      {/* Message Input - Fixed at bottom */}
-      <div className="flex-none border-t">
-        <form onSubmit={handleSubmit} className="p-3 flex flex-col gap-2">
-          {error && (
-            <div className="text-red-500 text-sm px-2">{error}</div>
-          )}
-          <div className="flex items-center gap-2">
+      {/* Input Section */}
+      {!readOnly && (
+        <div className="flex-none p-4 border-t">
+          <form onSubmit={handleSubmit} className="flex gap-2">
             <input
               type="text"
               value={messageText}
               onChange={(e) => setMessageText(e.target.value)}
               onKeyPress={handleKeyPress}
               placeholder="Type a message..."
-              className="flex-1 p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              disabled={isSending || readOnly}
+              className="flex-1 border rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              disabled={isSending}
             />
             <button
               type="submit"
-              className="shrink-0 whitespace-nowrap px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-              disabled={isSending || !messageText.trim() || readOnly}
+              disabled={isSending || !messageText.trim()}
+              className={`px-4 py-2 rounded-lg ${
+                isSending || !messageText.trim()
+                  ? "bg-gray-300 cursor-not-allowed"
+                  : "bg-blue-500 hover:bg-blue-600 text-white"
+              }`}
             >
-              {isSending ? 'Sending...' : 'Send'}
+              {isSending ? "Sending..." : "Send"}
             </button>
-          </div>
-          {!readOnly && onFilesChange && (
-            <div className="flex items-center gap-2">
-              <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                className="hidden"
-                onChange={(e) => handleFileSelect(e.target.files)}
-                accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
-              />
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isUploading}
-                className="flex items-center gap-2 px-3 py-1 border border-gray-300 rounded text-sm hover:bg-gray-50 disabled:opacity-50"
-              >
-                <span>📎</span>
-                {isUploading ? 'Processing...' : 'Attach Files'}
-              </button>
-              <span className="text-xs text-gray-500">
-                Images, PDF, Word, Excel • Max 3MB each
-              </span>
-            </div>
+          </form>
+          {error && (
+            <div className="text-red-500 text-sm mt-2">{error}</div>
           )}
-        </form>
-      </div>
+        </div>
+      )}
 
       {/* Preview Modal */}
       {previewUrl && (
