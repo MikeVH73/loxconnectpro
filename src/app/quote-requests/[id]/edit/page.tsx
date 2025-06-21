@@ -152,10 +152,11 @@ export default function EditQuoteRequestPage() {
     const fetchContacts = async () => {
       if (!db || !form?.customer) return;
       try {
-        const contactsCollection = collection(db as Firestore, "contacts");
-        const q = query(contactsCollection, where("customer", "==", form.customer));
-        const snapshot = await getDocs(q);
-        setContacts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        const contactsRef = collection(db as Firestore, `customers/${form.customer}/contacts`);
+        const snapshot = await getDocs(contactsRef);
+        const fetchedContacts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setContacts(fetchedContacts);
+        console.log('Fetched contacts:', fetchedContacts);
       } catch (err) {
         console.error("Error fetching contacts:", err);
       }
@@ -284,13 +285,13 @@ export default function EditQuoteRequestPage() {
   const handleAddNewContact = async () => {
     if (!db || !newContact.name || !newContact.phone || !form?.customer) return;
     try {
-      const contactsCollection = collection(db as Firestore, "contacts");
-      const docRef = await addDoc(contactsCollection, {
+      const contactsRef = collection(db as Firestore, `customers/${form.customer}/contacts`);
+      const docRef = await addDoc(contactsRef, {
         ...newContact,
-        customer: form.customer,
         createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
       });
-      const addedContact = { id: docRef.id, ...newContact, customer: form.customer };
+      const addedContact = { id: docRef.id, ...newContact };
       setContacts(prev => [...prev, addedContact]);
       setForm(prev => prev ? ({ ...prev, jobsiteContactId: docRef.id }) : null);
       setShowNewContact(false);

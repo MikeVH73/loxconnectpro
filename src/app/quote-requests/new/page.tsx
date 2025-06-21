@@ -375,6 +375,9 @@ export default function NewQuoteRequestPage() {
       const docRef = await addDoc(contactsRef, contactData);
       console.log('Created new contact:', { id: docRef.id, ...contactData });
 
+      // Set the new contact as the jobsite contact
+      setJobsiteContactId(docRef.id);
+
       // Refresh contacts list
       const contactsSnapshot = await getDocs(contactsRef);
       const fetchedContacts = contactsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -610,13 +613,13 @@ export default function NewQuoteRequestPage() {
         </div>
 
         {/* Jobsite Contact */}
-        <div>
+        <div className="mb-4">
           <label className="block text-sm font-medium text-gray-700">Jobsite Contact</label>
-          <div className="mt-1 flex gap-2">
+          <div className="flex items-center gap-2">
             <select
               value={jobsiteContactId}
               onChange={(e) => setJobsiteContactId(e.target.value)}
-              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
             >
               <option value="">Select a contact</option>
               {contacts.map((contact) => (
@@ -628,7 +631,7 @@ export default function NewQuoteRequestPage() {
             <button
               type="button"
               onClick={() => setShowNewContact(true)}
-              className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600"
+              className="mt-1 inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
             >
               New Contact
             </button>
@@ -761,40 +764,44 @@ export default function NewQuoteRequestPage() {
 
       {/* New Contact Modal */}
       {showNewContact && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-          <div className="bg-white p-6 rounded-lg w-96">
+        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg p-6 max-w-sm w-full">
             <h3 className="text-lg font-medium mb-4">Add New Contact</h3>
             <div className="space-y-4">
-              <input
-                type="text"
-                value={newContact.name}
-                onChange={(e) => setNewContact({ ...newContact, name: e.target.value })}
-                placeholder="Contact Name"
-                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-              />
-              <input
-                type="tel"
-                value={newContact.phone}
-                onChange={(e) => setNewContact({ ...newContact, phone: e.target.value })}
-                placeholder="Phone Number"
-                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-              />
-            </div>
-            <div className="mt-6 flex justify-end gap-4">
-              <button
-                type="button"
-                onClick={() => setShowNewContact(false)}
-                className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleAddNewContact}
-                className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600"
-              >
-                Add Contact
-              </button>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Name</label>
+                <input
+                  type="text"
+                  value={newContact.name}
+                  onChange={(e) => setNewContact(prev => ({ ...prev, name: e.target.value }))}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Phone</label>
+                <input
+                  type="text"
+                  value={newContact.phone}
+                  onChange={(e) => setNewContact(prev => ({ ...prev, phone: e.target.value }))}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                />
+              </div>
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowNewContact(false)}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleAddNewContact}
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  Add Contact
+                </button>
+              </div>
             </div>
           </div>
         </div>
