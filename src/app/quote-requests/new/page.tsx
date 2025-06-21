@@ -65,6 +65,14 @@ interface QuoteRequest {
   updatedAt: any;
 }
 
+interface Contact {
+  id: string;
+  name: string;
+  phone: string;
+  email?: string;
+  isFirstContact?: boolean;
+}
+
 const statuses = ["In Progress", "Won", "Lost", "Cancelled"];
 
 // Add state for archived status
@@ -98,7 +106,7 @@ export default function NewQuoteRequestPage() {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [customerDecidesEnd, setCustomerDecidesEnd] = useState(false);
-  const [contacts, setContacts] = useState<any[]>([]);
+  const [contacts, setContacts] = useState<Contact[]>([]);
   const [jobsiteContactId, setJobsiteContactId] = useState("");
   const [showNewContact, setShowNewContact] = useState(false);
   const [newContact, setNewContact] = useState({ name: "", phone: "" });
@@ -197,36 +205,44 @@ export default function NewQuoteRequestPage() {
       if (!customerId || !db || !isMounted.current) return;
 
       try {
-        // First try to fetch from the subcollection
-        const contactsRef = collection(db as Firestore, `customers/${customerId}/contacts`);
-        const contactsSnapshot = await getDocs(contactsRef);
-        let fetchedContacts = contactsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-        // If no contacts found in subcollection, check if there's a contact in the customer document
-        if (fetchedContacts.length === 0) {
-          const customerDoc = await getDoc(doc(db as Firestore, "customers", customerId));
-          if (customerDoc.exists()) {
-            const customerData = customerDoc.data();
-            if (customerData.contact && customerData.phone) {
-              // Create a contact from the customer's contact info
-              fetchedContacts = [{
-                id: 'main',
-                name: customerData.contact,
-                phone: customerData.phone,
-                email: customerData.email || ''
-              }];
-            }
+        let fetchedContacts: Contact[] = [];
+        
+        // First check if there's a contact in the customer document
+        const customerDoc = await getDoc(doc(db as Firestore, "customers", customerId));
+        if (customerDoc.exists()) {
+          const customerData = customerDoc.data();
+          if (customerData.contact && customerData.phone) {
+            // Add the first contact to the list
+            fetchedContacts.push({
+              id: 'main',
+              name: customerData.contact,
+              phone: customerData.phone,
+              email: customerData.email || '',
+              isFirstContact: true
+            });
           }
         }
+
+        // Then fetch contacts from the subcollection
+        const contactsRef = collection(db as Firestore, `customers/${customerId}/contacts`);
+        const contactsSnapshot = await getDocs(contactsRef);
+        const subcollectionContacts = contactsSnapshot.docs.map(doc => ({
+          id: doc.id,
+          name: doc.data().name,
+          phone: doc.data().phone,
+          email: doc.data().email,
+          isFirstContact: false
+        }));
+        
+        // Combine both sets of contacts
+        fetchedContacts = [...fetchedContacts, ...subcollectionContacts];
         
         if (isMounted.current) {
           setContacts(fetchedContacts);
           console.log('Fetched contacts:', fetchedContacts);
           
-          // If there's exactly one contact, auto-select it
-          if (fetchedContacts.length === 1) {
-            setJobsiteContactId(fetchedContacts[0].id);
-          }
+          // Do not auto-select any contact
+          setJobsiteContactId("");
         }
       } catch (err) {
         console.error("Error fetching contacts:", err);
@@ -243,6 +259,7 @@ export default function NewQuoteRequestPage() {
   const handleCustomerChange = useCallback(async (selectedCustomerId: string) => {
     setCustomerId(selectedCustomerId);
     setJobsiteContactId(""); // Reset contact when customer changes
+    setContacts([]); // Reset contacts when customer changes
 
     if (!selectedCustomerId || !db) return;
 
@@ -346,8 +363,6 @@ export default function NewQuoteRequestPage() {
         ...newCustomer,
         createdAt: serverTimestamp(),
       });
-      const newCustomerData = { id: customerRef.id, ...newCustomer };
-      setCustomers(prev => [...prev, newCustomerData]);
       setCustomerId(customerRef.id);
       setShowNewCustomer(false);
       setNewCustomer({ name: "", address: "", contact: "", phone: "", email: "" });
@@ -381,23 +396,26 @@ export default function NewQuoteRequestPage() {
 
     try {
       const contactsRef = collection(db as Firestore, `customers/${customerId}/contacts`);
-      const contactData = {
+      const contactData: Omit<Contact, 'id'> = {
         name: newContact.name,
-        phone: newContact.phone,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
+        phone: newContact.phone
       };
 
-      const docRef = await addDoc(contactsRef, contactData);
-      console.log('Created new contact:', { id: docRef.id, ...contactData });
+      const docRef = await addDoc(contactsRef, {
+        ...contactData,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
 
+      // Add the new contact to the contacts list
+      const newContactWithId: Contact = {
+        id: docRef.id,
+        ...contactData
+      };
+      setContacts(prev => [...prev, newContactWithId]);
+      
       // Set the new contact as the jobsite contact
       setJobsiteContactId(docRef.id);
-
-      // Refresh contacts list
-      const contactsSnapshot = await getDocs(contactsRef);
-      const fetchedContacts = contactsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setContacts(fetchedContacts);
 
       // Reset form and close modal
       setNewContact({ name: "", phone: "" });
@@ -640,7 +658,7 @@ export default function NewQuoteRequestPage() {
               <option value="">Select a contact</option>
               {contacts.map((contact) => (
                 <option key={contact.id} value={contact.id}>
-                  {contact.name} ({contact.phone})
+                  {contact.name} ({contact.phone}){contact.isFirstContact ? ' (First Contact)' : ''}
                 </option>
               ))}
             </select>
