@@ -124,7 +124,7 @@ export default function PlanningPage() {
   };
 
   if (loading) return (
-    <div className="flex items-center justify-center h-64">
+    <div className="flex items-center justify-center h-screen">
       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
     </div>
   );
@@ -150,7 +150,7 @@ export default function PlanningPage() {
   });
 
   return (
-    <div className="p-4 max-w-7xl mx-auto">
+    <div className="flex flex-col h-screen p-4">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Planning</h1>
         <div className="flex gap-4 items-center">
@@ -178,16 +178,16 @@ export default function PlanningPage() {
         </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow overflow-hidden">
+      <div className="flex-1 bg-white rounded-lg shadow overflow-hidden flex flex-col min-h-0">
         <div className="grid grid-cols-7 gap-px bg-gray-200">
           {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-            <div key={day} className="bg-gray-50 py-2 text-center text-sm font-medium text-gray-700">
+            <div key={day} className="bg-gray-50 py-3 text-center text-sm font-medium text-gray-700">
               {day}
             </div>
           ))}
         </div>
 
-        <div className="divide-y">
+        <div className="flex-1 divide-y overflow-auto">
           {weeks.map((week, weekIndex) => {
             // Get all quotes that appear in this week
             const weekQuotes = quoteRequests.filter(quote => {
@@ -223,9 +223,9 @@ export default function PlanningPage() {
 
             // Calculate required height based on number of rows
             const maxRow = Math.max(...positionedQuotes.map(q => q.row), 0);
-            const rowHeight = 28; // Height for each quote bar
-            const padding = 8; // Padding top and bottom
-            const minHeight = 120; // Minimum height of the week row
+            const rowHeight = 32; // Increased height for each quote bar
+            const padding = 12; // Increased padding
+            const minHeight = 150; // Increased minimum height
             const calculatedHeight = Math.max(minHeight, (maxRow + 1) * rowHeight + padding * 2);
 
             return (
@@ -238,11 +238,11 @@ export default function PlanningPage() {
                   return (
                     <div
                       key={date.toISOString()}
-                      className={`relative p-2 ${
+                      className={`relative p-3 ${
                         !isCurrentMonth ? 'bg-gray-50' : 'bg-white'
                       } ${isToday ? 'bg-blue-50' : ''}`}
                     >
-                      <div className={`font-medium text-sm mb-1 ${
+                      <div className={`font-medium text-base mb-2 ${
                         !isCurrentMonth ? 'text-gray-400' : 'text-gray-700'
                       }`}>
                         {format(date, 'd')}
@@ -277,7 +277,7 @@ export default function PlanningPage() {
                       key={quote.id}
                       href={`/quote-requests/${quote.id}`}
                       className={`
-                        absolute z-10 p-1 text-xs rounded-md
+                        absolute z-10 px-2 py-1.5 text-sm rounded-md
                         bg-red-100 text-red-700 hover:bg-red-200 transition-colors
                         overflow-hidden text-ellipsis whitespace-nowrap
                         border border-red-200
