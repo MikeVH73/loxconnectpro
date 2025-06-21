@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { doc, getDoc, updateDoc, collection, getDocs, query, where, serverTimestamp, addDoc } from "firebase/firestore";
+import { doc, getDoc, updateDoc, collection, getDocs, query, where, serverTimestamp, addDoc, Firestore, DocumentData } from "firebase/firestore";
 import { db } from "@/firebaseClient";
 import { useAuth } from "../../../AuthProvider";
 import FileUpload from "../../../components/FileUpload";
@@ -25,10 +25,58 @@ declare global {
         GeocoderStatus: {
           OK: string;
         };
+        places: {
+          Autocomplete: new (input: HTMLInputElement, options: any) => any;
+        };
       };
     };
   }
 }
+
+interface Coordinates {
+  lat: number;
+  lng: number;
+}
+
+interface Jobsite {
+  address: string;
+  coordinates: Coordinates | null;
+}
+
+interface Product {
+  catClass: string;
+  description: string;
+  quantity: number;
+}
+
+interface Note {
+  text: string;
+  author: string;
+  createdAt: string;
+}
+
+interface QuoteRequest {
+  id: string;
+  title: string;
+  creatorCountry: string;
+  involvedCountry: string;
+  customer: string;
+  status: string;
+  products: Product[];
+  jobsite: Jobsite;
+  startDate: string;
+  endDate: string | null;
+  customerDecidesEnd: boolean;
+  jobsiteContactId: string;
+  jobsiteContact: any;
+  labels: string[];
+  notes: Note[];
+  attachments: any[];
+  createdAt: any;
+  updatedAt: any;
+}
+
+type StatusType = "In Progress" | "Snoozed" | "Won" | "Lost" | "Cancelled";
 
 if (!db) {
   throw new Error("Firestore is not initialized");
@@ -43,8 +91,8 @@ export default function EditQuoteRequestPage() {
   const { user, userProfile } = useAuth();
   const isReadOnly = userProfile?.role === "readOnly";
   const [loading, setLoading] = useState(true);
-  const [form, setForm] = useState<any>(null);
-  const [original, setOriginal] = useState<any>(null);
+  const [form, setForm] = useState<QuoteRequest | null>(null);
+  const [original, setOriginal] = useState<QuoteRequest | null>(null);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [customers, setCustomers] = useState<any[]>([]);
@@ -69,15 +117,30 @@ export default function EditQuoteRequestPage() {
         setLoading(false);
         return;
       }
-      const docRef = doc(db, "quoteRequests", params.id as string);
-      const snap = await getDoc(docRef);
-      if (snap.exists()) {
-        const data = { ...snap.data(), id: snap.id };
-        setForm(data);
-        setOriginal(data);
-        setAttachments(data.attachments || []);
-      } else {
-        setError("Quote Request not found");
+      try {
+        const docRef = doc(db as Firestore, "quoteRequests", params.id as string);
+        const snap = await getDoc(docRef);
+        if (snap.exists()) {
+          const data = { ...snap.data(), id: snap.id };
+          // Ensure jobsite data is properly structured
+          const jobsite = {
+            address: data.jobsite?.address || data.jobsiteAddress || "",
+            coordinates: data.jobsite?.coordinates || null
+          };
+          const formattedData = {
+            ...data,
+            jobsite,
+            attachments: data.attachments || []
+          };
+          setForm(formattedData);
+          setOriginal(formattedData);
+          setAttachments(formattedData.attachments);
+        } else {
+          setError("Quote Request not found");
+        }
+      } catch (err) {
+        console.error("Error fetching quote request:", err);
+        setError("Failed to load quote request");
       }
       setLoading(false);
     };
@@ -86,21 +149,29 @@ export default function EditQuoteRequestPage() {
 
   useEffect(() => {
     const fetchCustomers = async () => {
-      const snapshot = await getDocs(collection(db, "customers"));
-      setCustomers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      if (!db) return;
+      try {
+        const customersCollection = collection(db as Firestore, "customers");
+        const snapshot = await getDocs(customersCollection);
+        setCustomers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      } catch (err) {
+        console.error("Error fetching customers:", err);
+      }
     };
     fetchCustomers();
   }, []);
 
   useEffect(() => {
     const fetchContacts = async () => {
-      if (!form?.customer) {
-        setContacts([]);
-        return;
+      if (!db || !form?.customer) return;
+      try {
+        const contactsCollection = collection(db as Firestore, "contacts");
+        const q = query(contactsCollection, where("customer", "==", form.customer));
+        const snapshot = await getDocs(q);
+        setContacts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      } catch (err) {
+        console.error("Error fetching contacts:", err);
       }
-      const q = query(collection(db, "contacts"), where("customer", "==", form.customer));
-      const snapshot = await getDocs(q);
-      setContacts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     };
     fetchContacts();
   }, [form?.customer]);
@@ -125,7 +196,28 @@ export default function EditQuoteRequestPage() {
       script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
       script.async = true;
       script.defer = true;
-      script.onload = () => setIsGoogleMapsLoaded(true);
+      script.onload = () => {
+        setIsGoogleMapsLoaded(true);
+        
+        // Initialize Places Autocomplete
+        if (addressInputRef.current) {
+          const autocomplete = new google.maps.places.Autocomplete(addressInputRef.current, {
+            types: ['address'],
+            fields: ['geometry', 'formatted_address']
+          });
+
+          autocomplete.addListener('place_changed', () => {
+            const place = autocomplete.getPlace();
+            if (place.geometry?.location) {
+              const lat = place.geometry.location.lat();
+              const lng = place.geometry.location.lng();
+              const coordinates = `${lat.toFixed(6)}° N, ${lng.toFixed(6)}° E`;
+              handleChange("gpsCoordinates", coordinates);
+              handleChange("jobsiteAddress", place.formatted_address);
+            }
+          });
+        }
+      };
       document.head.appendChild(script);
 
       return () => {
@@ -134,38 +226,6 @@ export default function EditQuoteRequestPage() {
     } else {
       setIsGoogleMapsLoaded(true);
     }
-  }, []);
-
-  useEffect(() => {
-    // Load Google Maps script
-    const script = document.createElement("script");
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places`;
-    script.async = true;
-    script.onload = () => {
-      // Initialize Places Autocomplete
-      if (addressInputRef.current) {
-        const autocomplete = new google.maps.places.Autocomplete(addressInputRef.current, {
-          types: ['address'],
-          fields: ['geometry', 'formatted_address']
-        });
-
-        autocomplete.addListener('place_changed', () => {
-          const place = autocomplete.getPlace();
-          if (place.geometry?.location) {
-            const lat = place.geometry.location.lat();
-            const lng = place.geometry.location.lng();
-            const coordinates = `${lat.toFixed(6)}° N, ${lng.toFixed(6)}° E`;
-            handleChange("gpsCoordinates", coordinates);
-            handleChange("jobsiteAddress", place.formatted_address);
-          }
-        });
-      }
-    };
-    document.head.appendChild(script);
-
-    return () => {
-      document.head.removeChild(script);
-    };
   }, []);
 
   const handleChange = (field: string, value: any) => {
@@ -205,45 +265,101 @@ export default function EditQuoteRequestPage() {
   };
 
   const handleAddNewContact = async () => {
-    if (!newContact.name || !newContact.phone || !form.customer) return;
-    const docRef = await addDoc(collection(db, "contacts"), {
-      ...newContact,
-      customer: form.customer,
-      createdAt: serverTimestamp(),
-    });
-    const addedContact = { id: docRef.id, ...newContact, customer: form.customer };
-    setContacts((prev: any[]) => [...prev, addedContact]);
-    setForm((prev: any) => ({ ...prev, jobsiteContactId: docRef.id }));
-    setShowNewContact(false);
-    setNewContact({ name: "", phone: "" });
+    if (!db || !newContact.name || !newContact.phone || !form?.customer) return;
+    try {
+      const contactsCollection = collection(db as Firestore, "contacts");
+      const docRef = await addDoc(contactsCollection, {
+        ...newContact,
+        customer: form.customer,
+        createdAt: serverTimestamp(),
+      });
+      const addedContact = { id: docRef.id, ...newContact, customer: form.customer };
+      setContacts(prev => [...prev, addedContact]);
+      setForm(prev => prev ? ({ ...prev, jobsiteContactId: docRef.id }) : null);
+      setShowNewContact(false);
+      setNewContact({ name: "", phone: "" });
+    } catch (err) {
+      console.error("Error adding new contact:", err);
+    }
   };
 
   const handleAddressChange = async (address: string) => {
-    if (!address || address.length < 5) return;
+    if (!address || address.length < 5) {
+      setForm(prev => ({
+        ...prev,
+        jobsite: {
+          ...prev.jobsite,
+          address,
+          coordinates: null
+        }
+      }));
+      setGeocodingError("");
+      return;
+    }
     
     setIsGeocoding(true);
     setGeocodingError("");
     
     try {
-      const response = await fetch(
-        `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}`
+      // Format address to improve geocoding accuracy
+      const formattedAddress = address.trim().replace(/\s+/g, ' ');
+      
+      // First try Places API Autocomplete
+      const placesResponse = await fetch(
+        `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(formattedAddress)}&types=address&key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}`
       );
       
-      const data = await response.json();
-      console.log('Geocoding response:', data);
+      const placesData = await placesResponse.json();
+      console.log('Places API response:', placesData);
       
-      if (data.status === "OK" && data.results?.[0]?.geometry?.location) {
-        const { lat, lng } = data.results[0].geometry.location;
-        const coordinates = `${lat.toFixed(6)}° N, ${lng.toFixed(6)}° E`;
-        console.log('Setting coordinates:', coordinates);
-        handleChange("gpsCoordinates", coordinates);
+      if (placesData.predictions && placesData.predictions.length > 0) {
+        // Get place details for the first prediction
+        const placeId = placesData.predictions[0].place_id;
+        const detailsResponse = await fetch(
+          `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=geometry,formatted_address&key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}`
+        );
+        
+        const detailsData = await detailsResponse.json();
+        console.log('Place Details response:', detailsData);
+        
+        if (detailsData.result?.geometry?.location) {
+          const { lat, lng } = detailsData.result.geometry.location;
+          setForm(prev => ({
+            ...prev,
+            jobsite: {
+              ...prev.jobsite,
+              address: detailsData.result.formatted_address,
+              coordinates: { lat, lng }
+            }
+          }));
+          setGeocodingError("");
+        }
+      }
+      // Fallback to Geocoding API
+      const geocodingResponse = await fetch(
+        `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(formattedAddress)}&key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}`
+      );
+      
+      const geocodingData = await geocodingResponse.json();
+      console.log('Geocoding API response:', geocodingData);
+      
+      if (geocodingData.status === "OK" && geocodingData.results?.[0]?.geometry?.location) {
+        const { lat, lng } = geocodingData.results[0].geometry.location;
+        setForm(prev => ({
+          ...prev,
+          jobsite: {
+            ...prev.jobsite,
+            address: geocodingData.results[0].formatted_address,
+            coordinates: { lat, lng }
+          }
+        }));
+        setGeocodingError("");
       } else {
-        console.error('Geocoding failed:', data);
-        setGeocodingError("Could not get coordinates for this address");
+        setGeocodingError("Could not find coordinates for this address. Please check the address and try again.");
       }
     } catch (error) {
-      console.error('Error:', error);
-      setGeocodingError("Failed to get coordinates");
+      console.error('Error geocoding address:', error);
+      setGeocodingError("An error occurred while getting coordinates. Please try again.");
     } finally {
       setIsGeocoding(false);
     }
@@ -257,43 +373,49 @@ export default function EditQuoteRequestPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!db) {
-      setError("Database not initialized");
+    if (!db || !form) {
+      setError("Database not initialized or form not loaded");
       return;
     }
     setSaving(true);
     setError("");
-    // Date validation
+    
     if (!form.customerDecidesEnd && form.startDate && form.endDate && form.endDate < form.startDate) {
       setError("End Date cannot be before Start Date.");
       setSaving(false);
       return;
     }
+    
     try {
-      const docRef = doc(db, "quoteRequests", params.id as string);
+      const docRef = doc(db as Firestore, "quoteRequests", params.id as string);
       // Compare original and form to find changes
       const changes = [];
       const sanitize = (value: any) => value === undefined ? null : value;
       for (const key in form) {
         if (key === "updatedAt" || key === "id") continue;
-        if (JSON.stringify(form[key]) !== JSON.stringify(original[key])) {
-          changes.push({ field: key, from: sanitize(original[key]), to: sanitize(form[key]) });
+        if (JSON.stringify(form[key]) !== JSON.stringify(original?.[key])) {
+          changes.push({ field: key, from: sanitize(original?.[key]), to: sanitize(form[key]) });
         }
       }
+      
       if (changes.length > 0) {
-        await addDoc(collection(db, "modifications"), {
+        const modificationsCollection = collection(db as Firestore, "modifications");
+        await addDoc(modificationsCollection, {
           quoteRequestId: params.id,
           dateTime: serverTimestamp(),
           user: user?.email || "Unknown",
           changes,
         });
       }
+      
       await updateDoc(docRef, {
         ...form,
         updatedAt: new Date().toISOString(),
       });
+      
       router.push("/quote-requests");
     } catch (err: any) {
+      console.error("Error updating quote request:", err);
       setError(err.message || "Failed to update");
     } finally {
       setSaving(false);
@@ -334,381 +456,375 @@ export default function EditQuoteRequestPage() {
         src={`https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places`}
         strategy="beforeInteractive"
       />
-      <div className="container mx-auto p-4">
-        <div className="flex h-full">
-          {/* Main content with scaling */}
-          <div className="flex-1 transform scale-[0.85] origin-top-left min-h-screen">
-            <div className="p-6">
-              <form onSubmit={handleSubmit} className="space-y-6">
-                <div className="flex items-center gap-4 mb-6">
-                  <h1 className="text-2xl font-semibold text-gray-900 flex items-center gap-2">
-                    <Link href="/quote-requests" className="text-gray-400 hover:text-gray-600">
-                      Edit Quote Request
-                    </Link>
-                    <span className="text-gray-400">/</span>
-                    {form.creatorCountry}
-                    {form.targetCountry && (
-                      <>
-                        <span className="text-gray-400">→</span>
-                        {form.targetCountry}
-                      </>
-                    )}
-                  </h1>
+      <div className="flex h-full">
+        {/* Main content */}
+        <div className="flex-1 p-4 overflow-auto">
+          <form onSubmit={handleSubmit} className="space-y-6 max-w-5xl mx-auto">
+            {/* Form header */}
+            <div className="flex items-center gap-4 mb-6">
+              <h1 className="text-2xl font-semibold text-gray-900 flex items-center gap-2">
+                <Link href="/quote-requests" className="text-gray-400 hover:text-gray-600">
+                  Edit Quote Request
+                </Link>
+                <span className="text-gray-400">/</span>
+                {form?.creatorCountry}
+                {form?.involvedCountry && (
+                  <>
+                    <span className="text-gray-400">→</span>
+                    {form.involvedCountry}
+                  </>
+                )}
+              </h1>
+            </div>
+
+            {/* Form content */}
+            <div className="grid grid-cols-1 gap-8">
+              <div className="flex flex-wrap gap-4 items-center">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="waitingForAnswer"
+                    checked={form.waitingForAnswer}
+                    onChange={(e) => handleChange("waitingForAnswer", e.target.checked)}
+                    disabled={isReadOnly}
+                    className="h-5 w-5 text-blue-600"
+                  />
+                  <label htmlFor="waitingForAnswer" className="text-sm text-gray-700">
+                    Waiting for Answer
+                  </label>
                 </div>
 
-                <div className="flex flex-wrap gap-4 items-center">
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      id="waitingForAnswer"
-                      checked={form.waitingForAnswer}
-                      onChange={(e) => handleChange("waitingForAnswer", e.target.checked)}
-                      disabled={isReadOnly}
-                      className="h-5 w-5 text-blue-600"
-                    />
-                    <label htmlFor="waitingForAnswer" className="text-sm text-gray-700">
-                      Waiting for Answer
-                    </label>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      id="urgent"
-                      checked={form.urgent}
-                      onChange={(e) => handleChange("urgent", e.target.checked)}
-                      disabled={isReadOnly}
-                      className="h-5 w-5 text-red-600"
-                    />
-                    <label htmlFor="urgent" className="text-sm text-gray-700">
-                      Urgent
-                    </label>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      id="problems"
-                      checked={form.problems}
-                      onChange={(e) => handleChange("problems", e.target.checked)}
-                      disabled={isReadOnly}
-                      className="h-5 w-5 text-yellow-600"
-                    />
-                    <label htmlFor="problems" className="text-sm text-gray-700">
-                      Problems
-                    </label>
-                  </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="urgent"
+                    checked={form.urgent}
+                    onChange={(e) => handleChange("urgent", e.target.checked)}
+                    disabled={isReadOnly}
+                    className="h-5 w-5 text-red-600"
+                  />
+                  <label htmlFor="urgent" className="text-sm text-gray-700">
+                    Urgent
+                  </label>
                 </div>
 
-                <div className="p-6">
-                  <div className="grid grid-cols-[1fr_2fr_1fr] gap-6">
-                    <div className="space-y-6">
-                      <div>
-                        <label className="block mb-1 font-medium">Title</label>
-                        <input
-                          type="text"
-                          value={form.title || ""}
-                          onChange={(e) => handleChange("title", e.target.value)}
-                          disabled={isReadOnly}
-                          className="w-full p-2 border rounded"
-                        />
-                      </div>
-                      <div>
-                        <label className="block mb-1 font-medium">Creator Country</label>
-                        <input
-                          type="text"
-                          value={form.creatorCountry || ""}
-                          disabled
-                          className="w-full p-2 border rounded bg-gray-50"
-                        />
-                      </div>
-                      <div>
-                        <label className="block mb-1 font-medium">Target Country</label>
-                        <CountrySelect
-                          value={form.involvedCountry || form.targetCountry || ""}
-                          onChange={(value) => {
-                            handleChange("involvedCountry", value);
-                            handleChange("targetCountry", value);
-                          }}
-                          disabled={isReadOnly}
-                        />
-                      </div>
-                      <div>
-                        <label className="block mb-1 font-medium">Customer</label>
-                        <select
-                          value={form.customer || ""}
-                          onChange={(e) => handleChange("customer", e.target.value)}
-                          disabled={isReadOnly}
-                          className="w-full p-2 border rounded"
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="problems"
+                    checked={form.problems}
+                    onChange={(e) => handleChange("problems", e.target.checked)}
+                    disabled={isReadOnly}
+                    className="h-5 w-5 text-yellow-600"
+                  />
+                  <label htmlFor="problems" className="text-sm text-gray-700">
+                    Problems
+                  </label>
+                </div>
+              </div>
+
+              <div className="p-6">
+                <div className="grid grid-cols-[1fr_2fr_1fr] gap-6">
+                  <div className="space-y-6">
+                    <div>
+                      <label className="block mb-1 font-medium">Title</label>
+                      <input
+                        type="text"
+                        value={form.title || ""}
+                        onChange={(e) => handleChange("title", e.target.value)}
+                        disabled={isReadOnly}
+                        className="w-full p-2 border rounded"
+                      />
+                    </div>
+                    <div>
+                      <label className="block mb-1 font-medium">Creator Country</label>
+                      <input
+                        type="text"
+                        value={form.creatorCountry || ""}
+                        disabled
+                        className="w-full p-2 border rounded bg-gray-50"
+                      />
+                    </div>
+                    <div>
+                      <label className="block mb-1 font-medium">Target Country</label>
+                      <CountrySelect
+                        value={form.involvedCountry || form.targetCountry || ""}
+                        onChange={(value) => {
+                          handleChange("involvedCountry", value);
+                          handleChange("targetCountry", value);
+                        }}
+                        disabled={isReadOnly}
+                      />
+                    </div>
+                    <div>
+                      <label className="block mb-1 font-medium">Customer</label>
+                      <select
+                        value={form.customer || ""}
+                        onChange={(e) => handleChange("customer", e.target.value)}
+                        disabled={isReadOnly}
+                        className="w-full p-2 border rounded"
+                      >
+                        <option value="">Select customer...</option>
+                        {customers.map(customer => (
+                          <option key={customer.id} value={customer.id}>
+                            {customer.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="space-y-6">
+                    <div>
+                      <label className="block mb-1 font-medium">Products</label>
+                      {form.products?.map((product: any, idx: number) => (
+                        <div key={idx} className="flex gap-2 mb-2">
+                          <input
+                            type="text"
+                            value={product.catClass || ""}
+                            onChange={(e) => handleProductChange(idx, "catClass", e.target.value)}
+                            placeholder="Cat. Class"
+                            className="w-[150px] p-2 border rounded"
+                            disabled={isReadOnly}
+                          />
+                          <input
+                            type="text"
+                            value={product.description || ""}
+                            onChange={(e) => handleProductChange(idx, "description", e.target.value)}
+                            placeholder="Description"
+                            className="flex-1 p-2 border rounded"
+                            disabled={isReadOnly}
+                          />
+                          <input
+                            type="number"
+                            value={product.quantity || ""}
+                            onChange={(e) => handleProductChange(idx, "quantity", parseInt(e.target.value))}
+                            placeholder="Qty"
+                            className="w-20 p-2 border rounded"
+                            disabled={isReadOnly}
+                          />
+                          {!isReadOnly && (
+                            <button
+                              type="button"
+                              onClick={() => removeProduct(idx)}
+                              className="text-red-500 hover:text-red-700"
+                            >
+                              ×
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                      {!isReadOnly && (
+                        <button
+                          type="button"
+                          onClick={addProduct}
+                          className="text-blue-500 hover:text-blue-700"
                         >
-                          <option value="">Select customer...</option>
-                          {customers.map(customer => (
-                            <option key={customer.id} value={customer.id}>
-                              {customer.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
+                          + Add Product
+                        </button>
+                      )}
                     </div>
 
-                    <div className="space-y-6">
-                      <div>
-                        <label className="block mb-1 font-medium">Products</label>
-                        {form.products?.map((product: any, idx: number) => (
-                          <div key={idx} className="flex gap-2 mb-2">
-                            <input
-                              type="text"
-                              value={product.catClass || ""}
-                              onChange={(e) => handleProductChange(idx, "catClass", e.target.value)}
-                              placeholder="Cat. Class"
-                              className="w-[150px] p-2 border rounded"
-                              disabled={isReadOnly}
-                            />
-                            <input
-                              type="text"
-                              value={product.description || ""}
-                              onChange={(e) => handleProductChange(idx, "description", e.target.value)}
-                              placeholder="Description"
-                              className="flex-1 p-2 border rounded"
-                              disabled={isReadOnly}
-                            />
-                            <input
-                              type="number"
-                              value={product.quantity || ""}
-                              onChange={(e) => handleProductChange(idx, "quantity", parseInt(e.target.value))}
-                              placeholder="Qty"
-                              className="w-20 p-2 border rounded"
-                              disabled={isReadOnly}
-                            />
-                            {!isReadOnly && (
-                              <button
-                                type="button"
-                                onClick={() => removeProduct(idx)}
-                                className="text-red-500 hover:text-red-700"
-                              >
-                                ×
-                              </button>
-                            )}
+                    <div>
+                      <label className="block mb-1 font-medium">Notes</label>
+                      <div className="space-y-2">
+                        {form.notes?.map((note: any) => (
+                          <div key={note.dateTime} className="text-sm bg-gray-50 p-2 rounded">
+                            <div className="text-gray-500">
+                              {note.user} on {new Date(note.dateTime).toLocaleString()}
+                            </div>
+                            <div>{note.text}</div>
                           </div>
                         ))}
                         {!isReadOnly && (
-                          <button
-                            type="button"
-                            onClick={addProduct}
-                            className="text-blue-500 hover:text-blue-700"
-                          >
-                            + Add Product
-                          </button>
-                        )}
-                      </div>
-
-                      <div>
-                        <label className="block mb-1 font-medium">Notes</label>
-                        <div className="space-y-2">
-                          {form.notes?.map((note: any) => (
-                            <div key={note.dateTime} className="text-sm bg-gray-50 p-2 rounded">
-                              <div className="text-gray-500">
-                                {note.user} on {new Date(note.dateTime).toLocaleString()}
-                              </div>
-                              <div>{note.text}</div>
-                            </div>
-                          ))}
-                          {!isReadOnly && (
-                            <div className="flex gap-2">
-                              <input
-                                type="text"
-                                value={newNote}
-                                onChange={(e) => setNewNote(e.target.value)}
-                                placeholder="Add a note..."
-                                className="flex-1 p-2 border rounded"
-                              />
-                              <button
-                                type="button"
-                                onClick={addNote}
-                                disabled={!newNote.trim()}
-                                className="px-4 py-2 bg-blue-500 text-white rounded disabled:opacity-50"
-                              >
-                                Add
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="space-y-6">
-                      <div>
-                        <label className="block mb-1 font-medium">Jobsite Address</label>
-                        <input
-                          type="text"
-                          value={form.jobsiteAddress || ""}
-                          onChange={(e) => {
-                            const address = e.target.value;
-                            handleChange("jobsiteAddress", address);
-                            handleAddressChange(address);
-                          }}
-                          placeholder="Enter a complete address including street, number, city, and country"
-                          className="w-full p-2 border rounded"
-                          disabled={isReadOnly}
-                        />
-                        {isGeocoding && <div className="text-sm text-gray-500 mt-1">Getting coordinates...</div>}
-                        {geocodingError && <div className="text-sm text-red-500 mt-1">{geocodingError}</div>}
-                      </div>
-
-                      <div>
-                        <label className="block mb-1 font-medium">GPS Coordinates</label>
-                        <input
-                          type="text"
-                          value={form.gpsCoordinates || ""}
-                          onChange={(e) => handleChange("gpsCoordinates", e.target.value)}
-                          placeholder="Coordinates will auto-fill when you enter an address"
-                          className="w-full p-2 border rounded"
-                          disabled={isReadOnly}
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block mb-1 font-medium">Jobsite Contact</label>
-                        <select
-                          value={form.jobsiteContactId || ""}
-                          onChange={(e) => handleChange("jobsiteContactId", e.target.value)}
-                          disabled={isReadOnly || !form.customer}
-                          className="w-full p-2 border rounded"
-                        >
-                          <option value="">Select contact...</option>
-                          {contacts.map(contact => (
-                            <option key={contact.id} value={contact.id}>
-                              {contact.name} ({contact.phone})
-                            </option>
-                          ))}
-                        </select>
-                        {!isReadOnly && form.customer && (
-                          <button
-                            type="button"
-                            onClick={() => setShowNewContact(true)}
-                            className="mt-2 text-blue-500 hover:text-blue-700"
-                          >
-                            + Add New Contact
-                          </button>
-                        )}
-                      </div>
-
-                      <div>
-                        <label className="block mb-1 font-medium">Status</label>
-                        <select
-                          value={form.status || ""}
-                          onChange={(e) => handleChange("status", e.target.value)}
-                          disabled={isReadOnly}
-                          className="w-full p-2 border rounded"
-                        >
-                          {statuses.map(status => (
-                            <option key={status} value={status}>
-                              {status}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block mb-1 font-medium">Labels</label>
-                        <div className="flex flex-wrap gap-2">
-                          {labels.map(label => (
-                            <label
-                              key={label.id}
-                              className={`px-3 py-1 rounded-full border cursor-pointer select-none ${
-                                form.labels?.includes(label.id)
-                                  ? 'bg-[#e40115] text-white border-[#e40115]'
-                                  : 'bg-gray-100 text-gray-800 border-gray-300'
-                              }`}
-                              style={{
-                                opacity:
-                                  form.labels?.length >= 4 && !form.labels?.includes(label.id)
-                                    ? 0.5
-                                    : 1,
-                              }}
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              value={newNote}
+                              onChange={(e) => setNewNote(e.target.value)}
+                              placeholder="Add a note..."
+                              className="flex-1 p-2 border rounded"
+                            />
+                            <button
+                              type="button"
+                              onClick={addNote}
+                              disabled={!newNote.trim()}
+                              className="px-4 py-2 bg-blue-500 text-white rounded disabled:opacity-50"
                             >
-                              <input
-                                type="checkbox"
-                                className="hidden"
-                                checked={form.labels?.includes(label.id)}
-                                onChange={() => handleLabelToggle(label.id)}
-                                disabled={
-                                  isReadOnly ||
-                                  (!form.labels?.includes(label.id) &&
-                                    (form.labels?.length || 0) >= 4)
-                                }
-                              />
-                              {label.name}
-                            </label>
-                          ))}
-                        </div>
+                              Add
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
 
-                  <div>
-                    <label className="block mb-1 font-medium">Attachments</label>
-                    <FileUpload
-                      files={attachments}
-                      onFilesChange={files => handleChange('attachments', files)}
-                      disabled={isReadOnly}
-                    />
-                  </div>
-
-                  {!isReadOnly && (
-                    <div className="flex gap-4 mt-8">
-                      <button
-                        type="submit"
-                        className="bg-[#e40115] text-white px-8 py-3 rounded text-lg font-semibold hover:bg-red-700 transition"
-                        disabled={saving}
-                      >
-                        {saving ? "Saving..." : "Save Changes"}
-                      </button>
-                      <button
-                        type="button"
-                        className="bg-gray-200 text-gray-700 px-8 py-3 rounded text-lg font-semibold hover:bg-gray-300 transition"
-                        onClick={() => router.push("/quote-requests")}
-                        disabled={saving}
-                      >
-                        Cancel
-                      </button>
+                  <div className="space-y-6">
+                    <div>
+                      <label className="block mb-1 font-medium">Jobsite Address</label>
+                      <input
+                        type="text"
+                        value={form.jobsite?.address || ""}
+                        onChange={(e) => {
+                          const address = e.target.value;
+                          setForm(prev => ({
+                            ...prev,
+                            jobsite: {
+                              ...prev.jobsite,
+                              address
+                            }
+                          }));
+                          debouncedHandleAddressChange(address);
+                        }}
+                        placeholder="Enter a complete address including street, number, city, and country"
+                        className="w-full p-2 border rounded"
+                        disabled={isReadOnly}
+                      />
+                      {isGeocoding && <div className="text-sm text-gray-500 mt-1">Getting coordinates...</div>}
+                      {geocodingError && <div className="text-sm text-red-500 mt-1">{geocodingError}</div>}
                     </div>
-                  )}
 
-                  {error && <div className="text-red-600 text-sm mt-4">{error}</div>}
+                    <div className="flex gap-4 mt-2">
+                      <div className="flex-1">
+                        <label className="block text-xs text-gray-500">Latitude</label>
+                        <input
+                          className="w-full border rounded px-3 py-2 bg-gray-100"
+                          value={form.jobsite?.coordinates?.lat ?? ""}
+                          readOnly
+                          disabled
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <label className="block text-xs text-gray-500">Longitude</label>
+                        <input
+                          className="w-full border rounded px-3 py-2 bg-gray-100"
+                          value={form.jobsite?.coordinates?.lng ?? ""}
+                          readOnly
+                          disabled
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block mb-1 font-medium">Jobsite Contact</label>
+                      <select
+                        value={form.jobsiteContactId || ""}
+                        onChange={(e) => handleChange("jobsiteContactId", e.target.value)}
+                        disabled={isReadOnly || !form.customer}
+                        className="w-full p-2 border rounded"
+                      >
+                        <option value="">Select contact...</option>
+                        {contacts.map(contact => (
+                          <option key={contact.id} value={contact.id}>
+                            {contact.name} ({contact.phone})
+                          </option>
+                        ))}
+                      </select>
+                      {!isReadOnly && form.customer && (
+                        <button
+                          type="button"
+                          onClick={() => setShowNewContact(true)}
+                          className="mt-2 text-blue-500 hover:text-blue-700"
+                        >
+                          + Add New Contact
+                        </button>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="block mb-1 font-medium">Status</label>
+                      <select
+                        value={form.status || ""}
+                        onChange={(e) => handleChange("status", e.target.value)}
+                        disabled={isReadOnly}
+                        className="w-full p-2 border rounded"
+                      >
+                        {statuses.map(status => (
+                          <option key={status} value={status}>
+                            {status}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block mb-1 font-medium">Labels</label>
+                      <div className="flex flex-wrap gap-2">
+                        {labels.map(label => (
+                          <label
+                            key={label.id}
+                            className={`px-3 py-1 rounded-full border cursor-pointer select-none ${
+                              form.labels?.includes(label.id)
+                                ? 'bg-[#e40115] text-white border-[#e40115]'
+                                : 'bg-gray-100 text-gray-800 border-gray-300'
+                            }`}
+                            style={{
+                              opacity:
+                                form.labels?.length >= 4 && !form.labels?.includes(label.id)
+                                  ? 0.5
+                                  : 1,
+                            }}
+                          >
+                            <input
+                              type="checkbox"
+                              className="hidden"
+                              checked={form.labels?.includes(label.id)}
+                              onChange={() => handleLabelToggle(label.id)}
+                              disabled={
+                                isReadOnly ||
+                                (!form.labels?.includes(label.id) &&
+                                  (form.labels?.length || 0) >= 4)
+                              }
+                            />
+                            {label.name}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              </form>
-            </div>
-          </div>
 
-          {/* Right: Messaging Panel */}
-          <div className="w-[400px] border-l bg-white">
-            {isArchived ? (
-              <ArchivedMessaging 
-                quoteRequestId={params.id as string}
-                quoteRequest={{
-                  id: params.id as string,
-                  title: form.title,
-                  creatorCountry: form.creatorCountry,
-                  targetCountry: form.targetCountry,
-                  status: form.status,
-                  attachments: form.attachments
-                }}
-                userCountries={[form.creatorCountry, form.targetCountry].filter(Boolean)}
-              />
-            ) : (
-              <MessagingPanel
-                messages={messages}
-                currentUser={user?.email || ''}
-                currentCountry={userProfile?.businessUnit || ''}
-                onSendMessage={handleSendMessage}
-                quoteTitle={`${form.title} (${form.creatorCountry} → ${form.targetCountry})`}
-                quoteRequestFiles={attachments}
-                onFilesChange={files => handleChange('attachments', files)}
-                readOnly={isReadOnly}
-              />
-            )}
-          </div>
+                <div>
+                  <label className="block mb-1 font-medium">Attachments</label>
+                  <FileUpload
+                    files={attachments}
+                    onFilesChange={files => handleChange('attachments', files)}
+                    disabled={isReadOnly}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Form actions */}
+            <div className="flex justify-end gap-4 mt-8">
+              <button
+                type="button"
+                onClick={() => router.push("/quote-requests")}
+                className="px-6 py-2 text-gray-700 bg-gray-100 rounded hover:bg-gray-200"
+                disabled={saving}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="px-6 py-2 text-white bg-red-600 rounded hover:bg-red-700"
+                disabled={saving || isReadOnly}
+              >
+                {saving ? "Saving..." : "Save Changes"}
+              </button>
+            </div>
+          </form>
+        </div>
+
+        {/* Messaging panel */}
+        <div className="w-[400px] border-l border-gray-200 bg-white">
+          <MessagingPanel
+            quoteRequestId={params.id as string}
+            messages={messages}
+            onSendMessage={handleSendMessage}
+            loading={messagesLoading}
+            error={messagesError}
+          />
         </div>
       </div>
     </>

@@ -1,7 +1,7 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { collection, addDoc, serverTimestamp, getDocs, query, where, doc, getDoc, updateDoc } from "firebase/firestore";
+import { collection, addDoc, serverTimestamp, getDocs, query, where, doc, getDoc, updateDoc, Firestore, DocumentData, CollectionReference } from "firebase/firestore";
 import { db } from "../../../firebaseClient";
 import { useAuth } from "../../AuthProvider";
 import { Fragment } from "react";
@@ -11,10 +11,70 @@ import FileUploadSimple from "../../components/FileUploadSimple";
 import { moveFilesToQuoteRequest } from "../../utils/fileUtils";
 import StorageTest from "../../components/StorageTest";
 import CountrySelect from "../../components/CountrySelect";
+import MessagingPanel from '@/app/components/MessagingPanel';
+import { useMessages } from '@/app/hooks/useMessages';
+import { debounce } from "lodash";
+
+// Type definitions
+interface Jobsite {
+  address: string;
+  coordinates: {
+    lat: number;
+    lng: number;
+  } | null;
+}
+
+interface Product {
+  catClass: string;
+  description: string;
+  quantity: number;
+}
+
+interface Note {
+  text: string;
+  author: string;
+  dateTime: string;
+}
+
+interface FileData {
+  id: string;
+  name: string;
+  url: string;
+  type: string;
+  size: number;
+  uploadedAt: Date;
+  uploadedBy: string;
+}
+
+interface QuoteRequest {
+  title: string;
+  creatorCountry: string;
+  involvedCountry: string;
+  customer: string;
+  status: string;
+  products: Product[];
+  jobsite: Jobsite;
+  startDate: string;
+  endDate: string | null;
+  customerDecidesEnd: boolean;
+  jobsiteContactId: string;
+  jobsiteContact: any;
+  labels: string[];
+  notes: Note[];
+  attachments: any[];
+  createdAt: any;
+  updatedAt: any;
+}
+
 const statuses = ["In Progress", "Won", "Lost", "Cancelled"];
 
 // Add state for archived status
-type StatusType = "In Progress" | "Won" | "Lost" | "Cancelled";
+type StatusType = "In Progress" | "Snoozed" | "Won" | "Lost" | "Cancelled";
+
+// Ensure db is initialized
+if (!db) {
+  throw new Error("Firestore is not initialized");
+}
 
 export default function NewQuoteRequestPage() {
   const router = useRouter();
@@ -44,7 +104,7 @@ export default function NewQuoteRequestPage() {
   const [newContact, setNewContact] = useState({ name: "", phone: "" });
   const [labels, setLabels] = useState<any[]>([]);
   const [selectedLabels, setSelectedLabels] = useState<string[]>([]);
-  const [notes, setNotes] = useState<{ text: string; author: string }[]>([]);
+  const [notes, setNotes] = useState<Note[]>([]);
   const [noteText, setNoteText] = useState("");
   const [showCustomerModal, setShowCustomerModal] = useState(false);
   const [customerDetails, setCustomerDetails] = useState<any>(null);
@@ -53,7 +113,10 @@ export default function NewQuoteRequestPage() {
   const [chatInput, setChatInput] = useState("");
   const [success, setSuccess] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [attachments, setAttachments] = useState<any[]>([]);
+  const [attachments, setAttachments] = useState<FileData[]>([]);
+  const [isGeocoding, setIsGeocoding] = useState(false);
+  const [geocodingError, setGeocodingError] = useState("");
+  const [isGoogleMapsLoaded, setIsGoogleMapsLoaded] = useState(false);
 
   // Debug logging to understand country mismatch
   useEffect(() => {
@@ -68,107 +131,144 @@ export default function NewQuoteRequestPage() {
     }
   }, [userProfile, creatorCountry]);
 
+  // Initialize Google Maps
+  useEffect(() => {
+    if (!window.google) {
+      const script = document.createElement('script');
+      const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
+      script.async = true;
+      script.defer = true;
+      script.onload = () => {
+        setIsGoogleMapsLoaded(true);
+      };
+      document.head.appendChild(script);
+
+      return () => {
+        document.head.removeChild(script);
+      };
+    } else {
+      setIsGoogleMapsLoaded(true);
+    }
+  }, []);
+
   // Fetch customers
   useEffect(() => {
     const fetchCustomers = async () => {
-      const snapshot = await getDocs(collection(db, "customers"));
+      if (!db) return;
+      const customersCollection = collection(db as Firestore, "customers");
+      const snapshot = await getDocs(customersCollection);
       setCustomers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     };
     fetchCustomers();
   }, []);
 
-  // Geocode address to coordinates (using OpenStreetMap Nominatim API for demo)
+  // Fetch labels
   useEffect(() => {
-    const fetchCoords = async () => {
-      if (jobsiteAddress.length < 5) {
-        setJobsiteCoords({ lat: null, lng: null });
-        return;
-      }
-      try {
-        const res = await fetch(
-          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(jobsiteAddress)}`
-        );
-        const data = await res.json();
-        if (data && data[0]) {
-          setJobsiteCoords({ lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) });
-        } else {
-          setJobsiteCoords({ lat: null, lng: null });
-        }
-      } catch {
-        setJobsiteCoords({ lat: null, lng: null });
-      }
+    const fetchLabels = async () => {
+      if (!db) return;
+      const snapshot = await getDocs(collection(db as Firestore, "labels"));
+      setLabels(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     };
-    fetchCoords();
-  }, [jobsiteAddress]);
+    fetchLabels();
+  }, []);
 
   // Fetch contacts for the selected customer
   useEffect(() => {
     const fetchContacts = async () => {
-      if (!customerId) {
-        setContacts([]);
-        return;
-      }
-      const q = query(collection(db, "contacts"), where("customer", "==", customerId));
+      if (!db || !customerId) return;
+      const contactsCollection = collection(db as Firestore, "contacts");
+      const q = query(contactsCollection, where("customer", "==", customerId));
       const snapshot = await getDocs(q);
       setContacts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     };
     fetchContacts();
   }, [customerId]);
 
-  // Fetch labels (max 4 selectable)
-  useEffect(() => {
-    const fetchLabels = async () => {
-      const snapshot = await getDocs(collection(db, "labels"));
-      setLabels(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    };
-    fetchLabels();
-  }, []);
-
-  // Add this useEffect to clear End Date when customerDecidesEnd is checked
-  useEffect(() => {
-    if (customerDecidesEnd) {
-      setEndDate("");
+  // Geocode address using Google Maps API
+  const handleAddressChange = async (address: string) => {
+    if (!address || address.length < 5) {
+      setJobsiteCoords({ lat: null, lng: null });
+      setGeocodingError("");
+      return;
     }
-  }, [customerDecidesEnd]);
+    
+    setIsGeocoding(true);
+    setGeocodingError("");
+    
+    try {
+      // Format address to improve geocoding accuracy
+      const formattedAddress = address.trim().replace(/\s+/g, ' ');
+      
+      // First try Places API Autocomplete
+      const placesResponse = await fetch(
+        `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(formattedAddress)}&types=address&key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}`
+      );
+      
+      const placesData = await placesResponse.json();
+      console.log('Places API response:', placesData);
+      
+      if (placesData.predictions && placesData.predictions.length > 0) {
+        // Get place details for the first prediction
+        const placeId = placesData.predictions[0].place_id;
+        const detailsResponse = await fetch(
+          `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=geometry,formatted_address&key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}`
+        );
+        
+        const detailsData = await detailsResponse.json();
+        console.log('Place Details response:', detailsData);
+        
+        if (detailsData.result?.geometry?.location) {
+          const { lat, lng } = detailsData.result.geometry.location;
+          setJobsiteCoords({ lat, lng });
+          setJobsiteAddress(detailsData.result.formatted_address);
+          setGeocodingError("");
+          return;
+        }
+      }
+      
+      // Fallback to Geocoding API
+      const geocodingResponse = await fetch(
+        `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(formattedAddress)}&key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}`
+      );
+      
+      const geocodingData = await geocodingResponse.json();
+      console.log('Geocoding API response:', geocodingData);
+      
+      if (geocodingData.status === "OK" && geocodingData.results?.[0]?.geometry?.location) {
+        const { lat, lng } = geocodingData.results[0].geometry.location;
+        setJobsiteCoords({ lat, lng });
+        setJobsiteAddress(geocodingData.results[0].formatted_address);
+        setGeocodingError("");
+      } else {
+        setGeocodingError("Could not find coordinates for this address. Please check the address and try again.");
+      }
+    } catch (error) {
+      console.error('Error geocoding address:', error);
+      setGeocodingError("An error occurred while getting coordinates. Please try again.");
+    } finally {
+      setIsGeocoding(false);
+    }
+  };
+
+  // Add a debounced version of handleAddressChange
+  const debouncedHandleAddressChange = useCallback(
+    debounce((address: string) => handleAddressChange(address), 1000),
+    []
+  );
 
   // Add effect to update archived state based on status
   useEffect(() => {
     setIsArchived(status !== "In Progress");
   }, [status]);
 
-  const handleSubmit = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!db) return;
+    
+    setSubmitting(true);
     setError("");
     setSuccess("");
-    setSubmitting(true);
-    
-    console.log("[QuoteRequest] Submission started - Firebase config check:", {
-      hasApiKey: true, // Firebase config is hardcoded
-      hasProjectId: true, // Firebase config is hardcoded
-      userAuth: !!user,
-      userProfile: userProfile
-    });
-
-    // Only allow non-readOnly users
-    if (userProfile?.role === "readOnly") {
-      setError("You do not have permission to create a Quote Request.");
-      setSubmitting(false);
-      return;
-    }
-
-    // Required field validation
-    if (!title || !creatorCountry || !involvedCountry || !customerId || products.length === 0) {
-      setError("Please fill in all required fields: Title, Creator Country, Involved Country, Customer, and at least one Product.");
-      setSubmitting(false);
-      return;
-    }
-
-    // Add date validation
-    if (!customerDecidesEnd && startDate && endDate && endDate < startDate) {
-      setError("End Date cannot be before Start Date.");
-      setSubmitting(false);
-      return;
-    }
 
     try {
       console.log("[QuoteRequest] Starting Firestore write...");
@@ -182,6 +282,17 @@ export default function NewQuoteRequestPage() {
       }));
       const sanitizedNotes = (notes || []).map(n => ({ ...n, createdAt: new Date().toISOString() }));
       
+      // Ensure jobsite coordinates are properly formatted
+      const jobsiteData = {
+        address: sanitize(jobsiteAddress),
+        coordinates: jobsiteCoords.lat !== null && jobsiteCoords.lng !== null ? {
+          lat: jobsiteCoords.lat,
+          lng: jobsiteCoords.lng
+        } : null
+      };
+      
+      console.log("Saving jobsite data:", jobsiteData);
+      
       const quoteData = {
         title: sanitize(title),
         creatorCountry: sanitize(creatorCountry),
@@ -189,11 +300,7 @@ export default function NewQuoteRequestPage() {
         customer: sanitize(customerId),
         status: sanitize(status),
         products: sanitizedProducts,
-        jobsite: {
-          address: sanitize(jobsiteAddress),
-          lat: sanitize(jobsiteCoords.lat),
-          lng: sanitize(jobsiteCoords.lng),
-        },
+        jobsite: jobsiteData,
         startDate: sanitize(startDate),
         endDate: customerDecidesEnd ? null : sanitize(endDate),
         customerDecidesEnd: !!customerDecidesEnd,
@@ -209,45 +316,31 @@ export default function NewQuoteRequestPage() {
       console.log("[QuoteRequest] Attempting to write to Firestore:", quoteData);
       
       // First create the quote request
-      const docRef = await addDoc(collection(db, "quoteRequests"), quoteData);
-      
-      console.log("[QuoteRequest] Document created with ID:", docRef.id);
-      
-      // Save attachments directly (using simple base64 storage for now)
+      const quoteRequestsCollection = collection(db as Firestore, "quoteRequests");
+      const docRef = await addDoc(quoteRequestsCollection, quoteData);
+
+      // Handle file uploads if any
       if (attachments.length > 0) {
-        console.log("[QuoteRequest] Updating attachments...");
-        await updateDoc(doc(db, "quoteRequests", docRef.id), {
-          attachments: attachments
+        const movedFiles = await moveFilesToQuoteRequest(attachments, docRef.id);
+        // Update the quote request with the file references
+        await updateDoc(doc(db as Firestore, "quoteRequests", docRef.id), {
+          attachments: movedFiles.map(file => ({
+            id: file.id,
+            name: file.name,
+            url: file.url,
+            type: file.type,
+            size: file.size,
+            uploadedAt: file.uploadedAt,
+            uploadedBy: file.uploadedBy
+          }))
         });
       }
-      
-      setSuccess("Quote Request created successfully! Redirecting...");
-      console.log("[QuoteRequest] Successfully created", docRef.id);
-      
-      setTimeout(() => {
-        router.push(`/quote-requests/${docRef.id}/edit`);
-      }, 1200);
-      
-    } catch (err: any) {
-      console.error("[QuoteRequest] Detailed error:", err);
-      console.error("[QuoteRequest] Error code:", err.code);
-      console.error("[QuoteRequest] Error message:", err.message);
-      
-      let errorMessage = "Failed to create quote request";
-      
-      if (err.code === 'permission-denied') {
-        errorMessage = "Permission denied. Please check your Firebase security rules.";
-      } else if (err.code === 'unauthenticated') {
-        errorMessage = "You are not authenticated. Please log in again.";
-      } else if (err.code === 'unavailable') {
-        errorMessage = "Firebase service is unavailable. Please try again later.";
-      } else if (err.code === 'failed-precondition') {
-        errorMessage = "Firebase configuration error. Please check environment variables.";
-      } else if (err.message) {
-        errorMessage = `Error: ${err.message}`;
-      }
-      
-      setError(errorMessage);
+
+      setSuccess("Quote request created successfully!");
+      router.push(`/quote-requests/${docRef.id}`);
+    } catch (error) {
+      console.error("[QuoteRequest] Error creating quote request:", error);
+      setError("Failed to create quote request. Please try again.");
     } finally {
       setSubmitting(false);
     }
@@ -274,50 +367,75 @@ export default function NewQuoteRequestPage() {
   };
 
   const handleAddNewCustomer = async () => {
-    if (!newCustomer.name || !newCustomer.address || !newCustomer.contact || !newCustomer.phone || !newCustomer.email) return;
-    const docRef = await addDoc(collection(db, "customers"), newCustomer);
-    setCustomers(prev => [...prev, { id: docRef.id, ...newCustomer }]);
-    setCustomerId(docRef.id);
-    setShowNewCustomer(false);
-    setNewCustomer({ name: "", address: "", contact: "", phone: "", email: "" });
+    if (!db || !newCustomer.name) return;
+    try {
+      const customersCollection = collection(db as Firestore, "customers");
+      const customerRef = await addDoc(customersCollection, {
+        ...newCustomer,
+        createdAt: serverTimestamp(),
+      });
+      const newCustomerData = { id: customerRef.id, ...newCustomer };
+      setCustomers(prev => [...prev, newCustomerData]);
+      setCustomerId(customerRef.id);
+      setShowNewCustomer(false);
+      setNewCustomer({ name: "", address: "", contact: "", phone: "", email: "" });
+    } catch (error) {
+      console.error("Error adding customer:", error);
+    }
   };
 
   const handleAddNote = () => {
-    if (!noteText.trim()) return;
-    setNotes(prev => [...prev, { text: noteText, author: user?.email || "Unknown" }]);
+    const userEmail = user?.email;
+    if (!noteText.trim() || !userEmail) return;
+    
+    setNotes(prev => [
+      ...prev,
+      {
+        text: noteText.trim(),
+        author: userEmail,
+        dateTime: new Date().toISOString()
+      }
+    ]);
     setNoteText("");
   };
 
   const handleRemoveNote = (idx: number) => setNotes(prev => prev.filter((_, i) => i !== idx));
 
   const handleAddNewContact = async () => {
-    if (!newContact.name || !newContact.phone || !customerId) return;
-    const docRef = await addDoc(collection(db, "contacts"), {
-      ...newContact,
-      customer: customerId,
-      createdAt: serverTimestamp(),
-    });
-    const addedContact = { id: docRef.id, ...newContact, customer: customerId };
-    setContacts(prev => [...prev, addedContact]);
-    setJobsiteContactId(docRef.id);
-    setShowNewContact(false);
-    setNewContact({ name: "", phone: "" });
+    if (!db || !customerId || !newContact.name || !newContact.phone) return;
+    try {
+      const contactsCollection = collection(db as Firestore, "contacts");
+      const contactRef = await addDoc(contactsCollection, {
+        ...newContact,
+        customer: customerId,
+        createdAt: serverTimestamp(),
+      });
+      const newContactData = { id: contactRef.id, ...newContact };
+      setContacts(prev => [...prev, newContactData]);
+      setJobsiteContactId(contactRef.id);
+      setShowNewContact(false);
+      setNewContact({ name: "", phone: "" });
+    } catch (error) {
+      console.error("Error adding contact:", error);
+    }
   };
 
-  const handleViewCustomer = async (id: string) => {
-    setShowCustomerModal(true);
-    // Fetch customer details
-    const docRef = doc(db, "customers", id);
-    const snap = await getDoc(docRef);
-    if (snap.exists()) {
-      setCustomerDetails({ ...snap.data(), id: snap.id });
-    } else {
-      setCustomerDetails(null);
+  const handleCustomerClick = async (customerId: string) => {
+    if (!db) return;
+    try {
+      const customerDoc = doc(db as Firestore, "customers", customerId);
+      const customerSnap = await getDoc(customerDoc);
+      if (customerSnap.exists()) {
+        setCustomerDetails(customerSnap.data());
+        const contactsCollection = collection(db as Firestore, "contacts");
+        const q = query(contactsCollection, where("customer", "==", customerId));
+        const contactsSnap = await getDocs(q);
+        setCustomerContacts(contactsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        setShowCustomerModal(true);
+      }
+    } catch (error) {
+      console.error("Error fetching customer details:", error);
     }
-    // Fetch contacts for this customer
-    const q = query(collection(db, "contacts"), where("customer", "==", id));
-    const snapshot = await getDocs(q);
-    setCustomerContacts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
   };
 
   const handleSendChat = () => {
@@ -461,7 +579,7 @@ export default function NewQuoteRequestPage() {
               {customerId && !showNewCustomer && (
                 <button
                   type="button"
-                  onClick={() => handleViewCustomer(customerId)}
+                  onClick={() => handleCustomerClick(customerId)}
                   className="bg-[#e40115] text-white px-3 py-2 rounded hover:bg-red-700 transition text-sm"
                   style={{ whiteSpace: 'nowrap' }}
                 >
@@ -575,9 +693,15 @@ export default function NewQuoteRequestPage() {
             <input
               className="w-full border rounded px-3 py-2"
               value={jobsiteAddress}
-              onChange={e => setJobsiteAddress(e.target.value)}
+              onChange={e => {
+                const address = e.target.value;
+                setJobsiteAddress(address);
+                debouncedHandleAddressChange(address);
+              }}
             />
             <div className="text-xs text-gray-400">Please enter the full address (street, number, postal code, city, country) in one line, without commas, dashes, or special characters.</div>
+            {isGeocoding && <div className="text-sm text-gray-500 mt-1">Getting coordinates...</div>}
+            {geocodingError && <div className="text-sm text-red-500 mt-1">{geocodingError}</div>}
             <div className="flex gap-4 mt-2">
               <div className="flex-1">
                 <label className="block text-xs text-gray-500">Latitude</label>
