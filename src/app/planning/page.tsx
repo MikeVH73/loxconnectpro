@@ -14,7 +14,8 @@ import {
   isWithinInterval,
   isSameMonth,
   startOfWeek,
-  endOfWeek
+  endOfWeek,
+  addDays
 } from 'date-fns';
 
 interface QuoteRequest {
@@ -37,14 +38,29 @@ export default function PlanningPage() {
 
   useEffect(() => {
     const fetchQuoteRequests = async () => {
-      if (!db || !userProfile?.country) return;
+      if (!db || !userProfile) return;
 
       try {
+        // Get the user's assigned countries
+        const userCountries = userProfile.countries || [];
+        console.log("[Planning] User Profile:", {
+          email: userProfile?.email,
+          role: userProfile?.role,
+          countries: userCountries,
+          businessUnit: userProfile?.businessUnit
+        });
+
+        if (!userCountries.length) {
+          setError("No country assigned to your profile");
+          setLoading(false);
+          return;
+        }
+
+        // Fetch all "In Progress" quote requests
         const quotesRef = collection(db as Firestore, "quoteRequests");
         const q = query(
           quotesRef,
-          where("status", "==", "In Progress"),
-          where("creatorCountry", "in", [userProfile.country]),
+          where("status", "==", "In Progress")
         );
         
         const snapshot = await getDocs(q);
@@ -53,24 +69,13 @@ export default function PlanningPage() {
           ...doc.data()
         } as QuoteRequest));
 
-        // Also fetch quotes where user's country is the involved country
-        const q2 = query(
-          quotesRef,
-          where("status", "==", "In Progress"),
-          where("involvedCountry", "==", userProfile.country)
-        );
-        
-        const snapshot2 = await getDocs(q2);
-        requests = [...requests, ...snapshot2.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        } as QuoteRequest))];
-
-        // Remove duplicates
-        requests = requests.filter((request, index, self) =>
-          index === self.findIndex((r) => r.id === request.id)
+        // Filter quote requests based on user's countries
+        requests = requests.filter(qr => 
+          userCountries.includes(qr.creatorCountry) || 
+          userCountries.includes(qr.involvedCountry)
         );
 
+        console.log("[Planning] Filtered quote requests:", requests);
         setQuoteRequests(requests);
         setLoading(false);
       } catch (err) {
@@ -81,7 +86,7 @@ export default function PlanningPage() {
     };
 
     fetchQuoteRequests();
-  }, [userProfile?.country]);
+  }, [userProfile]);
 
   // Get all days for the calendar view (including days from adjacent months)
   const calendarDays = eachDayOfInterval({
@@ -92,11 +97,7 @@ export default function PlanningPage() {
   const getQuoteRequestsForDay = (date: Date) => {
     return quoteRequests.filter(request => {
       const startDate = parseISO(request.startDate);
-      const endDate = request.endDate ? parseISO(request.endDate) : null;
-
-      if (!endDate) {
-        return format(startDate, 'yyyy-MM-dd') === format(date, 'yyyy-MM-dd');
-      }
+      const endDate = request.endDate ? parseISO(request.endDate) : addDays(startDate, 1); // If no end date, show for one day
 
       return isWithinInterval(date, { start: startDate, end: endDate });
     });
@@ -123,6 +124,9 @@ export default function PlanningPage() {
   if (error) return (
     <div className="p-4 bg-red-50 text-red-600 rounded-lg">
       {error}
+      {error === "No country assigned to your profile" && (
+        <p className="text-sm mt-2">Please contact an administrator to assign you to a country.</p>
+      )}
     </div>
   );
 
@@ -181,16 +185,28 @@ export default function PlanningPage() {
                   {format(date, 'd')}
                 </div>
                 <div className="space-y-1">
-                  {dayQuotes.map(quote => (
-                    <Link
-                      key={quote.id}
-                      href={`/quote-requests/${quote.id}`}
-                      className="block p-1 text-xs bg-blue-100 text-blue-700 rounded truncate hover:bg-blue-200 transition-colors"
-                      title={quote.title}
-                    >
-                      {quote.title}
-                    </Link>
-                  ))}
+                  {dayQuotes.map(quote => {
+                    const startDate = parseISO(quote.startDate);
+                    const endDate = quote.endDate ? parseISO(quote.endDate) : addDays(startDate, 1);
+                    const isStart = format(date, 'yyyy-MM-dd') === format(startDate, 'yyyy-MM-dd');
+                    const isEnd = format(date, 'yyyy-MM-dd') === format(endDate, 'yyyy-MM-dd');
+                    
+                    return (
+                      <Link
+                        key={quote.id}
+                        href={`/quote-requests/${quote.id}`}
+                        className={`
+                          block p-1 text-xs rounded truncate hover:bg-blue-200 transition-colors
+                          ${isStart ? 'rounded-l-md' : ''}
+                          ${isEnd ? 'rounded-r-md' : ''}
+                          ${isStart && isEnd ? 'bg-blue-100 text-blue-700' : 'bg-blue-50 text-blue-600'}
+                        `}
+                        title={`${quote.title} (${format(startDate, 'MMM d')} - ${format(endDate, 'MMM d')})`}
+                      >
+                        {isStart ? quote.title : ''}
+                      </Link>
+                    );
+                  })}
                 </div>
               </div>
             );
