@@ -216,7 +216,37 @@ export default function EditQuoteRequestPage() {
   }, []);
 
   const handleChange = (field: string, value: any) => {
-    setForm((prev: any) => ({ ...prev, [field]: value }));
+    if (!form) return;
+    
+    if (field === 'jobsite.coordinates.lat' || field === 'jobsite.coordinates.lng') {
+      const numValue = parseFloat(value);
+      if (isNaN(numValue)) return;
+      
+      setForm({
+        ...form,
+        jobsite: {
+          ...form.jobsite,
+          coordinates: {
+            ...form.jobsite.coordinates,
+            [field.split('.').pop()!]: numValue
+          }
+        }
+      });
+      return;
+    }
+    
+    if (field === 'jobsite.address') {
+      setForm({
+        ...form,
+        jobsite: {
+          ...form.jobsite,
+          address: value
+        }
+      });
+      return;
+    }
+    
+    setForm({ ...form, [field]: value });
   };
 
   const handleProductChange = (idx: number, field: string, value: string | number) => {
@@ -647,49 +677,44 @@ export default function EditQuoteRequestPage() {
                   </div>
 
                   <div className="space-y-6">
-                    <div>
-                      <label className="block mb-1 font-medium">Jobsite Address</label>
+                    <div className="mb-4">
+                      <label className="block text-sm font-medium text-gray-700">Jobsite Address</label>
                       <input
                         type="text"
-                        value={form.jobsite?.address || ""}
-                        onChange={(e) => {
-                          const address = e.target.value;
-                          setForm(prev => ({
-                            ...prev,
-                            jobsite: {
-                              ...prev.jobsite,
-                              address
-                            }
-                          }));
-                          debouncedHandleAddressChange(address);
-                        }}
-                        placeholder="Enter a complete address including street, number, city, and country"
-                        className="w-full p-2 border rounded"
-                        disabled={isReadOnly}
+                        value={form?.jobsite.address || ''}
+                        onChange={(e) => handleChange('jobsite.address', e.target.value)}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                        placeholder="Enter full address"
+                        ref={addressInputRef}
                       />
-                      {isGeocoding && <div className="text-sm text-gray-500 mt-1">Getting coordinates...</div>}
-                      {geocodingError && <div className="text-sm text-red-500 mt-1">{geocodingError}</div>}
-                    </div>
-
-                    <div className="flex gap-4 mt-2">
-                      <div className="flex-1">
-                        <label className="block text-xs text-gray-500">Latitude</label>
-                        <input
-                          className="w-full border rounded px-3 py-2 bg-gray-100"
-                          value={form.jobsite?.coordinates?.lat ?? ""}
-                          readOnly
-                          disabled
-                        />
+                      
+                      <div className="mt-4 grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700">Latitude</label>
+                          <input
+                            type="number"
+                            step="any"
+                            value={form?.jobsite.coordinates?.lat || ''}
+                            onChange={(e) => handleChange('jobsite.coordinates.lat', e.target.value)}
+                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                            placeholder="e.g., 51.9244"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700">Longitude</label>
+                          <input
+                            type="number"
+                            step="any"
+                            value={form?.jobsite.coordinates?.lng || ''}
+                            onChange={(e) => handleChange('jobsite.coordinates.lng', e.target.value)}
+                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                            placeholder="e.g., 4.4777"
+                          />
+                        </div>
                       </div>
-                      <div className="flex-1">
-                        <label className="block text-xs text-gray-500">Longitude</label>
-                        <input
-                          className="w-full border rounded px-3 py-2 bg-gray-100"
-                          value={form.jobsite?.coordinates?.lng ?? ""}
-                          readOnly
-                          disabled
-                        />
-                      </div>
+                      <p className="mt-2 text-sm text-gray-500">
+                        You can find coordinates by right-clicking a location on Google Maps and selecting "What's here?"
+                      </p>
                     </div>
 
                     <div>
