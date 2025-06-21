@@ -197,13 +197,36 @@ export default function NewQuoteRequestPage() {
       if (!customerId || !db || !isMounted.current) return;
 
       try {
+        // First try to fetch from the subcollection
         const contactsRef = collection(db as Firestore, `customers/${customerId}/contacts`);
         const contactsSnapshot = await getDocs(contactsRef);
+        let fetchedContacts = contactsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+        // If no contacts found in subcollection, check if there's a contact in the customer document
+        if (fetchedContacts.length === 0) {
+          const customerDoc = await getDoc(doc(db as Firestore, "customers", customerId));
+          if (customerDoc.exists()) {
+            const customerData = customerDoc.data();
+            if (customerData.contact && customerData.phone) {
+              // Create a contact from the customer's contact info
+              fetchedContacts = [{
+                id: 'main',
+                name: customerData.contact,
+                phone: customerData.phone,
+                email: customerData.email || ''
+              }];
+            }
+          }
+        }
         
         if (isMounted.current) {
-          const fetchedContacts = contactsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
           setContacts(fetchedContacts);
           console.log('Fetched contacts:', fetchedContacts);
+          
+          // If there's exactly one contact, auto-select it
+          if (fetchedContacts.length === 1) {
+            setJobsiteContactId(fetchedContacts[0].id);
+          }
         }
       } catch (err) {
         console.error("Error fetching contacts:", err);
@@ -214,7 +237,7 @@ export default function NewQuoteRequestPage() {
     };
 
     fetchContacts();
-  }, [customerId]);
+  }, [customerId, db, isMounted]);
 
   // Handle customer selection
   const handleCustomerChange = useCallback(async (selectedCustomerId: string) => {
@@ -231,13 +254,6 @@ export default function NewQuoteRequestPage() {
         setCustomerDetails(customerData);
         console.log('Fetched customer details:', customerData);
       }
-
-      // Fetch customer contacts
-      const contactsRef = collection(db as Firestore, `customers/${selectedCustomerId}/contacts`);
-      const contactsSnapshot = await getDocs(contactsRef);
-      const fetchedContacts = contactsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setContacts(fetchedContacts);
-      console.log('Fetched contacts for customer:', fetchedContacts);
     } catch (err) {
       console.error("Error fetching customer details:", err);
       setError("Failed to fetch customer details");

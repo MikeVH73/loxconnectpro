@@ -152,17 +152,41 @@ export default function EditQuoteRequestPage() {
     const fetchContacts = async () => {
       if (!db || !form?.customer) return;
       try {
+        // First try to fetch from the subcollection
         const contactsRef = collection(db as Firestore, `customers/${form.customer}/contacts`);
         const snapshot = await getDocs(contactsRef);
-        const fetchedContacts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        let fetchedContacts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+        // If no contacts found in subcollection, check if there's a contact in the customer document
+        if (fetchedContacts.length === 0) {
+          const customerDoc = await getDoc(doc(db as Firestore, "customers", form.customer));
+          if (customerDoc.exists()) {
+            const customerData = customerDoc.data();
+            if (customerData.contact && customerData.phone) {
+              // Create a contact from the customer's contact info
+              fetchedContacts = [{
+                id: 'main',
+                name: customerData.contact,
+                phone: customerData.phone,
+                email: customerData.email || ''
+              }];
+            }
+          }
+        }
+
         setContacts(fetchedContacts);
         console.log('Fetched contacts:', fetchedContacts);
+
+        // If there's exactly one contact and no contact is selected, auto-select it
+        if (fetchedContacts.length === 1 && !form.jobsiteContactId) {
+          handleChange('jobsiteContactId', fetchedContacts[0].id);
+        }
       } catch (err) {
         console.error("Error fetching contacts:", err);
       }
     };
     fetchContacts();
-  }, [form?.customer]);
+  }, [form?.customer, db]);
 
   useEffect(() => {
     const fetchLabels = async () => {
@@ -293,7 +317,7 @@ export default function EditQuoteRequestPage() {
       });
       const addedContact = { id: docRef.id, ...newContact };
       setContacts(prev => [...prev, addedContact]);
-      setForm(prev => prev ? ({ ...prev, jobsiteContactId: docRef.id }) : null);
+      handleChange('jobsiteContactId', docRef.id);
       setShowNewContact(false);
       setNewContact({ name: "", phone: "" });
     } catch (err) {
