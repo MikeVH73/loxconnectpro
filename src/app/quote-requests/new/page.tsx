@@ -118,42 +118,28 @@ export default function NewQuoteRequestPage() {
   const [isGeocoding, setIsGeocoding] = useState(false);
   const [geocodingError, setGeocodingError] = useState("");
   const [isGoogleMapsLoaded, setIsGoogleMapsLoaded] = useState(false);
+  const googleMapsScriptRef = useRef<HTMLScriptElement | null>(null);
+  const geocodingTimeoutRef = useRef<NodeJS.Timeout>();
 
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      isMounted.current = false;
-    };
-  }, []);
-
-  // Initialize data
+  // Combine all initialization effects into one
   useEffect(() => {
     const initializeData = async () => {
-      if (!db) {
-        if (isMounted.current) {
-          setError("Database not initialized");
-          setLoading(false);
-        }
-        return;
-      }
+      if (!db || !isMounted.current) return;
 
       try {
-        // Fetch customers
-        const customersCollection = collection(db as Firestore, "customers");
-        const customersSnapshot = await getDocs(customersCollection);
+        // Load all data in parallel
+        const [customersSnapshot, labelsSnapshot] = await Promise.all([
+          getDocs(collection(db as Firestore, "customers")),
+          getDocs(collection(db as Firestore, "labels"))
+        ]);
+
         if (isMounted.current) {
           setCustomers(customersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-        }
-
-        // Fetch labels
-        const labelsCollection = collection(db as Firestore, "labels");
-        const labelsSnapshot = await getDocs(labelsCollection);
-        if (isMounted.current) {
           setLabels(labelsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
           setLoading(false);
         }
-      } catch (error) {
-        console.error("Error initializing data:", error);
+      } catch (err) {
+        console.error("Error initializing data:", err);
         if (isMounted.current) {
           setError("Failed to load initial data");
           setLoading(false);
@@ -161,34 +147,8 @@ export default function NewQuoteRequestPage() {
       }
     };
 
-    initializeData();
-  }, []);
-
-  // Show loading or error state
-  if (loading) {
-    return <div className="w-full p-8 bg-white mt-8">Loading...</div>;
-  }
-
-  if (error) {
-    return <div className="w-full p-8 bg-white mt-8 text-red-600">{error}</div>;
-  }
-
-  // Debug logging to understand country mismatch
-  useEffect(() => {
-    if (userProfile) {
-      console.log("[NewQuoteRequest] User Profile Debug:", {
-        country: userProfile.country,
-        businessUnit: userProfile.businessUnit,
-        countries: userProfile.countries,
-        role: userProfile.role,
-        calculatedCreatorCountry: creatorCountry
-      });
-    }
-  }, [userProfile, creatorCountry]);
-
-  // Initialize Google Maps
-  useEffect(() => {
-    if (!window.google && isMounted.current) {
+    // Initialize Google Maps
+    if (!window.google && !googleMapsScriptRef.current) {
       const script = document.createElement('script');
       const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
       script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
@@ -199,119 +159,113 @@ export default function NewQuoteRequestPage() {
           setIsGoogleMapsLoaded(true);
         }
       };
-      document.head.appendChild(script);
-
-      return () => {
-        if (script.parentNode) {
-          script.parentNode.removeChild(script);
+      script.onerror = () => {
+        if (isMounted.current) {
+          setError("Failed to load Google Maps");
         }
       };
-    } else if (window.google && isMounted.current) {
-      setIsGoogleMapsLoaded(true);
+      document.head.appendChild(script);
+      googleMapsScriptRef.current = script;
     }
-  }, []);
 
-  // Fetch contacts for the selected customer
-  useEffect(() => {
-    const fetchContacts = async () => {
-      if (!db || !customerId) return;
-      try {
-        const contactsCollection = collection(db as Firestore, "contacts");
-        const q = query(contactsCollection, where("customer", "==", customerId));
-        const snapshot = await getDocs(q);
-        if (isMounted.current) {
-          setContacts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-        }
-      } catch (error) {
-        console.error("Error fetching contacts:", error);
+    initializeData();
+
+    // Cleanup function
+    return () => {
+      isMounted.current = false;
+      if (geocodingTimeoutRef.current) {
+        clearTimeout(geocodingTimeoutRef.current);
+      }
+      if (googleMapsScriptRef.current && googleMapsScriptRef.current.parentNode) {
+        googleMapsScriptRef.current.parentNode.removeChild(googleMapsScriptRef.current);
       }
     };
+  }, []); // Empty dependency array since this should only run once
+
+  // Debug logging for country mismatch
+  useEffect(() => {
+    if (userProfile && isMounted.current) {
+      console.log("[NewQuoteRequest] User Profile Debug:", {
+        country: userProfile.country,
+        businessUnit: userProfile.businessUnit,
+        countries: userProfile.countries,
+        role: userProfile.role,
+        calculatedCreatorCountry: creatorCountry
+      });
+    }
+  }, [userProfile, creatorCountry]);
+
+  // Fetch contacts when customer changes
+  useEffect(() => {
+    const fetchContacts = async () => {
+      if (!customerId || !db || !isMounted.current) return;
+
+      try {
+        const contactsRef = collection(db as Firestore, `customers/${customerId}/contacts`);
+        const contactsSnapshot = await getDocs(contactsRef);
+        
+        if (isMounted.current) {
+          setContacts(contactsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        }
+      } catch (err) {
+        console.error("Error fetching contacts:", err);
+        if (isMounted.current) {
+          setError("Failed to fetch contacts");
+        }
+      }
+    };
+
     fetchContacts();
   }, [customerId]);
 
-  // Geocode address using Google Maps API
-  const handleAddressChange = async (address: string) => {
-    if (!address || address.length < 5) {
-      if (isMounted.current) {
-        setJobsiteCoords({ lat: null, lng: null });
-        setGeocodingError("");
-      }
-      return;
-    }
-    
-    if (isMounted.current) {
-      setIsGeocoding(true);
-      setGeocodingError("");
-    }
-    
-    try {
-      // Format address to improve geocoding accuracy
-      const formattedAddress = address.trim().replace(/\s+/g, ' ');
-      
-      // First try Places API Autocomplete
-      const placesResponse = await fetch(
-        `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(formattedAddress)}&types=address&key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}`
-      );
-      
-      const placesData = await placesResponse.json();
-      console.log('Places API response:', placesData);
-      
-      if (placesData.predictions && placesData.predictions.length > 0) {
-        // Get place details for the first prediction
-        const placeId = placesData.predictions[0].place_id;
-        const detailsResponse = await fetch(
-          `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=geometry,formatted_address&key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}`
-        );
-        
-        const detailsData = await detailsResponse.json();
-        console.log('Place Details response:', detailsData);
-        
-        if (detailsData.result?.geometry?.location && isMounted.current) {
-          const { lat, lng } = detailsData.result.geometry.location;
-          setJobsiteCoords({ lat, lng });
-          setJobsiteAddress(detailsData.result.formatted_address);
-          setGeocodingError("");
-          return;
+  // Geocoding handler with debounce
+  const handleAddressChange = useCallback((address: string) => {
+    if (!address || !window.google || !isMounted.current) return;
+
+    setIsGeocoding(true);
+    setGeocodingError("");
+
+    const geocodeAddress = async () => {
+      try {
+        const geocoder = new window.google.maps.Geocoder();
+        const result = await new Promise((resolve, reject) => {
+          geocoder.geocode({ address }, (results, status) => {
+            if (status === "OK" && results && results[0]) {
+              resolve(results[0]);
+            } else {
+              reject(new Error("Geocoding failed"));
+            }
+          });
+        });
+
+        if (isMounted.current) {
+          const location = (result as any).geometry.location;
+          setJobsiteCoords({
+            lat: location.lat(),
+            lng: location.lng()
+          });
+          setJobsiteAddress(address);
+        }
+      } catch (err) {
+        console.error("Geocoding error:", err);
+        if (isMounted.current) {
+          setGeocodingError("Failed to get coordinates for address");
+        }
+      } finally {
+        if (isMounted.current) {
+          setIsGeocoding(false);
         }
       }
-      
-      // Fallback to Geocoding API
-      const geocodingResponse = await fetch(
-        `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(formattedAddress)}&key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}`
-      );
-      
-      const geocodingData = await geocodingResponse.json();
-      console.log('Geocoding API response:', geocodingData);
-      
-      if (geocodingData.status === "OK" && geocodingData.results?.[0]?.geometry?.location && isMounted.current) {
-        const { lat, lng } = geocodingData.results[0].geometry.location;
-        setJobsiteCoords({ lat, lng });
-        setJobsiteAddress(geocodingData.results[0].formatted_address);
-        setGeocodingError("");
-      } else if (isMounted.current) {
-        setGeocodingError("Could not find coordinates for this address. Please check the address and try again.");
-      }
-    } catch (error) {
-      console.error('Error geocoding address:', error);
-      if (isMounted.current) {
-        setGeocodingError("An error occurred while getting coordinates. Please try again.");
-      }
-    } finally {
-      if (isMounted.current) {
-        setIsGeocoding(false);
-      }
-    }
-  };
+    };
 
-  // Add a debounced version of handleAddressChange
-  const debouncedHandleAddressChange = useCallback(
-    debounce((address: string) => {
-      if (isMounted.current) {
-        handleAddressChange(address);
-      }
-    }, 1000),
-    []
-  );
+    // Clear any existing timeout
+    if (geocodingTimeoutRef.current) {
+      clearTimeout(geocodingTimeoutRef.current);
+    }
+
+    // Set new timeout
+    geocodingTimeoutRef.current = setTimeout(geocodeAddress, 1000);
+  }, [isMounted, setIsGeocoding, setGeocodingError, setJobsiteCoords, setJobsiteAddress]);
 
   // Add effect to update archived state based on status
   useEffect(() => {
@@ -778,7 +732,7 @@ export default function NewQuoteRequestPage() {
               onChange={e => {
                 const address = e.target.value;
                 setJobsiteAddress(address);
-                debouncedHandleAddressChange(address);
+                handleAddressChange(address);
               }}
             />
             <div className="text-xs text-gray-400">Please enter the full address (street, number, postal code, city, country) in one line, without commas, dashes, or special characters.</div>
