@@ -4,8 +4,18 @@ import { useState, useEffect } from 'react';
 import { collection, query, where, getDocs, Firestore } from 'firebase/firestore';
 import { db } from '../../firebaseClient';
 import { useAuth } from '../AuthProvider';
-import { startOfMonth, endOfMonth, eachDayOfInterval, format, parseISO, isWithinInterval, isSameMonth, startOfWeek, endOfWeek } from 'date-fns';
 import Link from 'next/link';
+import {
+  startOfMonth,
+  endOfMonth,
+  eachDayOfInterval,
+  format,
+  parseISO,
+  isWithinInterval,
+  isSameMonth,
+  startOfWeek,
+  endOfWeek
+} from 'date-fns';
 
 interface QuoteRequest {
   id: string;
