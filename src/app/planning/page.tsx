@@ -196,14 +196,14 @@ export default function PlanningPage() {
                         key={quote.id}
                         href={`/quote-requests/${quote.id}`}
                         className={`
-                          block p-1 text-xs rounded truncate hover:bg-blue-200 transition-colors
+                          block p-1 text-xs rounded truncate hover:bg-red-200 transition-colors
                           ${isStart ? 'rounded-l-md' : ''}
                           ${isEnd ? 'rounded-r-md' : ''}
-                          ${isStart && isEnd ? 'bg-blue-100 text-blue-700' : 'bg-blue-50 text-blue-600'}
+                          bg-red-100 text-red-700
                         `}
                         title={`${quote.title} (${format(startDate, 'MMM d')} - ${format(endDate, 'MMM d')})`}
                       >
-                        {isStart ? quote.title : ''}
+                        {quote.title}
                       </Link>
                     );
                   })}

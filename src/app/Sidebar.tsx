@@ -5,6 +5,7 @@ import { useAuth } from "./AuthProvider";
 
 const navItems = [
   { label: "Dashboard", href: "/dashboard" },
+  { label: "Planning", href: "/planning" },
   { label: "Quote Requests", href: "/quote-requests" },
   { label: "Archived", href: "/archived" },
   { label: "Customers", href: "/customers" },
@@ -52,36 +53,6 @@ export default function Sidebar() {
       </div>
       <nav className="flex-1 py-6 overflow-y-auto">
         <ul className="space-y-1">
-          <li>
-            <Link
-              href="/dashboard"
-              className={`flex items-center space-x-2 p-2 hover:bg-gray-100 rounded ${
-                pathname === "/dashboard" ? "bg-gray-100" : ""
-              }`}
-            >
-              <span>Dashboard</span>
-            </Link>
-          </li>
-          <li>
-            <Link
-              href="/planning"
-              className={`flex items-center space-x-2 p-2 hover:bg-gray-100 rounded ${
-                pathname === "/planning" ? "bg-gray-100" : ""
-              }`}
-            >
-              <span>Planning</span>
-            </Link>
-          </li>
-          <li>
-            <Link
-              href="/quote-requests"
-              className={`flex items-center space-x-2 p-2 hover:bg-gray-100 rounded ${
-                pathname === "/quote-requests" ? "bg-gray-100" : ""
-              }`}
-            >
-              <span>Quote Requests</span>
-            </Link>
-          </li>
           {filteredNavItems.map((item) => (
             <li key={item.href}>
               <Link
