@@ -23,6 +23,11 @@ import {
 } from 'date-fns';
 import { enGB } from 'date-fns/locale';
 
+interface Label {
+  id: string;
+  name: string;
+}
+
 interface QuoteRequest {
   id: string;
   title: string;
@@ -32,6 +37,7 @@ interface QuoteRequest {
   startDate: string;
   endDate: string | null;
   customerDecidesEnd: boolean;
+  labels: string[];
 }
 
 interface PositionedQuoteRequest extends QuoteRequest {
@@ -41,6 +47,7 @@ interface PositionedQuoteRequest extends QuoteRequest {
 export default function PlanningPage() {
   const { userProfile } = useAuth();
   const [quoteRequests, setQuoteRequests] = useState<QuoteRequest[]>([]);
+  const [labels, setLabels] = useState<Label[]>([]);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -99,6 +106,22 @@ export default function PlanningPage() {
     fetchQuoteRequests();
   }, [userProfile]);
 
+  useEffect(() => {
+    const fetchLabels = async () => {
+      if (!db) return;
+      try {
+        const snapshot = await getDocs(collection(db, "labels"));
+        setLabels(snapshot.docs.map(doc => ({ 
+          id: doc.id, 
+          ...doc.data() 
+        } as Label)));
+      } catch (err) {
+        console.error("Error fetching labels:", err);
+      }
+    };
+    fetchLabels();
+  }, []);
+
   const previousWeek = () => {
     setCurrentDate(prev => subWeeks(prev, 1));
   };
@@ -156,6 +179,9 @@ export default function PlanningPage() {
     
     positionedQuotes.push({ ...quote, row });
   });
+
+  // Get the "Planned" label ID
+  const plannedLabelId = labels.find(label => label.name === "Planned")?.id;
 
   // Calculate height based on number of rows
   const maxRow = Math.max(...positionedQuotes.map(q => q.row), 0);
@@ -240,16 +266,21 @@ export default function PlanningPage() {
               ) + 1
             );
 
+            const isPlanned = plannedLabelId && quote.labels?.includes(plannedLabelId);
+
             return (
               <Link
                 key={quote.id}
                 href={`/quote-requests/${quote.id}`}
                 className={`
                   absolute z-10 px-3 py-2 text-sm rounded-lg
-                  bg-red-50 text-red-700 hover:bg-red-100 
+                  ${isPlanned 
+                    ? 'bg-red-50 text-red-700 hover:bg-red-100 border-red-200' 
+                    : 'bg-gray-50 text-gray-700 hover:bg-gray-100 border-gray-200'
+                  }
                   transition-all duration-200 ease-in-out
                   overflow-hidden text-ellipsis whitespace-nowrap
-                  border border-red-200 shadow-sm
+                  border shadow-sm
                   hover:shadow-md hover:-translate-y-0.5
                 `}
                 style={{
