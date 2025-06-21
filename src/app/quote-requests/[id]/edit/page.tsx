@@ -18,19 +18,7 @@ import Script from "next/script";
 // Add Google Maps types
 declare global {
   interface Window {
-    google: {
-      maps: {
-        Geocoder: new () => {
-          geocode: (request: { address: string }, callback: (results: any[], status: string) => void) => void;
-        };
-        GeocoderStatus: {
-          OK: string;
-        };
-        places: {
-          Autocomplete: new (input: HTMLInputElement, options: any) => any;
-        };
-      };
-    };
+    google: any;
   }
 }
 
@@ -52,8 +40,8 @@ interface Product {
 
 interface Note {
   text: string;
-  author: string;
-  createdAt: string;
+  user: string;
+  dateTime: string;
 }
 
 interface QuoteRequest {
@@ -75,6 +63,10 @@ interface QuoteRequest {
   attachments: any[];
   createdAt: any;
   updatedAt: any;
+  waitingForAnswer?: boolean;
+  urgent?: boolean;
+  problems?: boolean;
+  targetCountry?: string;
 }
 
 type StatusType = "In Progress" | "Snoozed" | "Won" | "Lost" | "Cancelled";
@@ -122,16 +114,33 @@ export default function EditQuoteRequestPage() {
         const docRef = doc(db as Firestore, "quoteRequests", params.id as string);
         const snap = await getDoc(docRef);
         if (snap.exists()) {
-          const data = { ...snap.data(), id: snap.id };
-          // Ensure jobsite data is properly structured
-          const jobsite = {
-            address: data.jobsite?.address || data.jobsiteAddress || "",
-            coordinates: data.jobsite?.coordinates || null
-          };
-          const formattedData = {
-            ...data,
-            jobsite,
-            attachments: data.attachments || []
+          const data = snap.data();
+          const formattedData: QuoteRequest = {
+            id: snap.id,
+            title: data.title || "",
+            creatorCountry: data.creatorCountry || "",
+            involvedCountry: data.involvedCountry || "",
+            customer: data.customer || "",
+            status: data.status || "",
+            products: data.products || [],
+            jobsite: {
+              address: data.jobsite?.address || data.jobsiteAddress || "",
+              coordinates: data.jobsite?.coordinates || null
+            },
+            startDate: data.startDate || "",
+            endDate: data.endDate || null,
+            customerDecidesEnd: data.customerDecidesEnd || false,
+            jobsiteContactId: data.jobsiteContactId || "",
+            jobsiteContact: data.jobsiteContact || null,
+            labels: data.labels || [],
+            notes: data.notes || [],
+            attachments: data.attachments || [],
+            createdAt: data.createdAt,
+            updatedAt: data.updatedAt,
+            waitingForAnswer: data.waitingForAnswer || false,
+            urgent: data.urgent || false,
+            problems: data.problems || false,
+            targetCountry: data.targetCountry || ""
           };
           setForm(formattedData);
           setOriginal(formattedData);
@@ -190,8 +199,16 @@ export default function EditQuoteRequestPage() {
 
   useEffect(() => {
     const fetchLabels = async () => {
-      const snapshot = await getDocs(collection(db, "labels"));
-      setLabels(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      if (!db) return;
+      try {
+        const snapshot = await getDocs(collection(db as Firestore, "labels"));
+        setLabels(snapshot.docs.map(doc => ({
+          id: doc.id,
+          name: doc.data().name
+        })));
+      } catch (err) {
+        console.error("Error fetching labels:", err);
+      }
     };
     fetchLabels();
   }, []);
@@ -500,10 +517,10 @@ export default function EditQuoteRequestPage() {
       />
       <div className="flex h-full">
         {/* Main content */}
-        <div className="flex-1 p-4 overflow-auto">
-          <form onSubmit={handleSubmit} className="space-y-6 max-w-5xl mx-auto">
+        <div className="flex-1 p-6 overflow-auto">
+          <form onSubmit={handleSubmit} className="space-y-6">
             {/* Form header */}
-            <div className="flex items-center gap-4 mb-6">
+            <div className="flex items-center justify-between mb-6">
               <h1 className="text-2xl font-semibold text-gray-900 flex items-center gap-2">
                 <Link href="/quote-requests" className="text-gray-400 hover:text-gray-600">
                   Edit Quote Request
@@ -517,11 +534,28 @@ export default function EditQuoteRequestPage() {
                   </>
                 )}
               </h1>
+              <div className="flex gap-4">
+                <button
+                  type="button"
+                  onClick={() => router.push("/quote-requests")}
+                  className="px-6 py-2 text-gray-700 bg-gray-100 rounded hover:bg-gray-200"
+                  disabled={saving}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-6 py-2 text-white bg-red-600 rounded hover:bg-red-700"
+                  disabled={saving || isReadOnly}
+                >
+                  {saving ? "Saving..." : "Save Changes"}
+                </button>
+              </div>
             </div>
 
             {/* Form content */}
-            <div className="grid grid-cols-1 gap-8">
-              <div className="flex flex-wrap gap-4 items-center">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <div className="flex flex-wrap gap-4 items-center mb-6">
                 <div className="flex items-center gap-2">
                   <input
                     type="checkbox"
@@ -565,290 +599,267 @@ export default function EditQuoteRequestPage() {
                 </div>
               </div>
 
-              <div className="p-6">
-                <div className="grid grid-cols-[1fr_2fr_1fr] gap-6">
-                  <div className="space-y-6">
-                    <div>
-                      <label className="block mb-1 font-medium">Title</label>
-                      <input
-                        type="text"
-                        value={form.title || ""}
-                        onChange={(e) => handleChange("title", e.target.value)}
-                        disabled={isReadOnly}
-                        className="w-full p-2 border rounded"
-                      />
-                    </div>
-                    <div>
-                      <label className="block mb-1 font-medium">Creator Country</label>
-                      <input
-                        type="text"
-                        value={form.creatorCountry || ""}
-                        disabled
-                        className="w-full p-2 border rounded bg-gray-50"
-                      />
-                    </div>
-                    <div>
-                      <label className="block mb-1 font-medium">Target Country</label>
-                      <CountrySelect
-                        value={form.involvedCountry || form.targetCountry || ""}
-                        onChange={(value) => {
-                          handleChange("involvedCountry", value);
-                          handleChange("targetCountry", value);
-                        }}
-                        disabled={isReadOnly}
-                      />
-                    </div>
-                    <div>
-                      <label className="block mb-1 font-medium">Customer</label>
-                      <select
-                        value={form.customer || ""}
-                        onChange={(e) => handleChange("customer", e.target.value)}
-                        disabled={isReadOnly}
-                        className="w-full p-2 border rounded"
-                      >
-                        <option value="">Select customer...</option>
-                        {customers.map(customer => (
-                          <option key={customer.id} value={customer.id}>
-                            {customer.name}
-                          </option>
-                        ))}
-                      </select>
+              <div className="grid grid-cols-[1fr_2fr_1fr] gap-8">
+                {/* Left Column */}
+                <div className="space-y-6">
+                  <div>
+                    <label className="block mb-1 font-medium">Title</label>
+                    <input
+                      type="text"
+                      value={form.title || ""}
+                      onChange={(e) => handleChange("title", e.target.value)}
+                      disabled={isReadOnly}
+                      className="w-full p-2 border rounded"
+                    />
+                  </div>
+                  <div>
+                    <label className="block mb-1 font-medium">Creator Country</label>
+                    <input
+                      type="text"
+                      value={form.creatorCountry || ""}
+                      disabled
+                      className="w-full p-2 border rounded bg-gray-50"
+                    />
+                  </div>
+                  <div>
+                    <label className="block mb-1 font-medium">Target Country</label>
+                    <CountrySelect
+                      value={form.involvedCountry || form.targetCountry || ""}
+                      onChange={(value) => {
+                        handleChange("involvedCountry", value);
+                        handleChange("targetCountry", value);
+                      }}
+                      disabled={isReadOnly}
+                    />
+                  </div>
+                  <div>
+                    <label className="block mb-1 font-medium">Customer</label>
+                    <select
+                      value={form.customer || ""}
+                      onChange={(e) => handleChange("customer", e.target.value)}
+                      disabled={isReadOnly}
+                      className="w-full p-2 border rounded"
+                    >
+                      <option value="">Select customer...</option>
+                      {customers.map(customer => (
+                        <option key={customer.id} value={customer.id}>
+                          {customer.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block mb-1 font-medium">Status</label>
+                    <select
+                      value={form.status || ""}
+                      onChange={(e) => handleChange("status", e.target.value)}
+                      disabled={isReadOnly}
+                      className="w-full p-2 border rounded"
+                    >
+                      {statuses.map(status => (
+                        <option key={status} value={status}>
+                          {status}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block mb-1 font-medium">Labels</label>
+                    <div className="flex flex-wrap gap-2">
+                      {labels.map(label => (
+                        <label
+                          key={label.id}
+                          className={`px-3 py-1 rounded-full border cursor-pointer select-none ${
+                            form.labels?.includes(label.id)
+                              ? 'bg-[#e40115] text-white border-[#e40115]'
+                              : 'bg-gray-100 text-gray-800 border-gray-300'
+                          }`}
+                          style={{
+                            opacity:
+                              form.labels?.length >= 4 && !form.labels?.includes(label.id)
+                                ? 0.5
+                                : 1,
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            className="hidden"
+                            checked={form.labels?.includes(label.id)}
+                            onChange={() => handleLabelToggle(label.id)}
+                            disabled={
+                              isReadOnly ||
+                              (!form.labels?.includes(label.id) &&
+                                (form.labels?.length || 0) >= 4)
+                            }
+                          />
+                          {label.name}
+                        </label>
+                      ))}
                     </div>
                   </div>
+                </div>
 
-                  <div className="space-y-6">
-                    <div>
-                      <label className="block mb-1 font-medium">Products</label>
-                      {form.products?.map((product: any, idx: number) => (
-                        <div key={idx} className="flex gap-2 mb-2">
-                          <input
-                            type="text"
-                            value={product.catClass || ""}
-                            onChange={(e) => handleProductChange(idx, "catClass", e.target.value)}
-                            placeholder="Cat. Class"
-                            className="w-[150px] p-2 border rounded"
-                            disabled={isReadOnly}
-                          />
-                          <input
-                            type="text"
-                            value={product.description || ""}
-                            onChange={(e) => handleProductChange(idx, "description", e.target.value)}
-                            placeholder="Description"
-                            className="flex-1 p-2 border rounded"
-                            disabled={isReadOnly}
-                          />
-                          <input
-                            type="number"
-                            value={product.quantity || ""}
-                            onChange={(e) => handleProductChange(idx, "quantity", parseInt(e.target.value))}
-                            placeholder="Qty"
-                            className="w-20 p-2 border rounded"
-                            disabled={isReadOnly}
-                          />
-                          {!isReadOnly && (
-                            <button
-                              type="button"
-                              onClick={() => removeProduct(idx)}
-                              className="text-red-500 hover:text-red-700"
-                            >
-                              ×
-                            </button>
-                          )}
+                {/* Middle Column */}
+                <div className="space-y-6">
+                  <div>
+                    <label className="block mb-1 font-medium">Products</label>
+                    {form.products?.map((product: any, idx: number) => (
+                      <div key={idx} className="flex gap-2 mb-2">
+                        <input
+                          type="text"
+                          value={product.catClass || ""}
+                          onChange={(e) => handleProductChange(idx, "catClass", e.target.value)}
+                          placeholder="Cat. Class"
+                          className="w-[150px] p-2 border rounded"
+                          disabled={isReadOnly}
+                        />
+                        <input
+                          type="text"
+                          value={product.description || ""}
+                          onChange={(e) => handleProductChange(idx, "description", e.target.value)}
+                          placeholder="Description"
+                          className="flex-1 p-2 border rounded"
+                          disabled={isReadOnly}
+                        />
+                        <input
+                          type="number"
+                          value={product.quantity || ""}
+                          onChange={(e) => handleProductChange(idx, "quantity", parseInt(e.target.value))}
+                          placeholder="Qty"
+                          className="w-20 p-2 border rounded"
+                          disabled={isReadOnly}
+                        />
+                        {!isReadOnly && (
+                          <button
+                            type="button"
+                            onClick={() => removeProduct(idx)}
+                            className="text-red-500 hover:text-red-700"
+                          >
+                            ×
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                    {!isReadOnly && (
+                      <button
+                        type="button"
+                        onClick={addProduct}
+                        className="text-blue-500 hover:text-blue-700"
+                      >
+                        + Add Product
+                      </button>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block mb-1 font-medium">Notes</label>
+                    <div className="space-y-2">
+                      {form.notes?.map((note: any) => (
+                        <div key={note.dateTime} className="text-sm bg-gray-50 p-2 rounded">
+                          <div className="text-gray-500">
+                            {note.user} on {new Date(note.dateTime).toLocaleString()}
+                          </div>
+                          <div>{note.text}</div>
                         </div>
                       ))}
                       {!isReadOnly && (
-                        <button
-                          type="button"
-                          onClick={addProduct}
-                          className="text-blue-500 hover:text-blue-700"
-                        >
-                          + Add Product
-                        </button>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={newNote}
+                            onChange={(e) => setNewNote(e.target.value)}
+                            placeholder="Add a note..."
+                            className="flex-1 p-2 border rounded"
+                          />
+                          <button
+                            type="button"
+                            onClick={addNote}
+                            disabled={!newNote.trim()}
+                            className="px-4 py-2 bg-blue-500 text-white rounded disabled:opacity-50"
+                          >
+                            Add
+                          </button>
+                        </div>
                       )}
-                    </div>
-
-                    <div>
-                      <label className="block mb-1 font-medium">Notes</label>
-                      <div className="space-y-2">
-                        {form.notes?.map((note: any) => (
-                          <div key={note.dateTime} className="text-sm bg-gray-50 p-2 rounded">
-                            <div className="text-gray-500">
-                              {note.user} on {new Date(note.dateTime).toLocaleString()}
-                            </div>
-                            <div>{note.text}</div>
-                          </div>
-                        ))}
-                        {!isReadOnly && (
-                          <div className="flex gap-2">
-                            <input
-                              type="text"
-                              value={newNote}
-                              onChange={(e) => setNewNote(e.target.value)}
-                              placeholder="Add a note..."
-                              className="flex-1 p-2 border rounded"
-                            />
-                            <button
-                              type="button"
-                              onClick={addNote}
-                              disabled={!newNote.trim()}
-                              className="px-4 py-2 bg-blue-500 text-white rounded disabled:opacity-50"
-                            >
-                              Add
-                            </button>
-                          </div>
-                        )}
-                      </div>
                     </div>
                   </div>
 
-                  <div className="space-y-6">
-                    <div className="mb-4">
-                      <label className="block text-sm font-medium text-gray-700">Jobsite Address</label>
-                      <input
-                        type="text"
-                        value={form?.jobsite.address || ''}
-                        onChange={(e) => handleChange('jobsite.address', e.target.value)}
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                        placeholder="Enter full address"
-                        ref={addressInputRef}
-                      />
-                      
-                      <div className="mt-4 grid grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700">Latitude</label>
-                          <input
-                            type="number"
-                            step="any"
-                            value={form?.jobsite.coordinates?.lat || ''}
-                            onChange={(e) => handleChange('jobsite.coordinates.lat', e.target.value)}
-                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                            placeholder="e.g., 51.9244"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700">Longitude</label>
-                          <input
-                            type="number"
-                            step="any"
-                            value={form?.jobsite.coordinates?.lng || ''}
-                            onChange={(e) => handleChange('jobsite.coordinates.lng', e.target.value)}
-                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                            placeholder="e.g., 4.4777"
-                          />
-                        </div>
-                      </div>
-                      <p className="mt-2 text-sm text-gray-500">
-                        You can find coordinates by right-clicking a location on Google Maps and selecting "What's here?"
-                      </p>
-                    </div>
-
-                    <div>
-                      <label className="block mb-1 font-medium">Jobsite Contact</label>
-                      <select
-                        value={form.jobsiteContactId || ""}
-                        onChange={(e) => handleChange("jobsiteContactId", e.target.value)}
-                        disabled={isReadOnly || !form.customer}
-                        className="w-full p-2 border rounded"
-                      >
-                        <option value="">Select contact...</option>
-                        {contacts.map(contact => (
-                          <option key={contact.id} value={contact.id}>
-                            {contact.name} ({contact.phone})
-                          </option>
-                        ))}
-                      </select>
-                      {!isReadOnly && form.customer && (
-                        <button
-                          type="button"
-                          onClick={() => setShowNewContact(true)}
-                          className="mt-2 text-blue-500 hover:text-blue-700"
-                        >
-                          + Add New Contact
-                        </button>
-                      )}
-                    </div>
-
-                    <div>
-                      <label className="block mb-1 font-medium">Status</label>
-                      <select
-                        value={form.status || ""}
-                        onChange={(e) => handleChange("status", e.target.value)}
-                        disabled={isReadOnly}
-                        className="w-full p-2 border rounded"
-                      >
-                        {statuses.map(status => (
-                          <option key={status} value={status}>
-                            {status}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block mb-1 font-medium">Labels</label>
-                      <div className="flex flex-wrap gap-2">
-                        {labels.map(label => (
-                          <label
-                            key={label.id}
-                            className={`px-3 py-1 rounded-full border cursor-pointer select-none ${
-                              form.labels?.includes(label.id)
-                                ? 'bg-[#e40115] text-white border-[#e40115]'
-                                : 'bg-gray-100 text-gray-800 border-gray-300'
-                            }`}
-                            style={{
-                              opacity:
-                                form.labels?.length >= 4 && !form.labels?.includes(label.id)
-                                  ? 0.5
-                                  : 1,
-                            }}
-                          >
-                            <input
-                              type="checkbox"
-                              className="hidden"
-                              checked={form.labels?.includes(label.id)}
-                              onChange={() => handleLabelToggle(label.id)}
-                              disabled={
-                                isReadOnly ||
-                                (!form.labels?.includes(label.id) &&
-                                  (form.labels?.length || 0) >= 4)
-                              }
-                            />
-                            {label.name}
-                          </label>
-                        ))}
-                      </div>
-                    </div>
+                  <div>
+                    <label className="block mb-1 font-medium">Attachments</label>
+                    <FileUpload
+                      files={attachments}
+                      onFilesChange={files => handleChange('attachments', files)}
+                      disabled={isReadOnly}
+                    />
                   </div>
                 </div>
 
-                <div>
-                  <label className="block mb-1 font-medium">Attachments</label>
-                  <FileUpload
-                    files={attachments}
-                    onFilesChange={files => handleChange('attachments', files)}
-                    disabled={isReadOnly}
-                  />
+                {/* Right Column */}
+                <div className="space-y-6">
+                  <div>
+                    <label className="block mb-1 font-medium">Jobsite Address</label>
+                    <input
+                      type="text"
+                      value={form?.jobsite.address || ''}
+                      onChange={(e) => handleChange('jobsite.address', e.target.value)}
+                      className="w-full p-2 border rounded"
+                      placeholder="Enter full address"
+                      ref={addressInputRef}
+                    />
+                    
+                    <div className="mt-4 grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Latitude</label>
+                        <input
+                          type="number"
+                          step="any"
+                          value={form?.jobsite.coordinates?.lat || ''}
+                          onChange={(e) => handleChange('jobsite.coordinates.lat', e.target.value)}
+                          className="w-full p-2 border rounded"
+                          placeholder="e.g., 51.9244"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Longitude</label>
+                        <input
+                          type="number"
+                          step="any"
+                          value={form?.jobsite.coordinates?.lng || ''}
+                          onChange={(e) => handleChange('jobsite.coordinates.lng', e.target.value)}
+                          className="w-full p-2 border rounded"
+                          placeholder="e.g., 4.4777"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block mb-1 font-medium">Jobsite Contact</label>
+                    <select
+                      value={form.jobsiteContactId || ""}
+                      onChange={(e) => handleChange("jobsiteContactId", e.target.value)}
+                      disabled={isReadOnly || !form.customer}
+                      className="w-full p-2 border rounded"
+                    >
+                      <option value="">Select contact...</option>
+                      {contacts.map(contact => (
+                        <option key={contact.id} value={contact.id}>
+                          {contact.name} ({contact.phone})
+                        </option>
+                      ))}
+                    </select>
+                    {!isReadOnly && form.customer && (
+                      <button
+                        type="button"
+                        onClick={() => setShowNewContact(true)}
+                        className="mt-2 text-blue-500 hover:text-blue-700"
+                      >
+                        + Add New Contact
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-
-            {/* Form actions */}
-            <div className="flex justify-end gap-4 mt-8">
-              <button
-                type="button"
-                onClick={() => router.push("/quote-requests")}
-                className="px-6 py-2 text-gray-700 bg-gray-100 rounded hover:bg-gray-200"
-                disabled={saving}
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="px-6 py-2 text-white bg-red-600 rounded hover:bg-red-700"
-                disabled={saving || isReadOnly}
-              >
-                {saving ? "Saving..." : "Save Changes"}
-              </button>
             </div>
           </form>
         </div>
