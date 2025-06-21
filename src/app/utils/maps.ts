@@ -1,19 +1,7 @@
 // Google Maps types
 declare global {
   interface Window {
-    google: {
-      maps: {
-        Geocoder: new () => {
-          geocode: (request: { address: string }, callback: (results: any[], status: string) => void) => void;
-        };
-        GeocoderStatus: {
-          OK: string;
-        };
-        places: {
-          Autocomplete: new (input: HTMLInputElement, options: any) => any;
-        };
-      };
-    };
+    google: any;
   }
 }
 
@@ -22,8 +10,17 @@ export interface Coordinates {
   lng: number;
 }
 
+let mapsPromise: Promise<void> | null = null;
+let retryCount = 0;
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 1000; // 1 second
+
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
 export const loadGoogleMaps = async (): Promise<void> => {
-  if (window.google) return;
+  if (typeof window === 'undefined') return;
+  if (window.google?.maps) return;
+  if (mapsPromise) return mapsPromise;
 
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
   if (!apiKey) {
@@ -31,8 +28,14 @@ export const loadGoogleMaps = async (): Promise<void> => {
     throw new Error('Google Maps API key not found');
   }
 
-  return new Promise((resolve, reject) => {
+  mapsPromise = new Promise((resolve, reject) => {
     try {
+      // Remove any existing Google Maps scripts
+      const existingScript = document.querySelector('script[src*="maps.googleapis.com"]');
+      if (existingScript) {
+        document.head.removeChild(existingScript);
+      }
+
       const script = document.createElement('script');
       script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
       script.async = true;
@@ -43,27 +46,59 @@ export const loadGoogleMaps = async (): Promise<void> => {
       };
       script.onerror = (error) => {
         console.error('Failed to load Google Maps:', error);
+        mapsPromise = null;
         reject(new Error('Failed to load Google Maps'));
       };
       document.head.appendChild(script);
     } catch (error) {
       console.error('Error loading Google Maps:', error);
+      mapsPromise = null;
       reject(error);
     }
   });
+
+  return mapsPromise;
 };
 
-export const geocodeAddress = async (address: string): Promise<Coordinates> => {
+const tryGeocodeWithRetry = async (address: string): Promise<Coordinates> => {
   try {
-    if (!window.google) {
-      console.log('Loading Google Maps...');
-      await loadGoogleMaps();
-    }
+    // First try Places Autocomplete
+    const placesResult = await new Promise<string>((resolve, reject) => {
+      try {
+        if (!window.google?.maps?.places) {
+          console.error('Google Maps Places API not loaded');
+          resolve(address);
+          return;
+        }
 
+        const autocompleteService = new window.google.maps.places.AutocompleteService();
+        autocompleteService.getPlacePredictions(
+          { input: address, types: ['address'] },
+          (predictions: any[], status: string) => {
+            if (status === 'OK' && predictions && predictions.length > 0) {
+              resolve(predictions[0].description);
+            } else {
+              console.log('Places Autocomplete failed, using original address');
+              resolve(address);
+            }
+          }
+        );
+      } catch (error) {
+        console.error('Error in Places Autocomplete:', error);
+        resolve(address);
+      }
+    });
+
+    // Then use Geocoding service
     return new Promise((resolve, reject) => {
-      const geocoder = new google.maps.Geocoder();
-      geocoder.geocode({ address }, (results, status) => {
-        if (status === google.maps.GeocoderStatus.OK && results && results[0] && results[0].geometry && results[0].geometry.location) {
+      if (!window.google?.maps) {
+        reject(new Error('Google Maps API not loaded'));
+        return;
+      }
+
+      const geocoder = new window.google.maps.Geocoder();
+      geocoder.geocode({ address: placesResult }, (results: any[], status: string) => {
+        if (status === 'OK' && results?.[0]?.geometry?.location) {
           const location = results[0].geometry.location;
           const coordinates = {
             lat: location.lat(),
@@ -77,6 +112,44 @@ export const geocodeAddress = async (address: string): Promise<Coordinates> => {
         }
       });
     });
+  } catch (error) {
+    throw error;
+  }
+};
+
+export const geocodeAddress = async (address: string): Promise<Coordinates> => {
+  if (!address.trim()) {
+    throw new Error('Address is required');
+  }
+
+  if (typeof window === 'undefined') {
+    throw new Error('geocodeAddress can only be called in browser environment');
+  }
+
+  try {
+    if (!window.google?.maps) {
+      console.log('Loading Google Maps...');
+      await loadGoogleMaps();
+    }
+
+    while (retryCount < MAX_RETRIES) {
+      try {
+        const result = await tryGeocodeWithRetry(address);
+        retryCount = 0; // Reset retry count on success
+        return result;
+      } catch (error) {
+        console.error(`Geocoding attempt ${retryCount + 1} failed:`, error);
+        retryCount++;
+        if (retryCount < MAX_RETRIES) {
+          console.log(`Retrying in ${RETRY_DELAY}ms...`);
+          await delay(RETRY_DELAY);
+        }
+      }
+    }
+
+    // If we get here, all retries failed
+    retryCount = 0; // Reset retry count
+    throw new Error(`Failed to geocode address after ${MAX_RETRIES} attempts`);
   } catch (error) {
     console.error('Error in geocodeAddress:', error);
     throw error;

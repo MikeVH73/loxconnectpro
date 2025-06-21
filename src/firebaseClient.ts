@@ -2,16 +2,24 @@ import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
 import { getFirestore, Firestore } from 'firebase/firestore';
 import { getAuth, Auth } from 'firebase/auth';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
+import { getAnalytics } from 'firebase/analytics';
+import { FirebaseError } from 'firebase/app';
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+  apiKey: "AIzaSyD3LGcmPieAnJuGrNUyIRTQw3bQ1Gzsjj0",
+  authDomain: "loxconnect-pro.firebaseapp.com",
+  projectId: "loxconnect-pro",
+  storageBucket: "loxconnect-pro.firebasestorage.app",
+  messagingSenderId: "767888928675",
+  appId: "1:767888928675:web:e4c6bb3914fc97ecf4b416",
+  measurementId: "G-5P1C1YTGQT"
 };
+
+console.log('Firebase configuration:', {
+  ...firebaseConfig,
+  apiKey: firebaseConfig.apiKey ? '(present)' : '(missing)',
+});
 
 // Initialize Firebase
 let app: FirebaseApp | undefined;
@@ -23,6 +31,10 @@ try {
   // Initialize Firebase only if it hasn't been initialized already
   if (!getApps().length) {
     app = initializeApp(firebaseConfig);
+    // Only initialize analytics on the client side
+    if (typeof window !== 'undefined') {
+      getAnalytics(app);
+    }
     console.log('Firebase app initialized successfully');
   } else {
     app = getApps()[0];
@@ -37,7 +49,11 @@ try {
 
 } catch (error) {
   console.error('Error initializing Firebase:', error);
-  throw new Error('Failed to initialize Firebase. Check your configuration.');
+  if (error instanceof FirebaseError) {
+    throw new Error(`Failed to initialize Firebase: ${error.message}`);
+  } else {
+    throw new Error('Failed to initialize Firebase: Unknown error');
+  }
 }
 
 if (!db || !auth || !storage) {

@@ -15,6 +15,7 @@ import MessagingPanel from '@/app/components/MessagingPanel';
 import { useMessages } from '@/app/hooks/useMessages';
 import { debounce } from "lodash";
 import { loadGoogleMaps, geocodeAddress, type Coordinates } from '../../utils/maps';
+import { useCustomers } from "../../hooks/useCustomers";
 
 // Type definitions
 interface Jobsite {
@@ -81,7 +82,7 @@ export default function NewQuoteRequestPage() {
   const [title, setTitle] = useState("");
   const creatorCountry = userProfile?.country || userProfile?.businessUnit || "";
   const [involvedCountry, setInvolvedCountry] = useState("");
-  const [customers, setCustomers] = useState<any[]>([]);
+  const { customers, loading: customersLoading, error: customersError } = useCustomers();
   const [customerId, setCustomerId] = useState("");
   const [showNewCustomer, setShowNewCustomer] = useState(false);
   const [newCustomer, setNewCustomer] = useState({ name: "", address: "", contact: "", phone: "", email: "" });
@@ -468,18 +469,13 @@ export default function NewQuoteRequestPage() {
 
         {/* Involved Country */}
         <div>
-          <label className="block text-sm font-medium text-gray-700">
-            Involved Country <span className="text-red-500">*</span>
-          </label>
-          <select
+          <CountrySelect
             value={involvedCountry}
-            onChange={(e) => setInvolvedCountry(e.target.value)}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            onChange={setInvolvedCountry}
             required
-          >
-            <option value="">Select a country</option>
-            {/* Add your country options here */}
-          </select>
+            label="Involved Country"
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+          />
         </div>
 
         {/* Customer */}

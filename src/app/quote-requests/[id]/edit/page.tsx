@@ -10,6 +10,7 @@ import ArchivedMessaging from "../../../components/ArchivedMessaging";
 import CountrySelect from "../../../components/CountrySelect";
 import MessagingPanel from '@/app/components/MessagingPanel';
 import { useMessages } from '@/app/hooks/useMessages';
+import { useCustomers } from '../../../hooks/useCustomers';
 import Link from "next/link";
 import { debounce } from "lodash";
 import Script from "next/script";
@@ -95,7 +96,7 @@ export default function EditQuoteRequestPage() {
   const [original, setOriginal] = useState<QuoteRequest | null>(null);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
-  const [customers, setCustomers] = useState<any[]>([]);
+  const { customers, loading: customersLoading, error: customersError } = useCustomers();
   const [contacts, setContacts] = useState<any[]>([]);
   const [labels, setLabels] = useState<any[]>([]);
   const [showNewContact, setShowNewContact] = useState(false);
@@ -146,20 +147,6 @@ export default function EditQuoteRequestPage() {
     };
     fetchData();
   }, [params.id]);
-
-  useEffect(() => {
-    const fetchCustomers = async () => {
-      if (!db) return;
-      try {
-        const customersCollection = collection(db as Firestore, "customers");
-        const snapshot = await getDocs(customersCollection);
-        setCustomers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      } catch (err) {
-        console.error("Error fetching customers:", err);
-      }
-    };
-    fetchCustomers();
-  }, []);
 
   useEffect(() => {
     const fetchContacts = async () => {
