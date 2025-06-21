@@ -22,20 +22,31 @@ let storage: FirebaseStorage;
 // Check if we're in the browser environment
 if (typeof window !== 'undefined') {
   try {
+    // Log Firebase config (without sensitive values)
+    console.log('Initializing Firebase with config:', {
+      authDomain: firebaseConfig.authDomain,
+      projectId: firebaseConfig.projectId,
+      storageBucket: firebaseConfig.storageBucket,
+    });
+
     // Initialize Firebase only if it hasn't been initialized already
     if (!getApps().length) {
       app = initializeApp(firebaseConfig);
+      console.log('Firebase app initialized successfully');
     } else {
       app = getApps()[0];
+      console.log('Using existing Firebase app');
     }
     
     // Initialize services
     db = getFirestore(app);
     auth = getAuth(app);
     storage = getStorage(app);
+    console.log('Firebase services initialized');
+
   } catch (error) {
     console.error('Error initializing Firebase:', error);
-    throw new Error('Failed to initialize Firebase');
+    throw new Error('Failed to initialize Firebase. Check your configuration.');
   }
 } else {
   // Server-side initialization
