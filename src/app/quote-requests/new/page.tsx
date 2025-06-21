@@ -88,7 +88,7 @@ export default function NewQuoteRequestPage() {
   const [newCustomer, setNewCustomer] = useState({ name: "", address: "", contact: "", phone: "", email: "" });
   const [status, setStatus] = useState<StatusType>("In Progress");
   const [isArchived, setIsArchived] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [products, setProducts] = useState([
     { catClass: "", description: "", quantity: 1 },
@@ -117,6 +117,46 @@ export default function NewQuoteRequestPage() {
   const [isGeocoding, setIsGeocoding] = useState(false);
   const [geocodingError, setGeocodingError] = useState("");
   const [isGoogleMapsLoaded, setIsGoogleMapsLoaded] = useState(false);
+
+  // Initialize data
+  useEffect(() => {
+    const initializeData = async () => {
+      if (!db) {
+        setError("Database not initialized");
+        setLoading(false);
+        return;
+      }
+
+      try {
+        // Fetch customers
+        const customersCollection = collection(db as Firestore, "customers");
+        const customersSnapshot = await getDocs(customersCollection);
+        setCustomers(customersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+
+        // Fetch labels
+        const labelsCollection = collection(db as Firestore, "labels");
+        const labelsSnapshot = await getDocs(labelsCollection);
+        setLabels(labelsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+
+        setLoading(false);
+      } catch (error) {
+        console.error("Error initializing data:", error);
+        setError("Failed to load initial data");
+        setLoading(false);
+      }
+    };
+
+    initializeData();
+  }, []);
+
+  // Show loading or error state
+  if (loading) {
+    return <div className="w-full p-8 bg-white mt-8">Loading...</div>;
+  }
+
+  if (error) {
+    return <div className="w-full p-8 bg-white mt-8 text-red-600">{error}</div>;
+  }
 
   // Debug logging to understand country mismatch
   useEffect(() => {
@@ -150,27 +190,6 @@ export default function NewQuoteRequestPage() {
     } else {
       setIsGoogleMapsLoaded(true);
     }
-  }, []);
-
-  // Fetch customers
-  useEffect(() => {
-    const fetchCustomers = async () => {
-      if (!db) return;
-      const customersCollection = collection(db as Firestore, "customers");
-      const snapshot = await getDocs(customersCollection);
-      setCustomers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    };
-    fetchCustomers();
-  }, []);
-
-  // Fetch labels
-  useEffect(() => {
-    const fetchLabels = async () => {
-      if (!db) return;
-      const snapshot = await getDocs(collection(db as Firestore, "labels"));
-      setLabels(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    };
-    fetchLabels();
   }, []);
 
   // Fetch contacts for the selected customer
