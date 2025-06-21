@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { collection, addDoc, serverTimestamp, getDocs, query, where, doc, getDoc, updateDoc, Firestore, DocumentData, CollectionReference } from "firebase/firestore";
 import { db } from "../../../firebaseClient";
@@ -79,6 +79,7 @@ if (!db) {
 export default function NewQuoteRequestPage() {
   const router = useRouter();
   const { userProfile, user } = useAuth();
+  const isMounted = useRef(true);
   const [title, setTitle] = useState("");
   const creatorCountry = userProfile?.country || userProfile?.businessUnit || "";
   const [involvedCountry, setInvolvedCountry] = useState("");
@@ -118,12 +119,21 @@ export default function NewQuoteRequestPage() {
   const [geocodingError, setGeocodingError] = useState("");
   const [isGoogleMapsLoaded, setIsGoogleMapsLoaded] = useState(false);
 
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
+
   // Initialize data
   useEffect(() => {
     const initializeData = async () => {
       if (!db) {
-        setError("Database not initialized");
-        setLoading(false);
+        if (isMounted.current) {
+          setError("Database not initialized");
+          setLoading(false);
+        }
         return;
       }
 
@@ -131,18 +141,23 @@ export default function NewQuoteRequestPage() {
         // Fetch customers
         const customersCollection = collection(db as Firestore, "customers");
         const customersSnapshot = await getDocs(customersCollection);
-        setCustomers(customersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        if (isMounted.current) {
+          setCustomers(customersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        }
 
         // Fetch labels
         const labelsCollection = collection(db as Firestore, "labels");
         const labelsSnapshot = await getDocs(labelsCollection);
-        setLabels(labelsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-
-        setLoading(false);
+        if (isMounted.current) {
+          setLabels(labelsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+          setLoading(false);
+        }
       } catch (error) {
         console.error("Error initializing data:", error);
-        setError("Failed to load initial data");
-        setLoading(false);
+        if (isMounted.current) {
+          setError("Failed to load initial data");
+          setLoading(false);
+        }
       }
     };
 
@@ -173,21 +188,25 @@ export default function NewQuoteRequestPage() {
 
   // Initialize Google Maps
   useEffect(() => {
-    if (!window.google) {
+    if (!window.google && isMounted.current) {
       const script = document.createElement('script');
       const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
       script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
       script.async = true;
       script.defer = true;
       script.onload = () => {
-        setIsGoogleMapsLoaded(true);
+        if (isMounted.current) {
+          setIsGoogleMapsLoaded(true);
+        }
       };
       document.head.appendChild(script);
 
       return () => {
-        document.head.removeChild(script);
+        if (script.parentNode) {
+          script.parentNode.removeChild(script);
+        }
       };
-    } else {
+    } else if (window.google && isMounted.current) {
       setIsGoogleMapsLoaded(true);
     }
   }, []);
@@ -196,10 +215,16 @@ export default function NewQuoteRequestPage() {
   useEffect(() => {
     const fetchContacts = async () => {
       if (!db || !customerId) return;
-      const contactsCollection = collection(db as Firestore, "contacts");
-      const q = query(contactsCollection, where("customer", "==", customerId));
-      const snapshot = await getDocs(q);
-      setContacts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      try {
+        const contactsCollection = collection(db as Firestore, "contacts");
+        const q = query(contactsCollection, where("customer", "==", customerId));
+        const snapshot = await getDocs(q);
+        if (isMounted.current) {
+          setContacts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        }
+      } catch (error) {
+        console.error("Error fetching contacts:", error);
+      }
     };
     fetchContacts();
   }, [customerId]);
@@ -207,13 +232,17 @@ export default function NewQuoteRequestPage() {
   // Geocode address using Google Maps API
   const handleAddressChange = async (address: string) => {
     if (!address || address.length < 5) {
-      setJobsiteCoords({ lat: null, lng: null });
-      setGeocodingError("");
+      if (isMounted.current) {
+        setJobsiteCoords({ lat: null, lng: null });
+        setGeocodingError("");
+      }
       return;
     }
     
-    setIsGeocoding(true);
-    setGeocodingError("");
+    if (isMounted.current) {
+      setIsGeocoding(true);
+      setGeocodingError("");
+    }
     
     try {
       // Format address to improve geocoding accuracy
@@ -237,7 +266,7 @@ export default function NewQuoteRequestPage() {
         const detailsData = await detailsResponse.json();
         console.log('Place Details response:', detailsData);
         
-        if (detailsData.result?.geometry?.location) {
+        if (detailsData.result?.geometry?.location && isMounted.current) {
           const { lat, lng } = detailsData.result.geometry.location;
           setJobsiteCoords({ lat, lng });
           setJobsiteAddress(detailsData.result.formatted_address);
@@ -254,25 +283,33 @@ export default function NewQuoteRequestPage() {
       const geocodingData = await geocodingResponse.json();
       console.log('Geocoding API response:', geocodingData);
       
-      if (geocodingData.status === "OK" && geocodingData.results?.[0]?.geometry?.location) {
+      if (geocodingData.status === "OK" && geocodingData.results?.[0]?.geometry?.location && isMounted.current) {
         const { lat, lng } = geocodingData.results[0].geometry.location;
         setJobsiteCoords({ lat, lng });
         setJobsiteAddress(geocodingData.results[0].formatted_address);
         setGeocodingError("");
-      } else {
+      } else if (isMounted.current) {
         setGeocodingError("Could not find coordinates for this address. Please check the address and try again.");
       }
     } catch (error) {
       console.error('Error geocoding address:', error);
-      setGeocodingError("An error occurred while getting coordinates. Please try again.");
+      if (isMounted.current) {
+        setGeocodingError("An error occurred while getting coordinates. Please try again.");
+      }
     } finally {
-      setIsGeocoding(false);
+      if (isMounted.current) {
+        setIsGeocoding(false);
+      }
     }
   };
 
   // Add a debounced version of handleAddressChange
   const debouncedHandleAddressChange = useCallback(
-    debounce((address: string) => handleAddressChange(address), 1000),
+    debounce((address: string) => {
+      if (isMounted.current) {
+        handleAddressChange(address);
+      }
+    }, 1000),
     []
   );
 
@@ -283,13 +320,33 @@ export default function NewQuoteRequestPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!db) return;
+    if (!db || !isMounted.current) return;
     
-    setSubmitting(true);
-    setError("");
-    setSuccess("");
+    if (isMounted.current) {
+      setSubmitting(true);
+      setError("");
+      setSuccess("");
+    }
 
     try {
+      // Required field validation
+      if (!title || !creatorCountry || !involvedCountry || !customerId || products.length === 0) {
+        if (isMounted.current) {
+          setError("Please fill in all required fields: Title, Creator Country, Involved Country, Customer, and at least one Product.");
+          setSubmitting(false);
+        }
+        return;
+      }
+
+      // Add date validation
+      if (!customerDecidesEnd && startDate && endDate && new Date(endDate) < new Date(startDate)) {
+        if (isMounted.current) {
+          setError("End Date cannot be before Start Date.");
+          setSubmitting(false);
+        }
+        return;
+      }
+
       console.log("[QuoteRequest] Starting Firestore write...");
       
       // Sanitize all fields to avoid undefined
@@ -355,13 +412,19 @@ export default function NewQuoteRequestPage() {
         });
       }
 
-      setSuccess("Quote request created successfully!");
+      if (isMounted.current) {
+        setSuccess("Quote request created successfully!");
+      }
       router.push(`/quote-requests/${docRef.id}`);
     } catch (error) {
       console.error("[QuoteRequest] Error creating quote request:", error);
-      setError("Failed to create quote request. Please try again.");
+      if (isMounted.current) {
+        setError("Failed to create quote request. Please try again.");
+      }
     } finally {
-      setSubmitting(false);
+      if (isMounted.current) {
+        setSubmitting(false);
+      }
     }
   };
 
