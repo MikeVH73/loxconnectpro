@@ -19,11 +19,19 @@
   }
 }
 
+html {
+  -webkit-text-size-adjust: none;
+  text-size-adjust: none;
+}
+
 body {
   background: linear-gradient(135deg, #f8fafc 0%, #f3f4f6 100%);
   color: var(--foreground);
   font-family: 'Inter', 'Poppins', Arial, Helvetica, system-ui, sans-serif;
   min-height: 100vh;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 /* Modern card style */
@@ -125,4 +133,15 @@ body {
 @keyframes spin {
   0%   { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
+}
+
+/* Fix for mobile browsers */
+@media screen and (max-width: 768px) {
+  html {
+    font-size: 16px;
+  }
+  
+  body {
+    -webkit-overflow-scrolling: touch;
+  }
 }
