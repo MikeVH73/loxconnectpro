@@ -14,50 +14,34 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase
-let app: FirebaseApp;
-let db: Firestore;
-let auth: Auth;
-let storage: FirebaseStorage;
+let app: FirebaseApp | undefined;
+let db: Firestore | undefined;
+let auth: Auth | undefined;
+let storage: FirebaseStorage | undefined;
 
-// Check if we're in the browser environment
-if (typeof window !== 'undefined') {
-  try {
-    // Log Firebase config (without sensitive values)
-    console.log('Initializing Firebase with config:', {
-      authDomain: firebaseConfig.authDomain,
-      projectId: firebaseConfig.projectId,
-      storageBucket: firebaseConfig.storageBucket,
-    });
-
-    // Initialize Firebase only if it hasn't been initialized already
-    if (!getApps().length) {
-      app = initializeApp(firebaseConfig);
-      console.log('Firebase app initialized successfully');
-    } else {
-      app = getApps()[0];
-      console.log('Using existing Firebase app');
-    }
-    
-    // Initialize services
-    db = getFirestore(app);
-    auth = getAuth(app);
-    storage = getStorage(app);
-    console.log('Firebase services initialized');
-
-  } catch (error) {
-    console.error('Error initializing Firebase:', error);
-    throw new Error('Failed to initialize Firebase. Check your configuration.');
-  }
-} else {
-  // Server-side initialization
+try {
+  // Initialize Firebase only if it hasn't been initialized already
   if (!getApps().length) {
     app = initializeApp(firebaseConfig);
+    console.log('Firebase app initialized successfully');
   } else {
     app = getApps()[0];
+    console.log('Using existing Firebase app');
   }
+  
+  // Initialize services
   db = getFirestore(app);
   auth = getAuth(app);
   storage = getStorage(app);
+  console.log('Firebase services initialized');
+
+} catch (error) {
+  console.error('Error initializing Firebase:', error);
+  throw new Error('Failed to initialize Firebase. Check your configuration.');
+}
+
+if (!db || !auth || !storage) {
+  throw new Error('Firebase services not initialized properly');
 }
 
 export { db, auth, storage }; 
