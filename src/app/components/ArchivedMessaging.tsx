@@ -63,6 +63,8 @@ export default function ArchivedMessaging({ quoteRequestId, userCountries, quote
       currentCountry=""
       onSendMessage={async () => {}}
       quoteTitle={quoteRequest?.title}
+      creatorCountry={quoteRequest?.creatorCountry}
+      involvedCountry={quoteRequest?.involvedCountry}
       quoteRequestFiles={quoteRequest?.attachments || []}
       readOnly={true}
     />

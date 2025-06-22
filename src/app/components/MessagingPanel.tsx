@@ -32,6 +32,8 @@ interface MessagingPanelProps {
   currentCountry: string;
   onSendMessage: (text: string) => Promise<void>;
   quoteTitle?: string;
+  creatorCountry?: string;
+  involvedCountry?: string;
   onBack?: () => void;
   quoteRequestFiles?: QuoteFile[];
   onFilesChange?: (files: QuoteFile[]) => void;
@@ -44,6 +46,8 @@ export default function MessagingPanel({
   currentCountry = "",
   onSendMessage,
   quoteTitle = "",
+  creatorCountry = "",
+  involvedCountry = "",
   onBack,
   quoteRequestFiles = [],
   onFilesChange,
@@ -119,7 +123,7 @@ export default function MessagingPanel({
     <div className="flex flex-col h-full bg-gray-50">
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b bg-white">
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center space-x-4">
           {onBack && (
             <button
               onClick={onBack}
@@ -128,7 +132,14 @@ export default function MessagingPanel({
               ←
             </button>
           )}
-          <h2 className="font-semibold text-gray-800">{quoteTitle}</h2>
+          <div className="flex flex-col">
+            <h2 className="font-semibold text-gray-800">{quoteTitle}</h2>
+            {(creatorCountry || involvedCountry) && (
+              <div className="text-sm text-gray-600 mt-1">
+                {creatorCountry} → {involvedCountry || "..."}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
