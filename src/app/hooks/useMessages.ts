@@ -31,7 +31,7 @@ export function useMessages(quoteRequestId: string | null) {
 
   // Load and listen to messages
   useEffect(() => {
-    if (!quoteRequestId) {
+    if (!quoteRequestId || !db) {
       setMessages([]);
       setLoading(false);
       return;
@@ -42,28 +42,30 @@ export function useMessages(quoteRequestId: string | null) {
       const q = query(
         messagesRef,
         where("quoteRequestId", "==", quoteRequestId),
-        orderBy("createdAt", "asc")
+        orderBy("createdAt", "desc")  // Change to desc to show newest at bottom
       );
 
       const unsubscribe = onSnapshot(q, (snapshot) => {
         try {
-          const newMessages = snapshot.docs.map(doc => {
-            const data = doc.data();
-            return {
-              id: doc.id,
-              text: data.text || '',
-              createdAt: data.createdAt,
-              sender: data.sender || '',
-              senderCountry: data.senderCountry || '',
-              quoteRequestId: data.quoteRequestId || '',
-              files: data.files || []
-            } as Message;
-          });
+          const newMessages = snapshot.docs
+            .map(doc => {
+              const data = doc.data();
+              return {
+                id: doc.id,
+                text: data.text || '',
+                createdAt: data.createdAt,
+                sender: data.sender || '',
+                senderCountry: data.senderCountry || '',
+                quoteRequestId: data.quoteRequestId || '',
+                files: data.files || []
+              } as Message;
+            })
+            .reverse();  // Reverse to maintain chronological order
           setMessages(newMessages);
           setError(null);
           
           // Mark messages as read when loaded
-          if (newMessages.length > 0) {
+          if (newMessages.length > 0 && db) {
             const quoteRef = doc(db, "quoteRequests", quoteRequestId);
             updateDoc(quoteRef, {
               hasUnreadMessages: false,
@@ -93,7 +95,7 @@ export function useMessages(quoteRequestId: string | null) {
   }, [quoteRequestId]);
 
   const sendMessage = async (text: string, sender: string, senderCountry: string, files: any[] = []) => {
-    if (!quoteRequestId || !sender || !senderCountry) {
+    if (!quoteRequestId || !sender || !senderCountry || !db) {
       throw new Error('Missing required data for sending message');
     }
 
