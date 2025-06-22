@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { doc, updateDoc, arrayUnion, collection, addDoc, serverTimestamp, onSnapshot, query, where, orderBy } from 'firebase/firestore';
+import { doc, updateDoc, arrayUnion, collection, addDoc, serverTimestamp, onSnapshot, query, where, orderBy, Timestamp } from 'firebase/firestore';
 import { db } from '../../firebaseClient';
 import dayjs from 'dayjs';
+import { useMessages } from '../hooks/useMessages';
 
 interface FileData {
   id: string;
@@ -17,9 +18,9 @@ interface MessageData {
   id: string;
   text?: string;
   files?: FileData[];
-  author: string;
-  authorCountry: string;
-  timestamp: any;
+  sender: string;
+  senderCountry: string;
+  createdAt: Timestamp;
   type: 'text' | 'file' | 'both';
 }
 
@@ -38,32 +39,13 @@ export default function MessagingWithFiles({
   isArchived = false,
   readOnly = false
 }: MessagingWithFilesProps) {
-  const [messages, setMessages] = useState<MessageData[]>([]);
+  const { messages, loading, error: messageError, sendMessage } = useMessages(quoteRequestId);
   const [messageText, setMessageText] = useState('');
   const [uploadingFiles, setUploadingFiles] = useState(false);
   const [dragOver, setDragOver] = useState(false);
-  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  // Load messages from Firestore
-  useEffect(() => {
-    const q = query(
-      collection(db, 'messages'), 
-      where('quoteRequestId', '==', quoteRequestId),
-      orderBy('timestamp', 'asc')
-    );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const loadedMessages: MessageData[] = [];
-      snapshot.forEach((doc) => {
-        loadedMessages.push({ id: doc.id, ...doc.data() } as MessageData);
-      });
-      setMessages(loadedMessages);
-    });
-
-    return () => unsubscribe();
-  }, [quoteRequestId]);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -74,18 +56,18 @@ export default function MessagingWithFiles({
     if (!selectedFiles || readOnly || isArchived) return;
 
     setUploadingFiles(true);
+    setError(null);
     const processedFiles: FileData[] = [];
 
-    for (let i = 0; i < selectedFiles.length; i++) {
-      const file = selectedFiles[i];
-      
-      // Check file size (limit to 3MB for messaging)
-      if (file.size > 3 * 1024 * 1024) {
-        alert(`File ${file.name} is too large. Maximum size is 3MB for messaging.`);
-        continue;
-      }
+    try {
+      for (let i = 0; i < selectedFiles.length; i++) {
+        const file = selectedFiles[i];
+        
+        // Check file size (limit to 3MB for messaging)
+        if (file.size > 3 * 1024 * 1024) {
+          throw new Error(`File ${file.name} is too large. Maximum size is 3MB for messaging.`);
+        }
 
-      try {
         // Convert file to base64 for storage
         const base64 = await new Promise<string>((resolve, reject) => {
           const reader = new FileReader();
@@ -94,7 +76,7 @@ export default function MessagingWithFiles({
           reader.readAsDataURL(file);
         });
 
-        const fileData: FileData = {
+        processedFiles.push({
           id: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
           name: file.name,
           url: base64,
@@ -102,51 +84,41 @@ export default function MessagingWithFiles({
           size: file.size,
           uploadedAt: new Date(),
           uploadedBy: currentUser
-        };
+        });
+      }
 
-        processedFiles.push(fileData);
-      } catch (error) {
-        console.error('Error processing file:', file.name, error);
-        alert(`Failed to process ${file.name}`);
+      if (processedFiles.length > 0) {
+        await sendMessage('', currentUser, currentCountry, processedFiles);
+      }
+    } catch (error: any) {
+      console.error('Error processing files:', error);
+      setError(error.message || 'Failed to process files');
+    } finally {
+      setUploadingFiles(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
       }
     }
-
-    if (processedFiles.length > 0) {
-      await sendMessage('', processedFiles);
-    }
-
-    setUploadingFiles(false);
   };
 
-  const sendMessage = async (text: string = '', files: FileData[] = []) => {
-    if ((!text.trim() && files.length === 0) || readOnly || isArchived) return;
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!messageText.trim() || readOnly || isArchived) return;
 
-    setSending(true);
     try {
-      const messageData = {
-        quoteRequestId,
-        text: text.trim() || null,
-        files: files.length > 0 ? files : null,
-        author: currentUser,
-        authorCountry: currentCountry,
-        timestamp: serverTimestamp(),
-        type: text.trim() && files.length > 0 ? 'both' : (files.length > 0 ? 'file' : 'text')
-      };
-
-      await addDoc(collection(db, 'messages'), messageData);
+      setError(null);
+      await sendMessage(messageText, currentUser, currentCountry);
       setMessageText('');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error sending message:', error);
-      alert('Failed to send message');
-    } finally {
-      setSending(false);
+      setError(error.message || 'Failed to send message');
     }
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      sendMessage(messageText);
+      handleSubmit(e as any);
     }
   };
 
@@ -168,189 +140,156 @@ export default function MessagingWithFiles({
     }
   };
 
-  const formatFileSize = (bytes: number) => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
-  };
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-gray-900"></div>
+      </div>
+    );
+  }
 
-  const getFileIcon = (type: string) => {
-    if (type.startsWith('image/')) return '🖼️';
-    if (type.includes('pdf')) return '📄';
-    if (type.includes('word') || type.includes('doc')) return '📝';
-    if (type.includes('excel') || type.includes('sheet')) return '📊';
-    return '📎';
-  };
-
-  const isImageFile = (type: string) => {
-    return type.startsWith('image/');
-  };
-
-  const downloadFile = (file: FileData) => {
-    const link = document.createElement('a');
-    link.href = file.url;
-    link.download = file.name;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
+  if (messageError) {
+    return (
+      <div className="flex items-center justify-center h-full text-red-500 p-4">
+        {messageError}
+      </div>
+    );
+  }
 
   return (
-    <div className="flex flex-col h-full bg-white border rounded shadow">
-      {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b bg-gray-50">
-        <div>
-          <h3 className="text-lg font-semibold text-gray-800">Country Communication</h3>
-          <p className="text-sm text-gray-600">Share messages and files between countries</p>
-        </div>
-        <div className="text-sm text-gray-500">
-          {messages.length} message{messages.length !== 1 ? 's' : ''}
-        </div>
-      </div>
-
-      {/* Messages Area */}
-      <div 
-        className={`flex-1 overflow-y-auto p-4 space-y-3 min-h-[300px] max-h-[400px] ${
-          dragOver ? 'bg-blue-50 border-2 border-dashed border-blue-300' : ''
-        }`}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-      >
+    <div 
+      className={`flex flex-col h-full ${
+        dragOver ? 'bg-blue-50' : 'bg-white'
+      }`}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {/* Messages Section */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-3">
         {messages.length === 0 ? (
           <div className="text-center text-gray-400 py-8">
             <div className="text-4xl mb-2">💬</div>
             <p>No messages yet.</p>
-            <p className="text-sm">Start the conversation between countries!</p>
+            <p className="text-sm">Start the conversation!</p>
           </div>
         ) : (
           messages.map((message) => (
             <div key={message.id} className="flex flex-col">
               {/* Message Header */}
               <div className="flex items-center gap-2 mb-1">
-                <span className="font-medium text-sm text-gray-700">{message.author}</span>
+                <span className="font-medium text-sm text-gray-700">{message.sender}</span>
                 <span className="text-xs px-2 py-1 bg-blue-100 text-blue-800 rounded-full">
-                  {message.authorCountry}
+                  {message.senderCountry}
                 </span>
                 <span className="text-xs text-gray-400">
-                  {message.timestamp?.toDate ? dayjs(message.timestamp.toDate()).format('MMM D, HH:mm') : ''}
+                  {message.createdAt?.toDate ? dayjs(message.createdAt.toDate()).format('MMM D, HH:mm') : ''}
                 </span>
               </div>
 
               {/* Message Content */}
-              <div className="bg-gray-50 border rounded-lg p-3 ml-4">
-                {/* Text Content */}
-                {message.text && (
-                  <div className="text-sm text-gray-800 mb-2">{message.text}</div>
-                )}
+              {message.text && (
+                <div className="text-gray-800 break-words bg-gray-50 rounded-lg p-3">
+                  {message.text}
+                </div>
+              )}
 
-                {/* File Content */}
-                {message.files && message.files.length > 0 && (
-                  <div className="space-y-2">
-                    {message.files.map((file) => (
-                      <div key={file.id} className="flex items-center gap-3 p-2 bg-white border rounded">
-                        <div className="text-lg">{getFileIcon(file.type)}</div>
-                        
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium text-sm truncate">{file.name}</span>
-                            <span className="text-xs text-gray-400">
-                              {formatFileSize(file.size)}
-                            </span>
-                          </div>
+              {/* Files */}
+              {message.files && message.files.length > 0 && (
+                <div className="mt-2 space-y-2">
+                  {message.files.map((file, index) => (
+                    <div
+                      key={index}
+                      className="flex items-center gap-2 bg-gray-50 p-2 rounded-lg"
+                    >
+                      <span className="text-xl">
+                        {file.type.startsWith('image/') ? '🖼️' : 
+                         file.type.includes('pdf') ? '📄' :
+                         file.type.includes('word') ? '📝' :
+                         file.type.includes('excel') ? '📊' : '📎'}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium text-gray-700 truncate">
+                          {file.name}
                         </div>
-
-                        {/* Image Preview */}
-                        {isImageFile(file.type) && (
-                          <img 
-                            src={file.url} 
-                            alt={file.name}
-                            className="w-12 h-12 object-cover rounded border cursor-pointer hover:opacity-80"
-                            onClick={() => window.open(file.url, '_blank')}
-                            title="Click to view full size"
-                          />
-                        )}
-
-                        {/* Download Button */}
-                        <button
-                          onClick={() => downloadFile(file)}
-                          className="text-blue-600 hover:text-blue-800 text-sm underline"
-                        >
-                          Download
-                        </button>
+                        <div className="text-xs text-gray-500">
+                          {(file.size / 1024).toFixed(1)} KB
+                        </div>
                       </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+                      <a
+                        href={file.url}
+                        download={file.name}
+                        className="text-blue-500 hover:text-blue-600"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        ⬇️
+                      </a>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           ))
         )}
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input Area */}
-      {!isArchived && !readOnly && (
-        <div className="border-t p-4 space-y-3">
-          {/* File Upload Area (when dragging) */}
-          {dragOver && (
-            <div className="text-center text-blue-600 py-2">
-              <div className="text-2xl mb-1">📎</div>
-              <p className="text-sm font-medium">Drop files to share</p>
-            </div>
-          )}
-
-          {/* Text Input */}
-          <div className="flex gap-2">
-            <textarea
+      {/* Input Section */}
+      {!readOnly && !isArchived && (
+        <div className="flex-none p-4 border-t space-y-2">
+          <form onSubmit={handleSubmit} className="flex gap-2">
+            <input
+              type="text"
               value={messageText}
               onChange={(e) => setMessageText(e.target.value)}
               onKeyPress={handleKeyPress}
-              placeholder="Type a message... (Press Enter to send, Shift+Enter for new line)"
-              className="flex-1 border rounded px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
-              rows={2}
-              disabled={sending || uploadingFiles}
+              placeholder="Type a message..."
+              className="flex-1 border rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              disabled={uploadingFiles}
             />
             <button
-              onClick={() => sendMessage(messageText)}
-              disabled={!messageText.trim() || sending || uploadingFiles}
-              className="bg-[#e40115] text-white px-4 py-2 rounded hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              type="submit"
+              disabled={!messageText.trim() || uploadingFiles}
+              className={`px-4 py-2 rounded-lg ${
+                !messageText.trim() || uploadingFiles
+                  ? "bg-gray-300 cursor-not-allowed"
+                  : "bg-blue-500 hover:bg-blue-600 text-white"
+              }`}
             >
-              {sending ? '...' : 'Send'}
+              Send
             </button>
-          </div>
+          </form>
 
-          {/* File Upload Button */}
+          {/* File Upload */}
           <div className="flex items-center gap-2">
             <input
               ref={fileInputRef}
               type="file"
               multiple
-              className="hidden"
               onChange={(e) => handleFileSelect(e.target.files)}
-              accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
+              className="hidden"
+              accept="image/*,.pdf,.doc,.docx,.xls,.xlsx"
             />
             <button
+              type="button"
               onClick={() => fileInputRef.current?.click()}
               disabled={uploadingFiles}
-              className="flex items-center gap-2 px-3 py-1 border border-gray-300 rounded text-sm hover:bg-gray-50 disabled:opacity-50"
+              className={`text-sm px-3 py-1 rounded ${
+                uploadingFiles
+                  ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              }`}
             >
-              <span>📎</span>
-              {uploadingFiles ? 'Processing...' : 'Attach Files'}
+              {uploadingFiles ? "Uploading..." : "Attach Files"}
             </button>
             <span className="text-xs text-gray-500">
-              Images, PDF, Word, Excel • Max 3MB each
+              Max size: 3MB per file
             </span>
           </div>
-        </div>
-      )}
 
-      {/* Archived Notice */}
-      {isArchived && (
-        <div className="border-t p-4 text-center text-gray-400 text-sm">
-          Messaging is disabled for archived Quote Requests.
+          {error && (
+            <div className="text-sm text-red-500">{error}</div>
+          )}
         </div>
       )}
     </div>
