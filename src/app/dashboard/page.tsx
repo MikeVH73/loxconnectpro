@@ -81,9 +81,31 @@ export default function DashboardPage() {
   const snoozeLabel = getLabelByName("snooze");
 
   // Column filters
-  const isUrgentOrProblems = (qr: any) => (qr.labels || []).some((id: string) => [urgentLabel?.id, problemsLabel?.id].includes(id));
-  const isWaiting = (qr: any) => (qr.labels || []).includes(waitingLabel?.id);
-  const isSnoozed = (qr: any) => (qr.status === "Snoozed" || (qr.labels || []).includes(snoozeLabel?.id));
+  const isUrgentOrProblems = (qr: any) => {
+    const qrLabels = qr.labels || [];
+    return qrLabels.length > 0 && qrLabels.some((labelId: string) => {
+      const label = labels.find((l: any) => l.id === labelId);
+      return label?.name?.toLowerCase() === "urgent" || label?.name?.toLowerCase() === "problems";
+    });
+  };
+
+  const isWaiting = (qr: any) => {
+    const qrLabels = qr.labels || [];
+    return qrLabels.length > 0 && qrLabels.some((labelId: string) => {
+      const label = labels.find((l: any) => l.id === labelId);
+      return label?.name?.toLowerCase() === "waiting for answer";
+    });
+  };
+
+  const isSnoozed = (qr: any) => {
+    if (qr.status === "Snoozed") return true;
+    const qrLabels = qr.labels || [];
+    return qrLabels.length > 0 && qrLabels.some((labelId: string) => {
+      const label = labels.find((l: any) => l.id === labelId);
+      return label?.name?.toLowerCase() === "snooze";
+    });
+  };
+
   const isStandard = (qr: any) => !isUrgentOrProblems(qr) && !isWaiting(qr) && !isSnoozed(qr);
 
   useEffect(() => {
@@ -477,57 +499,41 @@ export default function DashboardPage() {
 }
 
 function QuoteRequestCard({ qr, customers, labels, onCardClick, getCustomerName, getLabelName }: QuoteRequestCardProps) {
+  const qrLabels = (qr.labels || []).map(labelId => {
+    const label = labels.find(l => l.id === labelId);
+    return label?.name?.toLowerCase() || '';
+  }).filter(Boolean);
+
   return (
     <div className="card-modern border-l-4 border-[#e40115] p-3 min-h-[120px] flex flex-col justify-between relative cursor-pointer" onClick={onCardClick}>
       <Link
         href={`/quote-requests/${qr.id}/edit`}
         className="absolute top-2 right-2 text-gray-400 hover:text-[#e40115] focus:outline-none focus:ring-2 focus:ring-[#e40115] rounded-full text-sm"
-        title="View details"
-        tabIndex={0}
-        aria-label="View Quote Request details"
-        prefetch={false}
-        onClick={e => e.stopPropagation()}
+        title="Edit Quote Request"
       >
         🔍
       </Link>
-      <div className="font-bold text-sm flex items-center gap-2 pr-6">
-        {qr.title}
-      </div>
-      <div className="text-xs text-gray-500 mb-1">{getCustomerName(qr.customer)}</div>
-      <div className="text-xs text-gray-400 mb-1">
-        {qr.creatorCountry} {qr.involvedCountry ? `→ ${qr.involvedCountry}` : ''}
-      </div>
-      <div className="flex flex-wrap gap-1 mt-1">
-        {(qr.labels || []).map(id => {
-          const labelName = getLabelName(id)?.toLowerCase?.();
-          let colorClass = "";
-          if (labelName === "urgent") colorClass = "bg-orange-500";
-          else if (labelName === "problems") colorClass = "bg-[#e40115]";
-          else if (labelName === "waiting for answer") colorClass = "bg-blue-600";
-          else colorClass = "pill-modern";
-          return (
-            <span
-              key={id}
-              className={`${colorClass} text-xs px-1.5 py-0.5 rounded font-light text-white`}
-            >
-              {getLabelName(id)}
-            </span>
-          );
-        })}
-      </div>
-      {Array.isArray(qr.notes) && qr.notes.length > 0 && (
-        <div className="text-xs text-gray-400 italic mt-1 truncate" title={qr.notes[qr.notes.length-1].text}>
-          Last note: {qr.notes[qr.notes.length-1].text}
+      <div>
+        <h3 className="font-medium text-gray-900">{qr.title}</h3>
+        <p className="text-sm text-gray-500">{getCustomerName(qr.customer)}</p>
+        <div className="text-xs text-gray-400">
+          {qr.creatorCountry} → {qr.involvedCountry || "..."}
         </div>
-      )}
-      {qr.hasUnreadMessages && (
-        <div className="absolute top-2 right-8 w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
-      )}
-      {qr.lastMessageAt && (
-        <div className="text-xs text-gray-500 mt-1">
-          Last message: {new Date(qr.lastMessageAt).toLocaleString()}
-        </div>
-      )}
+      </div>
+      <div className="flex flex-wrap gap-1 mt-2">
+        {qrLabels.includes('waiting for answer') && (
+          <span className="px-2 py-0.5 rounded-full text-xs bg-blue-100 text-blue-800">Waiting for Answer</span>
+        )}
+        {qrLabels.includes('urgent') && (
+          <span className="px-2 py-0.5 rounded-full text-xs bg-red-100 text-red-800">Urgent</span>
+        )}
+        {qrLabels.includes('problems') && (
+          <span className="px-2 py-0.5 rounded-full text-xs bg-yellow-100 text-yellow-800">Problems</span>
+        )}
+        {qr.status === "Planned" && (
+          <span className="px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-800">Planned</span>
+        )}
+      </div>
     </div>
   );
 }
