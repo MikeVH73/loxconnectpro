@@ -208,7 +208,9 @@ export default function DashboardMessaging({ quoteRequestId, onClose }: Dashboar
         currentUser={user?.email || ''}
         currentCountry={userProfile?.businessUnit || ''}
         onSendMessage={handleSendMessage}
-        quoteTitle={quoteRequest ? `${quoteRequest.title} (${quoteRequest.creatorCountry} → ${quoteRequest.targetCountry})` : ''}
+        quoteTitle={quoteRequest?.title || ''}
+        creatorCountry={quoteRequest?.creatorCountry || ''}
+        involvedCountry={quoteRequest?.targetCountry || ''}
         onBack={onClose}
         quoteRequestFiles={quoteRequest?.attachments || []}
       />
