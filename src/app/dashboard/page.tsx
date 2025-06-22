@@ -37,12 +37,11 @@ interface QuoteRequest {
   customer: string;
   labels: string[];
   creatorCountry: string;
-  targetCountry: string;
+  involvedCountry?: string;
   status: string;
   lastMessageAt?: string | null;
   hasUnreadMessages?: boolean;
   jobsite?: string;
-  involvedCountry?: string;
   notes?: string;
 }
 
@@ -495,7 +494,9 @@ function QuoteRequestCard({ qr, customers, labels, onCardClick, getCustomerName,
         {qr.title}
       </div>
       <div className="text-xs text-gray-500 mb-1">{getCustomerName(qr.customer)}</div>
-      <div className="text-xs text-gray-400 mb-1">{qr.creatorCountry} → {qr.involvedCountry}</div>
+      <div className="text-xs text-gray-400 mb-1">
+        {qr.creatorCountry} {qr.involvedCountry ? `→ ${qr.involvedCountry}` : ''}
+      </div>
       <div className="flex flex-wrap gap-1 mt-1">
         {(qr.labels || []).map(id => {
           const labelName = getLabelName(id)?.toLowerCase?.();

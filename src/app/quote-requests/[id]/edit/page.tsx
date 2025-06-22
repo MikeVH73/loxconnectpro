@@ -83,12 +83,14 @@ if (!db) {
 const statuses = ["In Progress", "Snoozed", "Won", "Lost", "Cancelled"];
 const GEOCODING_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 
-const LABEL_OPTIONS: Label[] = [
+const LABEL_OPTIONS = [
   { id: 'waiting-for-answer', name: 'Waiting for Answer' },
   { id: 'urgent', name: 'Urgent' },
   { id: 'problems', name: 'Problems' },
   { id: 'planned', name: 'Planned' }
-];
+] as const;
+
+type LabelOption = typeof LABEL_OPTIONS[number];
 
 export default function EditQuoteRequestPage() {
   const params = useParams();
@@ -249,15 +251,15 @@ export default function EditQuoteRequestPage() {
             id: doc.id,
             name: doc.data().name
           }));
-          setLabels(fetchedLabels);
+          setForm(prev => ({ ...prev, labels: fetchedLabels.map(label => label.id) }));
         } else {
           // If no labels in Firestore, use default labels
-          setLabels(LABEL_OPTIONS);
+          setForm(prev => ({ ...prev, labels: LABEL_OPTIONS.map(label => label.id) }));
         }
       } catch (err) {
         console.error("Error fetching labels:", err);
         // Fallback to default labels
-        setLabels(LABEL_OPTIONS);
+        setForm(prev => ({ ...prev, labels: LABEL_OPTIONS.map(label => label.id) }));
       }
     };
 
@@ -323,25 +325,16 @@ export default function EditQuoteRequestPage() {
     }));
   };
 
-  const handleLabelToggle = useCallback((id: string) => {
+  const handleLabelToggle = (labelId: string) => {
     if (!form) return;
     
-    setForm(prev => {
-      if (!prev) return prev;
-      
-      const currentLabels = prev.labels || [];
-      const updatedLabels = currentLabels.includes(id)
-        ? currentLabels.filter(l => l !== id)
-        : currentLabels.length < 4
-        ? [...currentLabels, id]
-        : currentLabels;
+    const currentLabels = form.labels || [];
+    const newLabels = currentLabels.includes(labelId)
+      ? currentLabels.filter(id => id !== labelId)
+      : [...currentLabels, labelId];
 
-      return {
-        ...prev,
-        labels: updatedLabels
-      };
-    });
-  }, [form]);
+    setForm({ ...form, labels: newLabels });
+  };
 
   const handleAddNewContact = async () => {
     if (!db || !newContact.name || !newContact.phone || !form?.customer) return;
@@ -639,14 +632,14 @@ export default function EditQuoteRequestPage() {
           </div>
           <div>
             <label className="block mb-1 font-medium">Labels</label>
-            <div className="flex flex-wrap gap-2">
-              {labels.map((label) => (
+            <div className="flex flex-wrap gap-2 mb-4">
+              {LABEL_OPTIONS.map((label) => (
                 <button
                   key={label.id}
                   onClick={() => handleLabelToggle(label.id)}
                   disabled={isReadOnly}
                   className={`px-3 py-1 rounded-full text-sm ${
-                    form.labels?.includes(label.id)
+                    form?.labels?.includes(label.id)
                       ? 'bg-[#e40115] text-white'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                   } transition-colors disabled:opacity-50`}
