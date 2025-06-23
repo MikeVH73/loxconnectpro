@@ -24,8 +24,8 @@ export default function Header() {
   return (
     <header className="h-16 bg-white border-b border-gray-200 shadow-sm flex items-center justify-between px-6 flex-shrink-0">
       <div className="flex items-center gap-4">
-        <h1 className="text-xl font-semibold text-gray-900">
-          {/* Page title will be set by individual pages */}
+        <h1 className="text-2xl font-bold text-[#e40115] tracking-wide">
+          LoxConnect PRO
         </h1>
       </div>
       
