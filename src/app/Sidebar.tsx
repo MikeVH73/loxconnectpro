@@ -39,8 +39,8 @@ export default function Sidebar() {
 
   return (
     <aside className="w-64 bg-white border-r border-gray-200 flex flex-col h-screen shadow-md">
-      <div className="flex flex-col items-center justify-center border-b border-gray-100 py-6">
-        <div className="w-48 h-48 relative">
+      <div className="flex flex-col items-center justify-center border-b border-gray-100 py-2">
+        <div className="w-40 h-40 relative">
           <Image
             src="/logo1.png"
             alt="LoxConnect Logo"
@@ -50,7 +50,7 @@ export default function Sidebar() {
           />
         </div>
       </div>
-      <nav className="flex-1 py-6 overflow-y-auto">
+      <nav className="flex-1 py-4 overflow-y-auto">
         <ul className="space-y-1">
           {filteredNavItems.map((item) => (
             <li key={item.href}>
