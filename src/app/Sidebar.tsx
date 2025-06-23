@@ -39,8 +39,8 @@ export default function Sidebar() {
 
   return (
     <aside className="w-64 bg-white border-r border-gray-200 flex flex-col h-screen shadow-md">
-      <div className="flex flex-col items-center justify-center border-b border-gray-100 py-4">
-        <div className="w-32 h-32 relative">
+      <div className="flex flex-col items-center justify-center border-b border-gray-100 py-6">
+        <div className="w-48 h-48 relative">
           <Image
             src="/logo1.png"
             alt="LoxConnect Logo"
