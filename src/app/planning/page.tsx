@@ -271,7 +271,7 @@ export default function PlanningPage() {
             return (
               <Link
                 key={quote.id}
-                href={`/quote-requests/${quote.id}`}
+                href={`/quote-requests/${quote.id}/edit`}
                 className={`
                   absolute z-10 px-3 py-2 text-sm rounded-lg
                   ${isPlanned 
