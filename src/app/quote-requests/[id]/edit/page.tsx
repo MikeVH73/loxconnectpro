@@ -82,7 +82,7 @@ export default function EditQuoteRequestPage() {
   const params = useParams();
   const router = useRouter();
   const { user, userProfile } = useAuth();
-  const isReadOnly = userProfile?.role === "readOnly";
+  const isReadOnly = false; // Removed read-only restriction as requested
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState<QuoteRequest | null>(null);
   const [original, setOriginal] = useState<QuoteRequest | null>(null);
@@ -796,6 +796,49 @@ export default function EditQuoteRequestPage() {
 
                 {/* Right Column */}
                 <div className="space-y-6">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block mb-1 font-medium">Start Date</label>
+                      <input
+                        type="date"
+                        value={form.startDate || ''}
+                        onChange={(e) => handleChange('startDate', e.target.value)}
+                        className="w-full p-2 border rounded"
+                        disabled={isReadOnly}
+                      />
+                    </div>
+                    <div>
+                      <label className="block mb-1 font-medium">End Date</label>
+                      <div>
+                        <input
+                          type="date"
+                          value={form.endDate || ''}
+                          onChange={(e) => handleChange('endDate', e.target.value)}
+                          className="w-full p-2 border rounded"
+                          disabled={isReadOnly || form.customerDecidesEnd}
+                        />
+                        <div className="mt-1 flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            id="customerDecidesEnd"
+                            checked={form.customerDecidesEnd || false}
+                            onChange={(e) => {
+                              handleChange('customerDecidesEnd', e.target.checked);
+                              if (e.target.checked) {
+                                handleChange('endDate', null);
+                              }
+                            }}
+                            disabled={isReadOnly}
+                            className="h-4 w-4"
+                          />
+                          <label htmlFor="customerDecidesEnd" className="text-sm text-gray-600">
+                            Customer decides end date
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
                   <div>
                     <label className="block mb-1 font-medium">Jobsite Address</label>
                     <input
