@@ -266,7 +266,7 @@ export default function EditQuoteRequestPage() {
       
       setForm({
         ...form,
-        jobsite: {
+          jobsite: {
           ...form.jobsite,
           coordinates: {
             ...form.jobsite.coordinates,
@@ -280,7 +280,7 @@ export default function EditQuoteRequestPage() {
     if (field === 'jobsite.address') {
       setForm({
         ...form,
-        jobsite: {
+          jobsite: {
           ...form.jobsite,
           address: value
         }
@@ -314,7 +314,7 @@ export default function EditQuoteRequestPage() {
 
   const handleLabelToggle = (id: string) => {
     setForm((prev: any) => ({
-      ...prev,
+        ...prev,
       labels: prev.labels?.includes(id)
         ? prev.labels.filter((l: string) => l !== id)
         : (prev.labels?.length || 0) < 4
@@ -344,9 +344,9 @@ export default function EditQuoteRequestPage() {
 
   const handleAddressChange = async (address: string) => {
     if (!address || address.length < 5) {
-      setForm(prev => ({
+    setForm(prev => ({
         ...prev,
-        jobsite: {
+      jobsite: {
           ...prev.jobsite,
           address,
           coordinates: null
@@ -355,7 +355,7 @@ export default function EditQuoteRequestPage() {
       setGeocodingError("");
       return;
     }
-    
+
     setIsGeocoding(true);
     setGeocodingError("");
     
@@ -383,14 +383,14 @@ export default function EditQuoteRequestPage() {
         
         if (detailsData.result?.geometry?.location) {
           const { lat, lng } = detailsData.result.geometry.location;
-          setForm(prev => ({
+      setForm(prev => ({
             ...prev,
-            jobsite: {
+        jobsite: {
               ...prev.jobsite,
               address: detailsData.result.formatted_address,
               coordinates: { lat, lng }
-            }
-          }));
+        }
+      }));
           setGeocodingError("");
         }
       }
@@ -404,14 +404,14 @@ export default function EditQuoteRequestPage() {
       
       if (geocodingData.status === "OK" && geocodingData.results?.[0]?.geometry?.location) {
         const { lat, lng } = geocodingData.results[0].geometry.location;
-        setForm(prev => ({
+      setForm(prev => ({
           ...prev,
-          jobsite: {
+        jobsite: {
             ...prev.jobsite,
             address: geocodingData.results[0].formatted_address,
             coordinates: { lat, lng }
-          }
-        }));
+        }
+      }));
         setGeocodingError("");
       } else {
         setGeocodingError("Could not find coordinates for this address. Please check the address and try again.");
@@ -509,7 +509,7 @@ export default function EditQuoteRequestPage() {
   if (error) return <div className="p-8 text-red-600">{error}</div>;
   if (!form) return null;
 
-  return (
+   return (
     <>
       <Script
         src={`https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places`}
@@ -521,19 +521,27 @@ export default function EditQuoteRequestPage() {
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Form header */}
             <div className="flex items-center justify-between mb-6">
-              <h1 className="text-2xl font-semibold text-gray-900 flex items-center gap-2">
-                <Link href="/quote-requests" className="text-gray-400 hover:text-gray-600">
+              <div className="flex items-center gap-4">
+                <h1 className="text-2xl font-semibold text-gray-900 flex items-center gap-2">
+                  <Link href="/quote-requests" className="text-gray-400 hover:text-gray-600">
+                    Quote Request
+                  </Link>
+                  <span className="text-gray-400">/</span>
+                  {form?.creatorCountry}
+                  {form?.involvedCountry && (
+                    <>
+                      <span className="text-gray-400">→</span>
+                      {form.involvedCountry}
+                    </>
+                  )}
+                </h1>
+                <Link
+                  href={`/quote-requests/${params.id}/edit`}
+                  className="px-4 py-2 bg-[#e40115] text-white rounded-md hover:bg-[#c7010e] transition-colors shadow-sm"
+                >
                   Edit Quote Request
                 </Link>
-                <span className="text-gray-400">/</span>
-                {form?.creatorCountry}
-                {form?.involvedCountry && (
-                  <>
-                    <span className="text-gray-400">→</span>
-                    {form.involvedCountry}
-                  </>
-                )}
-              </h1>
+              </div>
               <div className="flex gap-4">
                 <button
                   type="button"
@@ -754,12 +762,12 @@ export default function EditQuoteRequestPage() {
                   <div>
                     <label className="block mb-1 font-medium">Notes</label>
                     <div className="space-y-2">
-                      {form.notes?.map((note: any) => (
-                        <div key={note.dateTime} className="text-sm bg-gray-50 p-2 rounded">
+                      {form.notes?.map((note: any, index: number) => (
+                        <div key={`note-${index}-${note.dateTime}`} className="text-sm bg-gray-50 p-2 rounded">
                           <div className="text-gray-500">
                             {note.user} on {new Date(note.dateTime).toLocaleString()}
                           </div>
-                          <div>{note.text}</div>
+                          {note.text}
                         </div>
                       ))}
                       {!isReadOnly && (
@@ -920,4 +928,4 @@ export default function EditQuoteRequestPage() {
       </div>
     </>
   );
-} 
+}
