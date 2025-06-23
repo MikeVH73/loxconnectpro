@@ -439,6 +439,13 @@ export default function EditQuoteRequestPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Block submission for read-only users
+    if (userProfile?.role === "readOnly") {
+      setError("You don't have permission to edit quote requests");
+      return;
+    }
+
     if (!db || !form) {
       setError("Database not initialized or form not loaded");
       return;
