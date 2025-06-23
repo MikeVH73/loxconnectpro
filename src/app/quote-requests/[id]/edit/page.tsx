@@ -82,7 +82,7 @@ export default function EditQuoteRequestPage() {
   const params = useParams();
   const router = useRouter();
   const { user, userProfile } = useAuth();
-  const isReadOnly = false; // Removed read-only restriction as requested
+  const isReadOnly = userProfile?.role === "readOnly"; // Set isReadOnly based on user role
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState<QuoteRequest | null>(null);
   const [original, setOriginal] = useState<QuoteRequest | null>(null);
@@ -110,6 +110,13 @@ export default function EditQuoteRequestPage() {
         setLoading(false);
         return;
       }
+
+      // Redirect read-only users to the quote requests list
+      if (userProfile?.role === "readOnly") {
+        router.push("/quote-requests");
+        return;
+      }
+
       try {
         const docRef = doc(db as Firestore, "quoteRequests", params.id as string);
         const snap = await getDoc(docRef);
