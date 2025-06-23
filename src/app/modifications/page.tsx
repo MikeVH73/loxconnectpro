@@ -1,9 +1,10 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { collection, getDocs, query, orderBy } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, Firestore } from 'firebase/firestore';
 import { db } from '../../../src/firebaseClient';
 import dayjs from 'dayjs';
 import { doc, getDoc } from 'firebase/firestore';
+import Link from 'next/link';
 
 export default function ModificationsPage() {
   const [mods, setMods] = useState<any[]>([]);
@@ -13,6 +14,7 @@ export default function ModificationsPage() {
   const [contactsMap, setContactsMap] = useState<any>({});
   const [customersMap, setCustomersMap] = useState<any>({});
   const [quoteRequestToCustomer, setQuoteRequestToCustomer] = useState<any>({});
+  const [quoteRequestsMap, setQuoteRequestsMap] = useState<any>({});
 
   useEffect(() => {
     const fetchMods = async () => {
@@ -27,18 +29,27 @@ export default function ModificationsPage() {
 
   useEffect(() => {
     const fetchExtraData = async () => {
+      if (!db) return;
+      
       // Fetch all labels
-      const labelsSnap = await getDocs(collection(db, 'labels'));
+      const labelsSnap = await getDocs(collection(db as Firestore, 'labels'));
       const labelsObj: any = {};
       labelsSnap.forEach(doc => { labelsObj[doc.id] = doc.data(); });
       setLabelsMap(labelsObj);
+      
       // Fetch all contacts
-      const contactsSnap = await getDocs(collection(db, 'contacts'));
+      const contactsSnap = await getDocs(collection(db as Firestore, 'contacts'));
       const contactsObj: any = {};
-      contactsSnap.forEach(doc => { contactsObj[doc.id] = doc.data(); });
+      contactsSnap.forEach(doc => { 
+        contactsObj[doc.id] = { 
+          ...doc.data(),
+          name: doc.data().name || 'Unknown Contact'  // Ensure name exists
+        }; 
+      });
       setContactsMap(contactsObj);
+      
       // Fetch all customers
-      const customersSnap = await getDocs(collection(db, 'customers'));
+      const customersSnap = await getDocs(collection(db as Firestore, 'customers'));
       const customersObj: any = {};
       customersSnap.forEach(doc => { customersObj[doc.id] = doc.data(); });
       setCustomersMap(customersObj);
@@ -48,13 +59,18 @@ export default function ModificationsPage() {
 
   useEffect(() => {
     const fetchQuoteRequests = async () => {
-      const snap = await getDocs(collection(db, 'quoteRequests'));
+      if (!db) return;
+      
+      const snap = await getDocs(collection(db as Firestore, 'quoteRequests'));
       const map: any = {};
       snap.forEach(doc => {
         const data = doc.data();
-        map[doc.id] = data.customer;
+        map[doc.id] = {
+          title: data.title || 'Untitled Quote Request',
+          customer: data.customer
+        };
       });
-      setQuoteRequestToCustomer(map);
+      setQuoteRequestsMap(map);
     };
     fetchQuoteRequests();
   }, []);
@@ -62,6 +78,7 @@ export default function ModificationsPage() {
   const filteredMods = mods
     .map(mod => {
       let customerName = '';
+      let quoteRequestTitle = '';
       // Try to get customer from changes or from quoteRequestId
       const customerChange = mod.changes?.find((chg: any) => chg.field === 'customer');
       let customerId = customerChange ? customerChange.to : undefined;
@@ -71,7 +88,11 @@ export default function ModificationsPage() {
       if (customerId && customersMap[customerId]) {
         customerName = customersMap[customerId].name;
       }
-      return { ...mod, customerName };
+      // Get quote request title
+      if (mod.quoteRequestId && quoteRequestsMap[mod.quoteRequestId]) {
+        quoteRequestTitle = quoteRequestsMap[mod.quoteRequestId].title;
+      }
+      return { ...mod, customerName, quoteRequestTitle };
     })
     .filter(mod => {
       const s = search.toLowerCase();
@@ -119,6 +140,7 @@ export default function ModificationsPage() {
                 <th className="px-4 py-2 text-left">Date/Time</th>
                 <th className="px-4 py-2 text-left">User</th>
                 <th className="px-4 py-2 text-left">Customer (Company)</th>
+                <th className="px-4 py-2 text-left">Quote Request</th>
                 <th className="px-4 py-2 text-left">Changes</th>
               </tr>
             </thead>
@@ -128,6 +150,11 @@ export default function ModificationsPage() {
                   <td className="px-4 py-2 whitespace-nowrap">{mod.dateTime?.toDate ? dayjs(mod.dateTime.toDate()).format('YYYY-MM-DD HH:mm') : ''}</td>
                   <td className="px-4 py-2 whitespace-nowrap">{mod.user}</td>
                   <td className="px-4 py-2 whitespace-nowrap">{mod.customerName || ''}</td>
+                  <td className="px-4 py-2 whitespace-nowrap">
+                    <Link href={`/quote-requests/${mod.quoteRequestId}/edit`} className="text-[#e40115] hover:underline">
+                      {mod.quoteRequestTitle || mod.quoteRequestId}
+                    </Link>
+                  </td>
                   <td className="px-4 py-2">
                     <ul className="list-disc ml-4">
                       {mod.changes?.map((chg: any, idx: number) => {
