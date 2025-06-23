@@ -36,7 +36,13 @@ export default function UsersPage() {
         const usersSnap = await getDocs(collection(db, "users"));
         const allUsers = usersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         
-        // Filter users by current user's countries (like dashboard filtering)
+        // If user is superAdmin, show all users
+        if (userProfile?.role === "superAdmin") {
+          setUsers(allUsers);
+          return;
+        }
+        
+        // Otherwise, filter users by current user's countries
         const userCountries = userProfile?.countries || [];
         const visibleUsers = userCountries.length > 0
           ? allUsers.filter((userData: any) => {
