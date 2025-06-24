@@ -294,14 +294,46 @@ export default function EditQuoteRequestPage() {
       const cleanOld = oldCatClass.replace(/[^a-zA-Z0-9]/g, '');
       const cleanNew = value.replace(/[^a-zA-Z0-9]/g, '');
       
-      // Only show warning if the numbers actually changed
-      if (cleanOld !== cleanNew) {
-        const confirmed = window.confirm(
-          `Are you sure you want to change the Cat-Class from "${oldCatClass}" to "${value}"? This change cannot be undone.`
-        );
-        if (!confirmed) {
-          return; // Don't update if user cancels
+      // Only show warning if:
+      // 1. The numbers actually changed
+      // 2. The old value had at least 3 characters (to avoid warnings while typing)
+      // 3. The new value is "complete" (hasn't changed in the last 2 seconds)
+      if (cleanOld !== cleanNew && cleanOld.length >= 3) {
+        // Clear existing timeout
+        if (saveTimeoutRef.current) {
+          clearTimeout(saveTimeoutRef.current);
         }
+        
+        // Set new timeout to show confirmation after 2 seconds of no changes
+        saveTimeoutRef.current = setTimeout(() => {
+          const confirmed = window.confirm(
+            `Are you sure you want to change the Cat-Class from "${oldCatClass}" to "${value}"? This change cannot be undone.`
+          );
+          if (!confirmed) {
+            // Revert the change if not confirmed
+            setForm((prevForm: QuoteRequest | null) => {
+              if (!prevForm) return prevForm;
+              const revertedProducts = [...prevForm.products];
+              revertedProducts[idx] = {
+                ...revertedProducts[idx],
+                catClass: oldCatClass
+              };
+              return {
+                ...prevForm,
+                products: revertedProducts
+              };
+            });
+            return;
+          } else {
+            // If confirmed, save the change
+            saveChanges(updatedForm);
+          }
+        }, 2000);
+        
+        // Update the form immediately but don't save yet
+        setForm((prevForm: QuoteRequest | null) => prevForm ? updatedForm : null);
+        setHasUnsavedChanges(true);
+        return;
       }
     }
     
