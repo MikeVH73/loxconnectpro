@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "./AuthProvider";
+import Image from "next/image";
 
 const navItems = [
   { label: "Dashboard", href: "/dashboard" },
@@ -38,20 +39,18 @@ export default function Sidebar() {
 
   return (
     <aside className="w-64 bg-white border-r border-gray-200 flex flex-col h-screen shadow-md">
-      <div className="flex flex-col items-center justify-center border-b border-gray-100 py-4 gap-2">
-        <div className="flex items-center justify-center w-20 h-20">
-          <img
-            src="https://i.ibb.co/60Q41WjS/Logo-rond-loxam-1.png"
+      <div className="flex flex-col items-center justify-center border-b border-gray-100 py-3">
+        <div className="w-44 h-44 relative -my-2">
+          <Image
+            src="/logo1.png"
             alt="LoxConnect Logo"
-            width={64}
-            height={64}
-            className="rounded-full bg-white shadow object-contain"
-            style={{ display: 'block' }}
+            fill
+            style={{ objectFit: 'contain' }}
+            priority
           />
         </div>
-        <span className="text-2xl font-bold text-[#e40115] tracking-wide text-center">LoxConnect PRO</span>
       </div>
-      <nav className="flex-1 py-6 overflow-y-auto">
+      <nav className="flex-1 py-3 overflow-y-auto">
         <ul className="space-y-1">
           {filteredNavItems.map((item) => (
             <li key={item.href}>

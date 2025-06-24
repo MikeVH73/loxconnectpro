@@ -80,12 +80,14 @@ export default function QuoteRequestsPage() {
     <div className="p-8">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-[#e40115]">Quote Requests</h1>
-        <Link
-          href="/quote-requests/new"
-          className="bg-[#e40115] text-white px-4 py-2 rounded hover:bg-red-700 transition"
-        >
-          + New Quote Request
-        </Link>
+        {userProfile?.role !== "readOnly" && (
+          <Link
+            href="/quote-requests/new"
+            className="bg-[#e40115] text-white px-4 py-2 rounded hover:bg-red-700 transition"
+          >
+            + New Quote Request
+          </Link>
+        )}
       </div>
       {loading ? (
         <div>Loading...</div>
@@ -100,7 +102,7 @@ export default function QuoteRequestsPage() {
                   <td colSpan={6} className="px-4 py-4">
                     <div
                       className="flex flex-col gap-2 bg-gray-50 rounded-lg p-4 shadow-sm cursor-pointer hover:bg-gray-100 transition"
-                      onClick={() => window.location.href = `/quote-requests/${qr.id}/edit`}
+                      onClick={() => window.location.href = userProfile?.role === "readOnly" ? `/quote-requests/${qr.id}` : `/quote-requests/${qr.id}/edit`}
                     >
                       <div className="flex items-center gap-4">
                         <span className="font-bold text-lg">{qr.title}</span>

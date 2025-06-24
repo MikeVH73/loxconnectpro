@@ -1,192 +1,402 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { doc, getDoc, collection, getDocs, query, where } from "firebase/firestore";
+import Link from "next/link";
+import { doc, getDoc, Firestore } from "firebase/firestore";
 import { db } from "../../../firebaseClient";
-import dayjs from "dayjs";
-import FileUpload from "../../components/FileUpload";
-import FileUploadSimple from "../../components/FileUploadSimple";
-import ArchivedMessaging from "../../components/ArchivedMessaging";
 import { useAuth } from "../../AuthProvider";
+import { useCustomers } from "../../hooks/useCustomers";
+import { useMessages } from "../../hooks/useMessages";
+import MessagingPanel from "../../components/MessagingPanel";
 
-export default function QuoteRequestDetailPage() {
+interface QuoteRequest {
+  id: string;
+  title: string;
+  creatorCountry: string;
+  involvedCountry: string;
+  customer: string;
+  status: string;
+  products: any[];
+  jobsite: {
+    address: string;
+    coordinates: any;
+  };
+  startDate: string;
+  endDate: string | null;
+  customerDecidesEnd: boolean;
+  jobsiteContactId: string;
+  jobsiteContact: any;
+  labels: string[];
+  notes: any[];
+  attachments: any[];
+  createdAt: any;
+  updatedAt: any;
+  waitingForAnswer?: boolean;
+  urgent?: boolean;
+  problems?: boolean;
+  targetCountry?: string;
+}
+
+export default function QuoteRequestPage() {
   const params = useParams();
   const router = useRouter();
-  const { userProfile } = useAuth();
-  const [data, setData] = useState<any>(null);
-  const [customers, setCustomers] = useState<any[]>([]);
-  const [contacts, setContacts] = useState<any[]>([]);
+  const { user, userProfile } = useAuth();
   const [loading, setLoading] = useState(true);
-  const [attachments, setAttachments] = useState<any[]>([]);
+  const [quoteRequest, setQuoteRequest] = useState<QuoteRequest | null>(null);
+  const [error, setError] = useState("");
+  const { customers } = useCustomers();
+  const { messages, loading: messagesLoading, error: messagesError, sendMessage } = useMessages(params.id as string);
 
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
-      const docRef = doc(db, "quoteRequests", params.id as string);
-      const snap = await getDoc(docRef);
-      let qr: any = null;
-      if (snap.exists()) {
-        qr = { ...snap.data(), id: snap.id };
-        setData(qr);
-        setAttachments(qr.attachments || []);
+      if (!db) {
+        setError("Database not initialized");
+        setLoading(false);
+        return;
       }
-      const custSnap = await getDocs(collection(db, "customers"));
-      setCustomers(custSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      if (qr?.customer) {
-        const q = query(collection(db, "contacts"), where("customer", "==", qr.customer));
-        const contactSnap = await getDocs(q);
-        setContacts(contactSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+
+      try {
+        const docRef = doc(db as Firestore, "quoteRequests", params.id as string);
+        const snap = await getDoc(docRef);
+        if (snap.exists()) {
+          const data = snap.data();
+          const formattedData: QuoteRequest = {
+            id: snap.id,
+            title: data.title || "",
+            creatorCountry: data.creatorCountry || "",
+            involvedCountry: data.involvedCountry || "",
+            customer: data.customer || "",
+            status: data.status || "",
+            products: data.products || [],
+            jobsite: {
+              address: data.jobsite?.address || data.jobsiteAddress || "",
+              coordinates: data.jobsite?.coordinates || null
+            },
+            startDate: data.startDate || "",
+            endDate: data.endDate || null,
+            customerDecidesEnd: data.customerDecidesEnd || false,
+            jobsiteContactId: data.jobsiteContactId || "",
+            jobsiteContact: data.jobsiteContact || null,
+            labels: data.labels || [],
+            notes: data.notes || [],
+            attachments: data.attachments || [],
+            createdAt: data.createdAt,
+            updatedAt: data.updatedAt,
+            waitingForAnswer: data.waitingForAnswer || false,
+            urgent: data.urgent || false,
+            problems: data.problems || false,
+            targetCountry: data.targetCountry || ""
+          };
+          setQuoteRequest(formattedData);
+        } else {
+          setError("Quote Request not found");
+        }
+      } catch (err) {
+        console.error("Error fetching quote request:", err);
+        setError("Failed to load quote request");
       }
       setLoading(false);
     };
+
     fetchData();
   }, [params.id]);
 
-  const getCustomerName = (id: string) => {
-    const cust = customers.find((c: any) => c.id === id);
-    return cust ? cust.name : id;
+  const handleSendMessage = async (text: string) => {
+    if (!user?.email || !userProfile?.businessUnit) {
+      throw new Error('Cannot send message: User not authenticated');
+    }
+    await sendMessage(text, user.email, userProfile.businessUnit);
   };
 
-  if (loading) return <div className="p-8">Loading...</div>;
-  if (!data) return <div className="p-8 text-red-600">Quote Request not found.</div>;
+  if (loading) {
+    return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+  }
+
+  if (error) {
+    return <div className="min-h-screen flex items-center justify-center text-red-600">{error}</div>;
+  }
+
+  if (!quoteRequest) {
+    return <div className="min-h-screen flex items-center justify-center">Quote Request not found</div>;
+  }
 
   return (
-    <div className="w-full p-8 bg-white mt-8">
-      <div className="flex items-center justify-between mb-8 border-b pb-4">
-        <div className="flex items-center gap-8">
-          <h1 className="text-3xl font-bold text-[#e40115]">Quote Request</h1>
-          <div className="flex items-center gap-3 text-xl">
-            <span>{data.creatorCountry}</span>
-            <span>&rarr;</span>
-            <span>{data.involvedCountry || "..."}</span>
-          </div>
-          {data.status && ['Won', 'Lost', 'Cancelled'].includes(data.status) && (
-            <div className="flex items-center gap-2">
-              <span className="px-3 py-1 bg-orange-100 text-orange-700 rounded-full text-sm font-medium border border-orange-200">
-                📁 {data.status}
-              </span>
-              <span className="text-sm text-gray-600">• Message history preserved</span>
+    <div className="flex h-full">
+      {/* Main content */}
+      <div className="flex-1 p-6 overflow-auto">
+        <div className="space-y-6">
+          {/* Header */}
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-4">
+              <h1 className="text-2xl font-semibold text-gray-900 flex items-center gap-2">
+                <Link href="/quote-requests" className="text-gray-400 hover:text-gray-600">
+                  Quote Request
+                </Link>
+                <span className="text-gray-400">/</span>
+                {quoteRequest.creatorCountry}
+                {quoteRequest.involvedCountry && (
+                  <>
+                    <span className="text-gray-400">→</span>
+                    {quoteRequest.involvedCountry}
+                  </>
+                )}
+              </h1>
             </div>
-          )}
-        </div>
-        <button
-          type="button"
-          className="bg-gray-200 text-gray-700 px-8 py-3 rounded text-lg font-semibold hover:bg-gray-300 transition"
-          onClick={() => router.push("/quote-requests")}
-        >
-          Back
-        </button>
-      </div>
-      <form className="grid grid-cols-[2fr_2fr_1.1fr] gap-8 w-full items-start">
-        {/* Left column: form fields (read-only) */}
-        <div className="space-y-6 bg-white p-6 rounded shadow border">
-          <div>
-            <label className="block mb-1 font-medium">Title</label>
-            <input className="w-full border rounded px-3 py-2 bg-gray-100" value={data.title || ""} readOnly />
+            <button
+              type="button"
+              onClick={() => router.push("/quote-requests")}
+              className="px-6 py-2 text-gray-700 bg-gray-100 rounded hover:bg-gray-200"
+            >
+              Back to List
+            </button>
           </div>
-          <div>
-            <label className="block mb-1 font-medium">Creator Country</label>
-            <input className="w-full border rounded px-3 py-2 bg-gray-100" value={data.creatorCountry || ""} readOnly />
-          </div>
-          <div>
-            <label className="block mb-1 font-medium">Involved Country</label>
-            <input className="w-full border rounded px-3 py-2 bg-gray-100" value={data.involvedCountry || ""} readOnly />
-          </div>
-          <div>
-            <label className="block mb-1 font-medium">Customer</label>
-            <input className="w-full border rounded px-3 py-2 bg-gray-100" value={getCustomerName(data.customer)} readOnly />
-          </div>
-          <div>
-            <label className="block mb-1 font-medium">Status</label>
-            <input className="w-full border rounded px-3 py-2 bg-gray-100" value={data.status || ""} readOnly />
-          </div>
-          <div>
-            <label className="block mb-1 font-medium">Jobsite Address</label>
-            <input className="w-full border rounded px-3 py-2 bg-gray-100" value={data.jobsite?.address || ""} readOnly />
-            <div className="flex gap-4 mt-2">
-              <div className="flex-1">
-                <label className="block text-xs text-gray-500">Latitude</label>
-                <input className="w-full border rounded px-3 py-2 bg-gray-100" value={data.jobsite?.lat ?? ""} readOnly />
+
+          {/* Content */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div className="flex flex-wrap gap-4 items-center mb-6">
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={quoteRequest.waitingForAnswer}
+                  disabled
+                  className="h-5 w-5 text-blue-600"
+                />
+                <label className="text-sm text-gray-700">
+                  Waiting for Answer
+                </label>
               </div>
-              <div className="flex-1">
-                <label className="block text-xs text-gray-500">Longitude</label>
-                <input className="w-full border rounded px-3 py-2 bg-gray-100" value={data.jobsite?.lng ?? ""} readOnly />
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={quoteRequest.urgent}
+                  disabled
+                  className="h-5 w-5 text-red-600"
+                />
+                <label className="text-sm text-gray-700">
+                  Urgent
+                </label>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={quoteRequest.problems}
+                  disabled
+                  className="h-5 w-5 text-yellow-600"
+                />
+                <label className="text-sm text-gray-700">
+                  Problems
+                </label>
               </div>
             </div>
-          </div>
-          <div>
-            <label className="block mb-1 font-medium">Jobsite Contact</label>
-            <input className="w-full border rounded px-3 py-2 bg-gray-100" value={contacts.find(c => c.id === data.jobsiteContactId)?.name || ""} readOnly />
-          </div>
-        </div>
-        {/* Middle column: products, notes, dates (read-only) */}
-        <div className="space-y-6 bg-white p-6 rounded shadow border">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block mb-1 font-medium">Start Date</label>
-              <input type="date" className="w-full border rounded px-3 py-2 bg-gray-100" value={data.startDate || ""} readOnly />
-            </div>
-            <div>
-              <label className="block mb-1 font-medium">End Date</label>
-              <input type="date" className="w-full border rounded px-3 py-2 bg-gray-100" value={data.endDate || ""} readOnly />
-            </div>
-          </div>
-          <div className="flex items-center gap-2 mb-2">
-            <input type="checkbox" id="customerDecidesEnd" checked={data.customerDecidesEnd} readOnly />
-            <label htmlFor="customerDecidesEnd" className="text-sm">Customer decides end date</label>
-          </div>
-          <div>
-            <label className="block mb-1 font-medium">Products</label>
-            <div className="space-y-2">
-              {(data.products || []).map((product: any, idx: number) => (
-                <div key={idx} className="flex gap-2 items-end">
-                  <input className="flex-1 border rounded px-3 py-2 bg-gray-100" value={product.catClass} readOnly />
-                  <input className="flex-2 border rounded px-3 py-2 bg-gray-100" value={product.description} readOnly />
-                  <input className="w-24 border rounded px-3 py-2 bg-gray-100" value={product.quantity} readOnly />
+
+            <div className="grid grid-cols-[1fr_2fr_1fr] gap-8">
+              {/* Left Column */}
+              <div className="space-y-6">
+                <div>
+                  <label className="block mb-1 font-medium">Title</label>
+                  <input
+                    type="text"
+                    value={quoteRequest.title}
+                    disabled
+                    className="w-full p-2 border rounded bg-gray-50"
+                  />
                 </div>
-              ))}
-            </div>
-          </div>
-          <div>
-            <label className="block mb-1 font-medium">Notes</label>
-            <div className="space-y-2">
-              {(data.notes || []).map((note: any, idx: number) => (
-                <div key={idx} className="flex items-center gap-2 bg-gray-50 rounded px-3 py-2">
-                  <div className="flex-1">
-                    <span className="block text-sm text-gray-800">{note.text}</span>
-                    <span className="block text-xs text-gray-500">By: {note.author}</span>
+                <div>
+                  <label className="block mb-1 font-medium">Creator Country</label>
+                  <input
+                    type="text"
+                    value={quoteRequest.creatorCountry}
+                    disabled
+                    className="w-full p-2 border rounded bg-gray-50"
+                  />
+                </div>
+                <div>
+                  <label className="block mb-1 font-medium">Target Country</label>
+                  <input
+                    type="text"
+                    value={quoteRequest.involvedCountry || quoteRequest.targetCountry || ""}
+                    disabled
+                    className="w-full p-2 border rounded bg-gray-50"
+                  />
+                </div>
+                <div>
+                  <label className="block mb-1 font-medium">Customer</label>
+                  <input
+                    type="text"
+                    value={customers.find(c => c.id === quoteRequest.customer)?.name || ""}
+                    disabled
+                    className="w-full p-2 border rounded bg-gray-50"
+                  />
+                </div>
+                <div>
+                  <label className="block mb-1 font-medium">Status</label>
+                  <input
+                    type="text"
+                    value={quoteRequest.status}
+                    disabled
+                    className="w-full p-2 border rounded bg-gray-50"
+                  />
+                </div>
+              </div>
+
+              {/* Middle Column */}
+              <div className="space-y-6">
+                <div>
+                  <label className="block mb-1 font-medium">Products</label>
+                  {quoteRequest.products?.map((product: any, idx: number) => (
+                    <div key={idx} className="flex gap-2 mb-2">
+                      <input
+                        type="text"
+                        value={product.catClass || ""}
+                        disabled
+                        placeholder="Cat. Class"
+                        className="w-[150px] p-2 border rounded bg-gray-50"
+                      />
+                      <input
+                        type="text"
+                        value={product.description || ""}
+                        disabled
+                        placeholder="Description"
+                        className="flex-1 p-2 border rounded bg-gray-50"
+                      />
+                      <input
+                        type="number"
+                        value={product.quantity || ""}
+                        disabled
+                        placeholder="Qty"
+                        className="w-20 p-2 border rounded bg-gray-50"
+                      />
+                    </div>
+                  ))}
+                </div>
+
+                <div>
+                  <label className="block mb-1 font-medium">Notes</label>
+                  <div className="space-y-2">
+                    {quoteRequest.notes?.map((note: any, index: number) => (
+                      <div key={`note-${index}-${note.dateTime}`} className="text-sm bg-gray-50 p-2 rounded">
+                        <div className="text-gray-500">
+                          {note.user} on {new Date(note.dateTime).toLocaleString()}
+                        </div>
+                        {note.text}
+                      </div>
+                    ))}
                   </div>
                 </div>
-              ))}
+
+                <div>
+                  <label className="block mb-1 font-medium">Attachments</label>
+                  <div className="space-y-2">
+                    {quoteRequest.attachments?.map((attachment: any, index: number) => (
+                      <div key={index} className="flex items-center gap-2">
+                        <a
+                          href={attachment.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:text-blue-800"
+                        >
+                          {attachment.name}
+                        </a>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Column */}
+              <div className="space-y-6">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block mb-1 font-medium">Start Date</label>
+                    <input
+                      type="date"
+                      value={quoteRequest.startDate}
+                      disabled
+                      className="w-full p-2 border rounded bg-gray-50"
+                    />
+                  </div>
+                  <div>
+                    <label className="block mb-1 font-medium">End Date</label>
+                    <div>
+                      <input
+                        type="date"
+                        value={quoteRequest.endDate || ""}
+                        disabled
+                        className="w-full p-2 border rounded bg-gray-50"
+                      />
+                      {quoteRequest.customerDecidesEnd && (
+                        <div className="mt-1 text-sm text-gray-600">
+                          Customer decides end date
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block mb-1 font-medium">Jobsite Address</label>
+                  <input
+                    type="text"
+                    value={quoteRequest.jobsite.address}
+                    disabled
+                    className="w-full p-2 border rounded bg-gray-50"
+                  />
+                </div>
+
+                {quoteRequest.jobsite.coordinates && (
+                  <div>
+                    <label className="block mb-1 font-medium">Coordinates</label>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <input
+                          type="text"
+                          value={quoteRequest.jobsite.coordinates.lat || ""}
+                          disabled
+                          className="w-full p-2 border rounded bg-gray-50"
+                          placeholder="Latitude"
+                        />
+                      </div>
+                      <div>
+                        <input
+                          type="text"
+                          value={quoteRequest.jobsite.coordinates.lng || ""}
+                          disabled
+                          className="w-full p-2 border rounded bg-gray-50"
+                          placeholder="Longitude"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block mb-1 font-medium">Jobsite Contact</label>
+                  <input
+                    type="text"
+                    value={quoteRequest.jobsiteContact ? `${quoteRequest.jobsiteContact.name} (${quoteRequest.jobsiteContact.phone})` : ""}
+                    disabled
+                    className="w-full p-2 border rounded bg-gray-50"
+                  />
+                </div>
+              </div>
             </div>
           </div>
-          {/* File upload section */}
-          <div className="mt-4">
-            <label className="block mb-1 font-medium">Attachments</label>
-            <FileUploadSimple
-              quoteRequestId={params.id as string}
-              files={attachments}
-              onFilesChange={setAttachments}
-              currentUser={userProfile?.name || "User"}
-              readOnly={true} // Read-only for detail view
-            />
-          </div>
         </div>
-        {/* Right column: Archived Message History */}
-        <div className="flex flex-col bg-white rounded shadow border min-h-[400px] w-96">
-          <div className="p-4 border-b text-xs text-gray-400 bg-gray-50">
-            Created: {data.createdAt?.toDate ? dayjs(data.createdAt.toDate()).format('YYYY-MM-DD HH:mm') : ''}<br />
-            Last Updated: {data.updatedAt ? dayjs(data.updatedAt).format('YYYY-MM-DD HH:mm') : ''}
-          </div>
-          <div className="flex-1">
-            <ArchivedMessaging
-              quoteRequestId={params.id as string}
-              userCountries={userProfile?.countries || []}
-              quoteRequest={data}
-            />
-          </div>
-        </div>
-      </form>
+      </div>
+
+      {/* Messaging panel */}
+      <div className="w-[400px] border-l border-gray-200 bg-white">
+        <MessagingPanel
+          quoteRequestId={params.id as string}
+          messages={messages}
+          onSendMessage={handleSendMessage}
+          loading={messagesLoading}
+          error={messagesError}
+        />
+      </div>
     </div>
   );
 } 

@@ -96,13 +96,12 @@ export default function DashboardMessaging({ quoteRequestId, onClose }: Dashboar
       );
 
       const unsubscribe = onSnapshot(q, (snapshot) => {
-        // Convert messages and reverse to show oldest first
+        // Convert messages without reversing
         const newMessages = snapshot.docs
           .map(doc => ({
             id: doc.id,
             ...doc.data(),
-          }))
-          .reverse() as Message[];
+          })) as Message[];
 
         setMessages(newMessages);
         setLoading(false);
