@@ -288,13 +288,20 @@ export default function EditQuoteRequestPage() {
       updatedAt: new Date().toISOString()
     };
     
-    // If cat-class is being changed and it had a previous value, show warning
-    if (field === 'catClass' && oldCatClass && oldCatClass !== value) {
-      const confirmed = window.confirm(
-        `Are you sure you want to change the Cat-Class from "${oldCatClass}" to "${value}"? This change cannot be undone.`
-      );
-      if (!confirmed) {
-        return; // Don't update if user cancels
+    // Only show warning if cat-class is being changed significantly
+    if (field === 'catClass' && oldCatClass) {
+      // Remove any non-alphanumeric characters for comparison
+      const cleanOld = oldCatClass.replace(/[^a-zA-Z0-9]/g, '');
+      const cleanNew = value.replace(/[^a-zA-Z0-9]/g, '');
+      
+      // Only show warning if the numbers actually changed
+      if (cleanOld !== cleanNew) {
+        const confirmed = window.confirm(
+          `Are you sure you want to change the Cat-Class from "${oldCatClass}" to "${value}"? This change cannot be undone.`
+        );
+        if (!confirmed) {
+          return; // Don't update if user cancels
+        }
       }
     }
     
