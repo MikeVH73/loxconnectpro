@@ -73,6 +73,16 @@ interface Contact {
   isFirstContact?: boolean;
 }
 
+interface Customer {
+  id: string;
+  name: string;
+  address: string;
+  contact?: string;
+  phone?: string;
+  email?: string;
+  customerNumbers?: { [country: string]: string };
+}
+
 const statuses = ["In Progress", "Won", "Lost", "Cancelled"];
 
 // Add state for archived status
@@ -125,6 +135,7 @@ export default function NewQuoteRequestPage() {
   const [isGeocoding, setIsGeocoding] = useState(false);
   const [geocodingError, setGeocodingError] = useState("");
   const [isGoogleMapsLoaded, setIsGoogleMapsLoaded] = useState(false);
+  const [customerNumber, setCustomerNumber] = useState("");
 
   // Initialize Google Maps
   useEffect(() => {
@@ -277,6 +288,20 @@ export default function NewQuoteRequestPage() {
     }
   }, [db]);
 
+  // Update customer number when involved country or customer changes
+  useEffect(() => {
+    if (customerId && involvedCountry) {
+      const selectedCustomer = customers.find(c => c.id === customerId);
+      if (selectedCustomer?.customerNumbers?.[involvedCountry]) {
+        setCustomerNumber(selectedCustomer.customerNumbers[involvedCountry]);
+      } else {
+        setCustomerNumber("");
+      }
+    } else {
+      setCustomerNumber("");
+    }
+  }, [customerId, involvedCountry, customers]);
+
   // Form submission handler
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -304,7 +329,8 @@ export default function NewQuoteRequestPage() {
         title,
         creatorCountry,
         involvedCountry,
-        customer: customerId, // Changed from customerId to customer to match interface
+        customer: customerId,
+        customerNumber,
         status,
         isArchived,
         products,
@@ -316,7 +342,7 @@ export default function NewQuoteRequestPage() {
         endDate: customerDecidesEnd ? null : endDate,
         customerDecidesEnd,
         jobsiteContactId,
-        jobsiteContact: jobsiteContactData, // Add the full contact data
+        jobsiteContact: jobsiteContactData,
         labels: selectedLabels,
         notes,
         attachments,
@@ -558,6 +584,21 @@ export default function NewQuoteRequestPage() {
             </button>
           </div>
         </div>
+
+        {/* Customer Number */}
+        {customerId && involvedCountry && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700">
+              Customer Number for {involvedCountry}
+            </label>
+            <input
+              type="text"
+              value={customerNumber}
+              readOnly
+              className="mt-1 block w-full rounded-md border-gray-300 bg-gray-100 shadow-sm"
+            />
+          </div>
+        )}
 
         {/* Products */}
         <div>

@@ -15,6 +15,7 @@ interface QuoteRequest {
   creatorCountry: string;
   involvedCountry: string;
   customer: string;
+  customerNumber?: string;
   status: string;
   products: any[];
   jobsite: {
@@ -35,6 +36,16 @@ interface QuoteRequest {
   urgent?: boolean;
   problems?: boolean;
   targetCountry?: string;
+}
+
+interface Customer {
+  id: string;
+  name: string;
+  address: string;
+  contact?: string;
+  phone?: string;
+  email?: string;
+  customerNumbers?: { [country: string]: string };
 }
 
 export default function QuoteRequestPage() {
@@ -67,6 +78,7 @@ export default function QuoteRequestPage() {
             creatorCountry: data.creatorCountry || "",
             involvedCountry: data.involvedCountry || "",
             customer: data.customer || "",
+            customerNumber: data.customerNumber || "",
             status: data.status || "",
             products: data.products || [],
             jobsite: {
@@ -231,6 +243,19 @@ export default function QuoteRequestPage() {
                     className="w-full p-2 border rounded bg-gray-50"
                   />
                 </div>
+                {quoteRequest.customerNumber && (
+                  <div>
+                    <label className="block mb-1 font-medium">
+                      Customer Number for {quoteRequest.involvedCountry}
+                    </label>
+                    <input
+                      type="text"
+                      value={quoteRequest.customerNumber}
+                      disabled
+                      className="w-full p-2 border rounded bg-gray-50"
+                    />
+                  </div>
+                )}
                 <div>
                   <label className="block mb-1 font-medium">Status</label>
                   <input

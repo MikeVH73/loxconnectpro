@@ -12,6 +12,7 @@ interface Customer {
   contact?: string;
   phone?: string;
   email?: string;
+  customerNumbers?: { [country: string]: string };
 }
 
 export default function CustomersPage() {
@@ -20,6 +21,7 @@ export default function CustomersPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
+  const [countries, setCountries] = useState<string[]>([]);
   const [deleteError, setDeleteError] = useState("");
   const [deleteSuccess, setDeleteSuccess] = useState("");
   const [editError, setEditError] = useState("");
@@ -29,9 +31,20 @@ export default function CustomersPage() {
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
-      const q = query(collection(db, "customers"), orderBy("name"));
-      const snapshot = await getDocs(q);
-      setCustomers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Customer)));
+      const [customersSnap, countriesSnap] = await Promise.all([
+        getDocs(query(collection(db, "customers"), orderBy("name"))),
+        getDocs(collection(db, "countries"))
+      ]);
+      
+      const countriesList = countriesSnap.docs.map(doc => doc.data().name);
+      setCountries(countriesList);
+      
+      setCustomers(customersSnap.docs.map(doc => ({ 
+        id: doc.id, 
+        ...doc.data(),
+        customerNumbers: doc.data().customerNumbers || {} 
+      } as Customer)));
+      
       setLoading(false);
     };
     fetchData();
@@ -69,6 +82,7 @@ export default function CustomersPage() {
         contact: editingCustomer.contact || "",
         phone: editingCustomer.phone || "",
         email: editingCustomer.email || "",
+        customerNumbers: editingCustomer.customerNumbers || {}
       });
 
       setCustomers(prev => 
@@ -141,6 +155,7 @@ export default function CustomersPage() {
                 <th className="px-4 py-2 text-left">Name</th>
                 <th className="px-4 py-2 text-left">Address</th>
                 <th className="px-4 py-2 text-left">Contact</th>
+                <th className="px-4 py-2 text-left">Customer Numbers</th>
                 <th className="px-4 py-2 text-left">Actions</th>
               </tr>
             </thead>
@@ -150,6 +165,15 @@ export default function CustomersPage() {
                   <td className="px-4 py-2 font-medium">{c.name}</td>
                   <td className="px-4 py-2">{c.address}</td>
                   <td className="px-4 py-2">{c.contact || '—'}</td>
+                  <td className="px-4 py-2">
+                    <div className="flex flex-col gap-1">
+                      {Object.entries(c.customerNumbers || {}).map(([country, number]) => (
+                        <div key={country} className="text-sm">
+                          <span className="font-medium">{country}:</span> {number}
+                        </div>
+                      ))}
+                    </div>
+                  </td>
                   <td className="px-4 py-2">
                     <div className="flex gap-2">
                       <Link href={`/customers/${c.id}`} className="text-blue-600 hover:text-blue-800">
@@ -212,53 +236,81 @@ export default function CustomersPage() {
       {/* Edit Modal */}
       {showEditModal && editingCustomer && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full">
+          <div className="bg-white rounded-lg p-6 max-w-2xl w-full">
             <h3 className="text-lg font-semibold mb-4">Edit Customer</h3>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-1">Name</label>
-                <input
-                  type="text"
-                  value={editingCustomer.name}
-                  onChange={(e) => setEditingCustomer({ ...editingCustomer, name: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                />
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">Name</label>
+                  <input
+                    type="text"
+                    value={editingCustomer.name}
+                    onChange={(e) => setEditingCustomer({ ...editingCustomer, name: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Address</label>
+                  <input
+                    type="text"
+                    value={editingCustomer.address}
+                    onChange={(e) => setEditingCustomer({ ...editingCustomer, address: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Contact Name</label>
+                  <input
+                    type="text"
+                    value={editingCustomer.contact || ''}
+                    onChange={(e) => setEditingCustomer({ ...editingCustomer, contact: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Phone</label>
+                  <input
+                    type="text"
+                    value={editingCustomer.phone || ''}
+                    onChange={(e) => setEditingCustomer({ ...editingCustomer, phone: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Email</label>
+                  <input
+                    type="email"
+                    value={editingCustomer.email || ''}
+                    onChange={(e) => setEditingCustomer({ ...editingCustomer, email: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  />
+                </div>
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">Address</label>
-                <input
-                  type="text"
-                  value={editingCustomer.address}
-                  onChange={(e) => setEditingCustomer({ ...editingCustomer, address: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Contact Name</label>
-                <input
-                  type="text"
-                  value={editingCustomer.contact || ''}
-                  onChange={(e) => setEditingCustomer({ ...editingCustomer, contact: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Phone</label>
-                <input
-                  type="text"
-                  value={editingCustomer.phone || ''}
-                  onChange={(e) => setEditingCustomer({ ...editingCustomer, phone: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Email</label>
-                <input
-                  type="email"
-                  value={editingCustomer.email || ''}
-                  onChange={(e) => setEditingCustomer({ ...editingCustomer, email: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                />
+                <label className="block text-sm font-medium mb-2">Customer Numbers</label>
+                <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                  {countries.map(country => (
+                    <div key={country} className="flex gap-2 items-center">
+                      <span className="w-24 text-sm font-medium">{country}:</span>
+                      <input
+                        type="text"
+                        value={editingCustomer.customerNumbers?.[country] || ''}
+                        onChange={(e) => {
+                          const newNumbers = {
+                            ...editingCustomer.customerNumbers,
+                            [country]: e.target.value
+                          };
+                          setEditingCustomer({
+                            ...editingCustomer,
+                            customerNumbers: newNumbers
+                          });
+                        }}
+                        placeholder={`${country} Number`}
+                        className="flex-1 px-3 py-1 border border-gray-300 rounded-md text-sm"
+                      />
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
             <div className="flex justify-end gap-4 mt-6">

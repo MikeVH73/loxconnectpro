@@ -44,12 +44,23 @@ interface Note {
   dateTime: string;
 }
 
+interface Customer {
+  id: string;
+  name: string;
+  address: string;
+  contact?: string;
+  phone?: string;
+  email?: string;
+  customerNumbers?: { [country: string]: string };
+}
+
 interface QuoteRequest {
   id: string;
   title: string;
   creatorCountry: string;
   involvedCountry: string;
   customer: string;
+  customerNumber?: string;
   status: string;
   products: Product[];
   jobsite: Jobsite;
@@ -140,6 +151,7 @@ export default function EditQuoteRequestPage() {
   const [isGoogleMapsLoaded, setIsGoogleMapsLoaded] = useState(false);
   const addressInputRef = useRef<HTMLInputElement>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout>();
+  const [customerNumber, setCustomerNumber] = useState("");
 
   // Add navigation warning
   useEffect(() => {
@@ -424,7 +436,8 @@ export default function EditQuoteRequestPage() {
             problems: data.problems || false,
             targetCountry: data.targetCountry || "",
             createdBy: data.createdBy || "",
-            updatedBy: data.updatedBy || ""
+            updatedBy: data.updatedBy || "",
+            customerNumber: data.customerNumber || ""
           };
           setForm(formattedData);
           setOriginal(formattedData);
@@ -547,6 +560,20 @@ export default function EditQuoteRequestPage() {
       setIsGoogleMapsLoaded(true);
     }
   }, []);
+
+  // Update customer number when involved country or customer changes
+  useEffect(() => {
+    if (form?.customer && form?.involvedCountry) {
+      const selectedCustomer = customers.find(c => c.id === form.customer);
+      if (selectedCustomer?.customerNumbers?.[form.involvedCountry]) {
+        setCustomerNumber(selectedCustomer.customerNumbers[form.involvedCountry]);
+      } else {
+        setCustomerNumber(form.customerNumber || "");
+      }
+    } else {
+      setCustomerNumber("");
+    }
+  }, [form?.customer, form?.involvedCountry, customers, form?.customerNumber]);
 
   const handleAddProduct = () => {
     setForm((prev: QuoteRequest | null) => {
@@ -840,6 +867,7 @@ export default function EditQuoteRequestPage() {
       
       const updatedForm = {
         ...form,
+        customerNumber,
         updatedAt: new Date().toISOString(),
         updatedBy: user?.email || ""
       };
@@ -1300,6 +1328,21 @@ export default function EditQuoteRequestPage() {
                           </button>
                         )}
                       </div>
+
+                      {/* Customer Number */}
+                      {form?.customer && form?.involvedCountry && (
+                        <div>
+                          <label className="block mb-1 font-medium">
+                            Customer Number for {form.involvedCountry}
+                          </label>
+                          <input
+                            type="text"
+                            value={customerNumber}
+                            readOnly
+                            className="w-full p-2 border rounded bg-gray-50"
+                          />
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
