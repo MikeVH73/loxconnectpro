@@ -1,12 +1,6 @@
-import type { Metadata } from "next";
-
-export const metadata: Metadata = {
-  title: "LoxConnect Pro",
-  description: "International quote request management system with real-time messaging",
-};
-
 "use client";
 
+import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import AuthProvider from "./AuthProvider";
@@ -17,6 +11,11 @@ const inter = Inter({
   subsets: ["latin"],
   variable: "--font-mono",
 });
+
+export const metadata: Metadata = {
+  title: "LoxConnect Pro",
+  description: "International quote request management system with real-time messaging",
+};
 
 export default function RootLayout({
   children,
