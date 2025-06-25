@@ -286,11 +286,25 @@ export default function NewQuoteRequestPage() {
     setError("");
 
     try {
+      // Get the selected contact information
+      let jobsiteContactData = null;
+      if (jobsiteContactId) {
+        const selectedContact = contacts.find(c => c.id === jobsiteContactId);
+        if (selectedContact) {
+          jobsiteContactData = {
+            id: selectedContact.id,
+            name: selectedContact.name,
+            phone: selectedContact.phone,
+            email: selectedContact.email || ""
+          };
+        }
+      }
+
       const quoteRequestData = {
         title,
         creatorCountry,
         involvedCountry,
-        customerId,
+        customer: customerId, // Changed from customerId to customer to match interface
         status,
         isArchived,
         products,
@@ -302,6 +316,7 @@ export default function NewQuoteRequestPage() {
         endDate: customerDecidesEnd ? null : endDate,
         customerDecidesEnd,
         jobsiteContactId,
+        jobsiteContact: jobsiteContactData, // Add the full contact data
         labels: selectedLabels,
         notes,
         attachments,
@@ -312,11 +327,11 @@ export default function NewQuoteRequestPage() {
       };
 
       console.log('Submitting quote request:', quoteRequestData);
-      const docRef = await addDoc(collection(db as Firestore, "quoteRequests"), quoteRequestData);
+      await addDoc(collection(db as Firestore, "quoteRequests"), quoteRequestData);
 
       if (isMounted.current) {
         setSuccess("Quote request created successfully!");
-        router.push(`/quote-requests/${docRef.id}`);
+        router.push("/dashboard"); // Redirect to dashboard instead of individual quote request
       }
     } catch (err) {
       console.error("Error creating quote request:", err);
