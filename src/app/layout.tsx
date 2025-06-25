@@ -1,53 +1,34 @@
-import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
-import "./globals.css";
-import { Inter } from "next/font/google";
-import AuthProvider from "./AuthProvider";
-import ConditionalLayout from "./ConditionalLayout";
-import ClientLayout from "./components/ClientLayout";
-import Script from "next/script";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
-
-const inter = Inter({
-  variable: "--font-inter",
-  subsets: ["latin"],
-});
-
-export const metadata: Metadata = {
+// Metadata must be in a separate file or before "use client"
+export const metadata = {
   title: "LoxConnect Pro",
   description: "International quote request management system with real-time messaging",
 };
 
+"use client";
+
+import { Inter } from "next/font/google";
+import "./globals.css";
+import AuthProvider from "./AuthProvider";
+import { Toaster } from "react-hot-toast";
+import type { ReactNode } from "react";
+
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-mono",
+});
+
 export default function RootLayout({
   children,
 }: {
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable} ${inter.variable} antialiased`}>
-      <head>
-        <Script
-          src={`https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places`}
-          strategy="beforeInteractive"
-        />
-      </head>
-      <body>
-        <ClientLayout>
-          <AuthProvider>
-            <ConditionalLayout>
-              {children}
-            </ConditionalLayout>
-          </AuthProvider>
-        </ClientLayout>
+    <html lang="en">
+      <body className={inter.className}>
+        <AuthProvider>
+          <Toaster position="top-right" />
+          {children}
+        </AuthProvider>
       </body>
     </html>
   );
