@@ -3,14 +3,17 @@ import "./globals.css";
 import AuthProvider from "./AuthProvider";
 import { Toaster } from "react-hot-toast";
 import type { ReactNode } from "react";
-import { metadata } from "./metadata";
+import type { Metadata } from "next";
 
 const inter = Inter({
   subsets: ["latin"],
   variable: "--font-mono",
 });
 
-export { metadata };
+export const metadata: Metadata = {
+  title: "LoxConnect Pro",
+  description: "International quote request management system with real-time messaging",
+};
 
 export default function RootLayout({
   children,
