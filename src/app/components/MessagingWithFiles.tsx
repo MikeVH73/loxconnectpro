@@ -60,13 +60,13 @@ export default function MessagingWithFiles({
     const processedFiles: FileData[] = [];
 
     try {
-      for (let i = 0; i < selectedFiles.length; i++) {
-        const file = selectedFiles[i];
-        
-        // Check file size (limit to 3MB for messaging)
-        if (file.size > 3 * 1024 * 1024) {
+    for (let i = 0; i < selectedFiles.length; i++) {
+      const file = selectedFiles[i];
+      
+      // Check file size (limit to 3MB for messaging)
+      if (file.size > 3 * 1024 * 1024) {
           throw new Error(`File ${file.name} is too large. Maximum size is 3MB for messaging.`);
-        }
+      }
 
         // Convert file to base64 for storage
         const base64 = await new Promise<string>((resolve, reject) => {
@@ -85,16 +85,16 @@ export default function MessagingWithFiles({
           uploadedAt: new Date(),
           uploadedBy: currentUser
         });
-      }
+    }
 
-      if (processedFiles.length > 0) {
+    if (processedFiles.length > 0) {
         await sendMessage('', currentUser, currentCountry, processedFiles);
-      }
+    }
     } catch (error: any) {
       console.error('Error processing files:', error);
       setError(error.message || 'Failed to process files');
     } finally {
-      setUploadingFiles(false);
+    setUploadingFiles(false);
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
@@ -141,10 +141,10 @@ export default function MessagingWithFiles({
   };
 
   if (loading) {
-    return (
+  return (
       <div className="flex items-center justify-center h-full">
         <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-gray-900"></div>
-      </div>
+        </div>
     );
   }
 
@@ -157,14 +157,14 @@ export default function MessagingWithFiles({
   }
 
   return (
-    <div 
+      <div 
       className={`flex flex-col h-full ${
         dragOver ? 'bg-blue-50' : 'bg-white'
-      }`}
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
-    >
+        }`}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
       {/* Messages Section */}
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
         {messages.length === 0 ? (
@@ -188,14 +188,14 @@ export default function MessagingWithFiles({
               </div>
 
               {/* Message Content */}
-              {message.text && (
+                {message.text && (
                 <div className="text-gray-800 break-words bg-gray-50 rounded-lg p-3">
                   {message.text}
                 </div>
-              )}
+                )}
 
               {/* Files */}
-              {message.files && message.files.length > 0 && (
+                {message.files && message.files.length > 0 && (
                 <div className="mt-2 space-y-2">
                   {message.files.map((file, index) => (
                     <div
@@ -208,10 +208,10 @@ export default function MessagingWithFiles({
                          file.type.includes('word') ? '📝' :
                          file.type.includes('excel') ? '📊' : '📎'}
                       </span>
-                      <div className="flex-1 min-w-0">
+                        <div className="flex-1 min-w-0">
                         <div className="text-sm font-medium text-gray-700 truncate">
                           {file.name}
-                        </div>
+                          </div>
                         <div className="text-xs text-gray-500">
                           {(file.size / 1024).toFixed(1)} KB
                         </div>
@@ -224,10 +224,10 @@ export default function MessagingWithFiles({
                       >
                         ⬇️
                       </a>
-                    </div>
-                  ))}
-                </div>
-              )}
+                      </div>
+                    ))}
+                  </div>
+                )}
             </div>
           ))
         )}
@@ -289,7 +289,7 @@ export default function MessagingWithFiles({
 
           {error && (
             <div className="text-sm text-red-500">{error}</div>
-          )}
+      )}
         </div>
       )}
     </div>

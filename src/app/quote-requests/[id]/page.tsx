@@ -154,15 +154,15 @@ export default function QuoteRequestPage() {
                   </>
                 )}
               </h1>
-            </div>
-            <button
-              type="button"
-              onClick={() => router.push("/quote-requests")}
+        </div>
+        <button
+          type="button"
+          onClick={() => router.push("/quote-requests")}
               className="px-6 py-2 text-gray-700 bg-gray-100 rounded hover:bg-gray-200"
-            >
+        >
               Back to List
-            </button>
-          </div>
+        </button>
+      </div>
 
           {/* Content */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
@@ -207,25 +207,25 @@ export default function QuoteRequestPage() {
             <div className="grid grid-cols-[1fr_2fr_1fr] gap-8">
               {/* Left Column */}
               <div className="space-y-6">
-                <div>
-                  <label className="block mb-1 font-medium">Title</label>
+          <div>
+            <label className="block mb-1 font-medium">Title</label>
                   <input
                     type="text"
                     value={quoteRequest.title}
                     disabled
                     className="w-full p-2 border rounded bg-gray-50"
                   />
-                </div>
-                <div>
-                  <label className="block mb-1 font-medium">Creator Country</label>
+          </div>
+          <div>
+            <label className="block mb-1 font-medium">Creator Country</label>
                   <input
                     type="text"
                     value={quoteRequest.creatorCountry}
                     disabled
                     className="w-full p-2 border rounded bg-gray-50"
                   />
-                </div>
-                <div>
+          </div>
+          <div>
                   <label className="block mb-1 font-medium">Target Country</label>
                   <input
                     type="text"
@@ -233,9 +233,9 @@ export default function QuoteRequestPage() {
                     disabled
                     className="w-full p-2 border rounded bg-gray-50"
                   />
-                </div>
-                <div>
-                  <label className="block mb-1 font-medium">Customer</label>
+          </div>
+          <div>
+            <label className="block mb-1 font-medium">Customer</label>
                   <input
                     type="text"
                     value={customers.find(c => c.id === quoteRequest.customer)?.name || ""}
@@ -254,17 +254,17 @@ export default function QuoteRequestPage() {
                       disabled
                       className="w-full p-2 border rounded bg-gray-50"
                     />
-                  </div>
+          </div>
                 )}
-                <div>
-                  <label className="block mb-1 font-medium">Status</label>
+          <div>
+            <label className="block mb-1 font-medium">Status</label>
                   <input
                     type="text"
                     value={quoteRequest.status}
                     disabled
                     className="w-full p-2 border rounded bg-gray-50"
                   />
-                </div>
+          </div>
               </div>
 
               {/* Middle Column */}
@@ -307,12 +307,12 @@ export default function QuoteRequestPage() {
                           {note.user} on {new Date(note.dateTime).toLocaleString()}
                         </div>
                         {note.text}
-                      </div>
+              </div>
                     ))}
-                  </div>
-                </div>
+            </div>
+          </div>
 
-                <div>
+          <div>
                   <label className="block mb-1 font-medium">Attachments</label>
                   <div className="space-y-2">
                     {quoteRequest.attachments?.map((attachment: any, index: number) => (
@@ -328,23 +328,23 @@ export default function QuoteRequestPage() {
                       </div>
                     ))}
                   </div>
-                </div>
-              </div>
+          </div>
+        </div>
 
               {/* Right Column */}
               <div className="space-y-6">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block mb-1 font-medium">Start Date</label>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block mb-1 font-medium">Start Date</label>
                     <input
                       type="date"
                       value={quoteRequest.startDate}
                       disabled
                       className="w-full p-2 border rounded bg-gray-50"
                     />
-                  </div>
-                  <div>
-                    <label className="block mb-1 font-medium">End Date</label>
+            </div>
+            <div>
+              <label className="block mb-1 font-medium">End Date</label>
                     <div>
                       <input
                         type="date"
@@ -357,11 +357,11 @@ export default function QuoteRequestPage() {
                           Customer decides end date
                         </div>
                       )}
-                    </div>
-                  </div>
-                </div>
+            </div>
+          </div>
+          </div>
 
-                <div>
+          <div>
                   <label className="block mb-1 font-medium">Jobsite Address</label>
                   <input
                     type="text"
@@ -392,8 +392,8 @@ export default function QuoteRequestPage() {
                           className="w-full p-2 border rounded bg-gray-50"
                           placeholder="Longitude"
                         />
-                      </div>
-                    </div>
+            </div>
+          </div>
                   </div>
                 )}
 
@@ -410,18 +410,18 @@ export default function QuoteRequestPage() {
             </div>
           </div>
         </div>
-      </div>
+          </div>
 
       {/* Messaging panel */}
       <div className="w-[400px] border-l border-gray-200 bg-white">
         <MessagingPanel
-          quoteRequestId={params.id as string}
+              quoteRequestId={params.id as string}
           messages={messages}
           onSendMessage={handleSendMessage}
           loading={messagesLoading}
           error={messagesError}
-        />
-      </div>
+            />
+          </div>
     </div>
   );
 } 

@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import { collection, query, where, orderBy, onSnapshot, DocumentData, addDoc, getDoc, doc, Firestore, serverTimestamp, Timestamp, updateDoc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, DocumentData, addDoc, getDoc, doc, Firestore, serverTimestamp, Timestamp, updateDoc, getDocs, writeBatch } from 'firebase/firestore';
 import { db } from '@/firebaseClient';
 import { useAuth } from '../AuthProvider';
 import MessagingPanel from '../components/MessagingPanel';
+import { createNotification } from '../utils/notifications';
 
 interface Message {
   id: string;
@@ -24,7 +25,7 @@ interface QuoteRequest {
 }
 
 interface DashboardMessagingProps {
-  quoteRequestId?: string;
+  quoteRequestId: string; // Make this required
   onClose?: () => void;
 }
 
@@ -42,10 +43,32 @@ export default function DashboardMessaging({ quoteRequestId, onClose }: Dashboar
     // Mark messages as read whenever the component mounts or quoteRequestId changes
     const markAsRead = async () => {
       try {
-        const quoteRef = doc(db, 'quoteRequests', quoteRequestId);
+        // Mark the quote request as read
+        const quoteRef = doc(db as Firestore, 'quoteRequests', quoteRequestId);
         await updateDoc(quoteRef, {
           hasUnreadMessages: false
         });
+
+        // Get all messages for this quote request
+        const messagesRef = collection(db as Firestore, 'messages');
+        const q = query(
+          messagesRef,
+          where('quoteRequestId', '==', quoteRequestId)
+        );
+        const snapshot = await getDocs(q);
+        
+        // Update each unread message
+        const batch = writeBatch(db as Firestore);
+        snapshot.docs.forEach(doc => {
+          const messageRef = doc.ref;
+          const currentReadBy = doc.data().readBy || [];
+          if (!currentReadBy.includes(user.email)) {
+            batch.update(messageRef, {
+              readBy: [...currentReadBy, user.email]
+            });
+          }
+        });
+        await batch.commit();
       } catch (err) {
         console.error('Error marking messages as read:', err);
       }
@@ -62,14 +85,13 @@ export default function DashboardMessaging({ quoteRequestId, onClose }: Dashboar
 
     const firestore = db;
 
-    // Fetch quote request details and mark as read
+    // Fetch quote request details
     const fetchQuoteRequest = async () => {
       try {
         const quoteRef = doc(firestore, 'quoteRequests', quoteRequestId);
         const quoteDoc = await getDoc(quoteRef);
         
         if (quoteDoc.exists()) {
-          // Mark as read immediately when opening
           await updateDoc(quoteRef, {
             hasUnreadMessages: false
           });
@@ -87,21 +109,24 @@ export default function DashboardMessaging({ quoteRequestId, onClose }: Dashboar
     fetchQuoteRequest();
 
     try {
-      // Set up messages listener
+      // Set up messages listener with simple query
       const messagesRef = collection(firestore, 'messages');
       const q = query(
         messagesRef,
-        where('quoteRequestId', '==', quoteRequestId),
-        orderBy('createdAt', 'asc')
+        where('quoteRequestId', '==', quoteRequestId)
       );
 
       const unsubscribe = onSnapshot(q, (snapshot) => {
-        // Convert messages without reversing
+        // Convert messages and sort in memory
         const newMessages = snapshot.docs
           .map(doc => ({
             id: doc.id,
             ...doc.data(),
+            createdAt: doc.data().createdAt?.toDate() || new Date()
           })) as Message[];
+
+        // Sort messages by createdAt in memory
+        newMessages.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
 
         setMessages(newMessages);
         setLoading(false);
@@ -121,18 +146,44 @@ export default function DashboardMessaging({ quoteRequestId, onClose }: Dashboar
   }, [user, db, quoteRequestId]);
 
   const handleSendMessage = async (text: string) => {
-    if (!user?.email || !userProfile?.businessUnit || !db) {
-      throw new Error('User not authenticated or database not initialized');
+    if (!user?.email || !userProfile?.businessUnit || !db || !quoteRequestId || !quoteRequest) {
+      throw new Error('User not authenticated, database not initialized, or quote request not found');
     }
+
     try {
-      const messagesRef = collection(db, 'messages');
+      const messagesRef = collection(db as Firestore, 'messages');
+      
+      // Add the new message
       await addDoc(messagesRef, {
         text,
         sender: user.email,
         senderCountry: userProfile.businessUnit,
         createdAt: serverTimestamp(),
         quoteRequestId,
-        participants: [user.uid]
+        readBy: [user.email] // Mark as read by sender
+      });
+
+      // Mark the quote request as having been responded to
+      const quoteRef = doc(db as Firestore, 'quoteRequests', quoteRequestId);
+      await updateDoc(quoteRef, {
+        hasUnreadMessages: false,
+        lastResponseAt: serverTimestamp(),
+        lastRespondedBy: user.email
+      });
+
+      // Create notification for the target country
+      const targetCountry = quoteRequest.creatorCountry === userProfile.businessUnit 
+        ? quoteRequest.targetCountry 
+        : quoteRequest.creatorCountry;
+
+      await createNotification({
+        type: 'message',
+        quoteRequestId,
+        quoteRequestTitle: quoteRequest.title,
+        sender: user.email,
+        senderCountry: userProfile.businessUnit,
+        targetCountry,
+        message: text.length > 50 ? `${text.substring(0, 50)}...` : text
       });
     } catch (err: any) {
       console.error('Error sending message:', err);

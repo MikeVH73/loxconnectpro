@@ -5,6 +5,16 @@ import { doc, getDoc, updateDoc, collection, getDocs, addDoc, deleteDoc, query, 
 import { db } from "../../../firebaseClient";
 import { Firestore } from "firebase/firestore";
 
+interface Contact {
+  id: string;
+  name: string;
+  phone: string;
+  email?: string;
+  type: 'first' | 'jobsite';
+  createdAt?: any;
+  updatedAt?: any;
+}
+
 export default function CustomerDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -12,10 +22,15 @@ export default function CustomerDetailPage() {
   const [form, setForm] = useState<any>(null);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
-  const [contacts, setContacts] = useState<any[]>([]);
+  const [contacts, setContacts] = useState<Contact[]>([]);
   const [showContactModal, setShowContactModal] = useState(false);
-  const [editingContact, setEditingContact] = useState<any>(null);
-  const [newContact, setNewContact] = useState({ name: "", phone: "", email: "", type: "jobsite" });
+  const [editingContact, setEditingContact] = useState<Contact | null>(null);
+  const [newContact, setNewContact] = useState<Omit<Contact, 'id'>>({ 
+    name: "", 
+    phone: "", 
+    email: "", 
+    type: "jobsite" 
+  });
 
   useEffect(() => {
     const fetchData = async () => {
@@ -30,30 +45,39 @@ export default function CustomerDetailPage() {
           const customerData = snap.data();
           setForm({ ...customerData, id: snap.id });
           
-          // If there's a first contact in the customer document, create a contact object
+          let allContacts: Contact[] = [];
+          
+          // Add first contact if it exists
           if (customerData.contact && customerData.phone) {
-            setContacts([{
+            allContacts.push({
               id: 'main',
               name: customerData.contact,
               phone: customerData.phone,
               email: customerData.email || '',
               type: 'first'
-            }]);
+            });
           }
+
+          // Fetch jobsite contacts from subcollection
+          const contactsRef = collection(db as Firestore, `customers/${params.id}/contacts`);
+          const contactsSnapshot = await getDocs(contactsRef);
+          const jobsiteContacts = contactsSnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            type: 'jobsite'
+          } as Contact));
+          
+          // Filter out any potential duplicates based on name and phone
+          const uniqueJobsiteContacts = jobsiteContacts.filter((contact, index, self) =>
+            index === self.findIndex((c) => (
+              c.name === contact.name && c.phone === contact.phone
+            ))
+          );
+          
+          setContacts([...allContacts, ...uniqueJobsiteContacts]);
         } else {
           setError("Customer not found");
         }
-
-        // Fetch additional contacts from subcollection
-        const contactsRef = collection(db as Firestore, `customers/${params.id}/contacts`);
-        const contactsSnapshot = await getDocs(contactsRef);
-        const subcollectionContacts = contactsSnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-          type: 'jobsite'
-        }));
-        
-        setContacts(prev => [...prev, ...subcollectionContacts]);
         setLoading(false);
       } catch (err) {
         console.error("Error fetching data:", err);
@@ -86,25 +110,97 @@ export default function CustomerDetailPage() {
   };
 
   const handleSaveContact = async () => {
-    if (!db || !newContact.name || !newContact.phone) return;
-    
-    if (editingContact) {
-      // Update existing contact
-      const docRef = doc(db as Firestore, `customers/${params.id}/contacts`, editingContact.id);
-      await updateDoc(docRef, newContact);
-      setContacts(prev => prev.map(c => c.id === editingContact.id ? { ...c, ...newContact } : c));
-    } else {
-      // Add new contact
-      const contactsRef = collection(db as Firestore, `customers/${params.id}/contacts`);
-      const docRef = await addDoc(contactsRef, {
-        ...newContact,
-        createdAt: serverTimestamp(),
-      });
-      setContacts(prev => [...prev, { id: docRef.id, ...newContact }]);
+    if (!db || !newContact.name || !newContact.phone) {
+      setError("Please fill in all required fields");
+      return;
     }
-    setShowContactModal(false);
-    setEditingContact(null);
-    setNewContact({ name: "", phone: "", email: "", type: "jobsite" });
+    
+    try {
+      // Check for duplicate contacts first
+      const contactsRef = collection(db as Firestore, `customers/${params.id}/contacts`);
+      const duplicateQuery = query(contactsRef, 
+        where("name", "==", newContact.name),
+        where("phone", "==", newContact.phone)
+      );
+      const duplicateSnapshot = await getDocs(duplicateQuery);
+      
+      if (!duplicateSnapshot.empty) {
+        setError("This contact already exists");
+        return;
+      }
+
+      if (editingContact) {
+        // Update existing contact
+        if (editingContact.id === 'main') {
+          // Update first contact in customer document
+          const customerRef = doc(db as Firestore, "customers", params.id as string);
+          await updateDoc(customerRef, {
+            contact: newContact.name,
+            phone: newContact.phone,
+            email: newContact.email || ''
+          });
+          
+          // Update contacts list
+          setContacts(prev => prev.map(c => 
+            c.id === 'main' ? {
+              id: 'main',
+              name: newContact.name,
+              phone: newContact.phone,
+              email: newContact.email || '',
+              type: 'first'
+            } : c
+          ));
+        } else {
+          // Update contact in subcollection
+          const docRef = doc(db as Firestore, `customers/${params.id}/contacts`, editingContact.id);
+          const updateData = {
+            name: newContact.name,
+            phone: newContact.phone,
+            email: newContact.email || '',
+            type: 'jobsite',
+            updatedAt: serverTimestamp()
+          };
+          await updateDoc(docRef, updateData);
+          
+          // Update contacts list
+          setContacts(prev => prev.map(c => 
+            c.id === editingContact.id ? {
+              id: editingContact.id,
+              ...updateData,
+              type: 'jobsite'
+            } : c
+          ));
+        }
+      } else {
+        // Add new contact
+        const contactData = {
+          name: newContact.name,
+          phone: newContact.phone,
+          email: newContact.email || '',
+          type: 'jobsite',
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        };
+        
+        const docRef = await addDoc(contactsRef, contactData);
+        
+        // Update contacts list
+        setContacts(prev => [...prev, {
+          id: docRef.id,
+          ...contactData,
+          type: 'jobsite'
+        }]);
+      }
+      
+      // Reset form state
+      setShowContactModal(false);
+      setEditingContact(null);
+      setNewContact({ name: "", phone: "", email: "", type: "jobsite" });
+      setError("");
+    } catch (err) {
+      console.error("Error saving contact:", err);
+      setError("Failed to save contact");
+    }
   };
 
   const handleEditContact = (contact: any) => {
@@ -116,18 +212,103 @@ export default function CustomerDetailPage() {
   const handleDeleteContact = async (contactId: string) => {
     if (!db) return;
     
-    const docRef = doc(db as Firestore, `customers/${params.id}/contacts`, contactId);
-    await deleteDoc(docRef);
-    setContacts(prev => prev.filter(c => c.id !== contactId));
+    try {
+      if (contactId === 'main') {
+        // Clear first contact from customer document
+        const customerRef = doc(db as Firestore, "customers", params.id as string);
+        await updateDoc(customerRef, {
+          contact: '',
+          phone: '',
+          email: ''
+        });
+        
+        // Update contacts list
+        setContacts(prev => prev.filter(c => c.id !== 'main'));
+      } else {
+        // Delete from subcollection
+        const docRef = doc(db as Firestore, `customers/${params.id}/contacts`, contactId);
+        await deleteDoc(docRef);
+        
+        // Update contacts list
+        setContacts(prev => prev.filter(c => c.id !== contactId));
+      }
+    } catch (err) {
+      console.error("Error deleting contact:", err);
+      setError("Failed to delete contact");
+    }
   };
 
   const handleSetFirstContact = async (contact: any) => {
     if (!db) return;
     
-    // Set this contact as the first contact for the customer
-    const docRef = doc(db as Firestore, "customers", params.id as string);
-    await updateDoc(docRef, { contact: contact.name, phone: contact.phone, email: contact.email });
-    setForm((prev: any) => ({ ...prev, contact: contact.name, phone: contact.phone, email: contact.email }));
+    try {
+      // Get current first contact info
+      const customerDoc = await getDoc(doc(db as Firestore, "customers", params.id as string));
+      const customerData = customerDoc.data();
+      
+      // Update customer document with new first contact
+      const customerRef = doc(db as Firestore, "customers", params.id as string);
+      await updateDoc(customerRef, {
+        contact: contact.name,
+        phone: contact.phone,
+        email: contact.email || ''
+      });
+
+      // If the contact was from subcollection, delete it
+      if (contact.id !== 'main') {
+        const contactRef = doc(db as Firestore, `customers/${params.id}/contacts`, contact.id);
+        await deleteDoc(contactRef);
+      }
+
+      // Move previous first contact to jobsite contacts if it exists
+      if (customerData?.contact && 
+          customerData.phone && 
+          customerData.contact !== contact.name) {
+        
+        // Check if this contact already exists in jobsite contacts
+        const contactsRef = collection(db as Firestore, `customers/${params.id}/contacts`);
+        const duplicateQuery = query(contactsRef,
+          where("name", "==", customerData.contact),
+          where("phone", "==", customerData.phone)
+        );
+        const duplicateSnapshot = await getDocs(duplicateQuery);
+        
+        if (duplicateSnapshot.empty) {
+          // Only add if it doesn't exist
+          await addDoc(contactsRef, {
+            name: customerData.contact,
+            phone: customerData.phone,
+            email: customerData.email || '',
+            type: 'jobsite',
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp()
+          });
+        }
+      }
+
+      // Refresh contacts list
+      const contactsRef = collection(db as Firestore, `customers/${params.id}/contacts`);
+      const contactsSnapshot = await getDocs(contactsRef);
+      const jobsiteContacts = contactsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        type: 'jobsite'
+      }));
+
+      setContacts([
+        {
+          id: 'main',
+          name: contact.name,
+          phone: contact.phone,
+          email: contact.email || '',
+          type: 'first'
+        },
+        ...jobsiteContacts
+      ]);
+    } catch (err) {
+      console.error("Error setting first contact:", err);
+      setError("Failed to set first contact");
+    }
   };
 
   if (loading) return <div className="p-8">Loading...</div>;

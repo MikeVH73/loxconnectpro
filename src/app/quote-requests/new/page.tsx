@@ -70,7 +70,7 @@ interface Contact {
   name: string;
   phone: string;
   email?: string;
-  isFirstContact?: boolean;
+  type: 'first' | 'jobsite';
 }
 
 interface Customer {
@@ -216,7 +216,7 @@ export default function NewQuoteRequestPage() {
       if (!customerId || !db || !isMounted.current) return;
 
       try {
-        let fetchedContacts: Contact[] = [];
+        let allContacts: Contact[] = [];
         
         // First check if there's a contact in the customer document
         const customerDoc = await getDoc(doc(db as Firestore, "customers", customerId));
@@ -224,12 +224,12 @@ export default function NewQuoteRequestPage() {
           const customerData = customerDoc.data();
           if (customerData.contact && customerData.phone) {
             // Add the first contact to the list
-            fetchedContacts.push({
+            allContacts.push({
               id: 'main',
               name: customerData.contact,
               phone: customerData.phone,
               email: customerData.email || '',
-              isFirstContact: true
+              type: 'first'
             });
           }
         }
@@ -241,19 +241,29 @@ export default function NewQuoteRequestPage() {
           id: doc.id,
           name: doc.data().name,
           phone: doc.data().phone,
-          email: doc.data().email,
-          isFirstContact: false
+          email: doc.data().email || '',
+          type: 'jobsite' as const
         }));
         
-        // Combine both sets of contacts
-        fetchedContacts = [...fetchedContacts, ...subcollectionContacts];
+        // Add jobsite contacts
+        allContacts = [...allContacts, ...subcollectionContacts];
         
         if (isMounted.current) {
-          setContacts(fetchedContacts);
-          console.log('Fetched contacts:', fetchedContacts);
+          console.log('Available contacts:', allContacts); // Debug log
+          setContacts(allContacts);
           
-          // Do not auto-select any contact
-          setJobsiteContactId("");
+          // If there's only one contact, auto-select it
+          if (allContacts.length === 1) {
+            setJobsiteContactId(allContacts[0].id);
+          } else if (allContacts.length > 0) {
+            // Default to first jobsite contact if available
+            const firstJobsiteContact = allContacts.find(c => c.type === 'jobsite');
+            if (firstJobsiteContact) {
+              setJobsiteContactId(firstJobsiteContact.id);
+            }
+          } else {
+            setJobsiteContactId(""); // Reset selection if no contacts
+          }
         }
       } catch (err) {
         console.error("Error fetching contacts:", err);
@@ -280,7 +290,43 @@ export default function NewQuoteRequestPage() {
       if (customerDoc.exists()) {
         const customerData = customerDoc.data();
         setCustomerDetails(customerData);
-        console.log('Fetched customer details:', customerData);
+        
+        // Fetch all contacts for this customer
+        let allContacts: Contact[] = [];
+        
+        // Add first contact if it exists
+        if (customerData.contact && customerData.phone) {
+          allContacts.push({
+            id: 'main',
+            name: customerData.contact,
+            phone: customerData.phone,
+            email: customerData.email || '',
+            type: 'first'
+          });
+        }
+        
+        // Fetch jobsite contacts
+        const contactsRef = collection(db as Firestore, `customers/${selectedCustomerId}/contacts`);
+        const contactsSnapshot = await getDocs(contactsRef);
+        const jobsiteContacts = contactsSnapshot.docs.map(doc => ({
+          id: doc.id,
+          name: doc.data().name,
+          phone: doc.data().phone,
+          email: doc.data().email || '',
+          type: 'jobsite' as const
+        }));
+        
+        allContacts = [...allContacts, ...jobsiteContacts];
+        console.log('All contacts:', allContacts); // Debug log
+        
+        setContacts(allContacts);
+        
+        // Auto-select appropriate contact
+        if (jobsiteContacts.length > 0) {
+          setJobsiteContactId(jobsiteContacts[0].id);
+        } else if (allContacts.length === 1) {
+          setJobsiteContactId(allContacts[0].id);
+        }
       }
     } catch (err) {
       console.error("Error fetching customer details:", err);
@@ -307,6 +353,20 @@ export default function NewQuoteRequestPage() {
     e.preventDefault();
     if (submitting || !db || !isMounted.current) return;
 
+    // Validate required fields
+    const errors = [];
+    if (!title) errors.push("Title is required");
+    if (!involvedCountry) errors.push("Involved Country is required");
+    if (!customerId) errors.push("Customer is required");
+    if (!products.length || !products[0].catClass) errors.push("At least one product with Cat. Class is required");
+    if (!startDate) errors.push("Start Date is required");
+    if (!jobsiteContactId) errors.push("Jobsite Contact is required");
+
+    if (errors.length > 0) {
+      setError(errors.join("\n"));
+      return;
+    }
+
     setSubmitting(true);
     setError("");
 
@@ -320,7 +380,8 @@ export default function NewQuoteRequestPage() {
             id: selectedContact.id,
             name: selectedContact.name,
             phone: selectedContact.phone,
-            email: selectedContact.email || ""
+            email: selectedContact.email || "",
+            type: selectedContact.type
           };
         }
       }
@@ -353,16 +414,16 @@ export default function NewQuoteRequestPage() {
       };
 
       console.log('Submitting quote request:', quoteRequestData);
-      await addDoc(collection(db as Firestore, "quoteRequests"), quoteRequestData);
+      const docRef = await addDoc(collection(db as Firestore, "quoteRequests"), quoteRequestData);
 
       if (isMounted.current) {
         setSuccess("Quote request created successfully!");
-        router.push("/dashboard"); // Redirect to dashboard instead of individual quote request
+        router.push(`/quote-requests/${docRef.id}`);
       }
     } catch (err) {
       console.error("Error creating quote request:", err);
       if (isMounted.current) {
-        setError("Failed to create quote request");
+        setError(err instanceof Error ? err.message : "Failed to create quote request");
       }
     } finally {
       if (isMounted.current) {
@@ -437,28 +498,24 @@ export default function NewQuoteRequestPage() {
 
     try {
       const contactsRef = collection(db as Firestore, `customers/${customerId}/contacts`);
-      const contactData: Omit<Contact, 'id'> = {
+      const contactData = {
         name: newContact.name,
-        phone: newContact.phone
-      };
-
-      const docRef = await addDoc(contactsRef, {
-        ...contactData,
+        phone: newContact.phone,
+        type: 'jobsite',
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
-      });
+      };
+
+      const docRef = await addDoc(contactsRef, contactData);
 
       // Add the new contact to the contacts list
-      const newContactWithId: Contact = {
+      const newContactWithId = {
         id: docRef.id,
         ...contactData
       };
-      setContacts(prev => [...prev, newContactWithId]);
       
-      // Set the new contact as the jobsite contact
+      setContacts(prev => [...prev, newContactWithId]);
       setJobsiteContactId(docRef.id);
-
-      // Reset form and close modal
       setNewContact({ name: "", phone: "" });
       setShowNewContact(false);
     } catch (err) {

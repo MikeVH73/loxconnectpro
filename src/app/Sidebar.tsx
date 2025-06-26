@@ -3,6 +3,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "./AuthProvider";
 import Image from "next/image";
+import NotificationBadge from "./components/NotificationBadge";
 
 const navItems = [
   { label: "Dashboard", href: "/dashboard" },
@@ -56,13 +57,14 @@ export default function Sidebar() {
             <li key={item.href}>
               <Link
                 href={item.href}
-                className={`block px-6 py-3 rounded-l-full font-medium transition-colors
+                className={`block px-6 py-3 rounded-l-full font-medium transition-colors relative
                   ${pathname.startsWith(item.href)
                     ? "bg-[#e40115] text-white shadow"
                     : "text-gray-800 hover:bg-[#bbbdbe] hover:text-[#e40115]"}
                 `}
               >
                 {item.label}
+                {item.label === "Notifications" && <NotificationBadge />}
               </Link>
             </li>
           ))}

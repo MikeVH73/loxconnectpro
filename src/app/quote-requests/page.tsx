@@ -128,12 +128,12 @@ export default function QuoteRequestsPage() {
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-[#e40115]">Quote Requests</h1>
         {userProfile?.role !== "readOnly" && (
-          <Link
-            href="/quote-requests/new"
-            className="bg-[#e40115] text-white px-4 py-2 rounded hover:bg-red-700 transition"
-          >
-            + New Quote Request
-          </Link>
+        <Link
+          href="/quote-requests/new"
+          className="bg-[#e40115] text-white px-4 py-2 rounded hover:bg-red-700 transition"
+        >
+          + New Quote Request
+        </Link>
         )}
       </div>
       {loading ? (
@@ -153,27 +153,27 @@ export default function QuoteRequestsPage() {
                       <div 
                         onClick={() => window.location.href = userProfile?.role === "readOnly" ? `/quote-requests/${qr.id}` : `/quote-requests/${qr.id}/edit`}
                         className="flex-1"
-                      >
-                        <div className="flex items-center gap-4">
-                          <span className="font-bold text-lg">{qr.title}</span>
-                          <span className="text-sm text-gray-500">{getCustomerName(qr.customer)}</span>
-                          <span className="text-sm text-gray-500">{qr.creatorCountry} → {qr.involvedCountry}</span>
-                          <span className="text-sm text-gray-500">{qr.status}</span>
-                        </div>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          {(qr.labels || []).map((id: string) => (
-                            <span key={id} className="bg-[#e40115] text-white px-2 py-1 rounded-full text-xs">{getLabelName(id)}</span>
-                          ))}
-                        </div>
-                        <div className="text-sm text-gray-700">Products: {getProductsSummary(qr.products || [])}</div>
-                        <div className="text-xs text-gray-500 italic">Last note: {getLastNote(qr.notes || [])}</div>
-                        {qr.updatedAt && (
-                          <div className="text-xs text-gray-400 mt-1">
-                            Latest Update: {
-                              typeof qr.updatedAt === 'string'
-                                ? qr.updatedAt.slice(0, 10)
-                                : (qr.updatedAt?.toDate ? qr.updatedAt.toDate().toISOString().slice(0, 10) : '')
-                            }
+                    >
+                      <div className="flex items-center gap-4">
+                        <span className="font-bold text-lg">{qr.title}</span>
+                        <span className="text-sm text-gray-500">{getCustomerName(qr.customer)}</span>
+                        <span className="text-sm text-gray-500">{qr.creatorCountry} → {qr.involvedCountry}</span>
+                        <span className="text-sm text-gray-500">{qr.status}</span>
+                      </div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {(qr.labels || []).map((id: string) => (
+                          <span key={id} className="bg-[#e40115] text-white px-2 py-1 rounded-full text-xs">{getLabelName(id)}</span>
+                        ))}
+                      </div>
+                      <div className="text-sm text-gray-700">Products: {getProductsSummary(qr.products || [])}</div>
+                      <div className="text-xs text-gray-500 italic">Last note: {getLastNote(qr.notes || [])}</div>
+                      {qr.updatedAt && (
+                        <div className="text-xs text-gray-400 mt-1">
+                          Latest Update: {
+                            typeof qr.updatedAt === 'string'
+                              ? qr.updatedAt.slice(0, 10)
+                              : (qr.updatedAt?.toDate ? qr.updatedAt.toDate().toISOString().slice(0, 10) : '')
+                          }
                           </div>
                         )}
                       </div>

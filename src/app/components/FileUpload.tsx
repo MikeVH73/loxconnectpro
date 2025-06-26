@@ -54,20 +54,20 @@ export default function FileUpload({
       }
       
       try {
-        // Generate unique file ID
-        const fileId = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        
+      // Generate unique file ID
+      const fileId = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      
         // Sanitize file name - replace any non-alphanumeric characters (except dots and hyphens) with underscores
         const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
         
         // Construct storage path
-        const storagePath = quoteRequestId === "new" 
+      const storagePath = quoteRequestId === "new" 
           ? `temp-uploads/${fileId}_${sanitizedFileName}`
           : `quote-requests/${quoteRequestId}/${fileId}_${sanitizedFileName}`;
-        
+      
         console.log('[FileUpload] Storage path:', storagePath);
         setUploadProgress(`Uploading ${file.name} to storage...`);
-        const fileRef = ref(storage, storagePath);
+      const fileRef = ref(storage, storagePath);
 
         // Upload with timeout and progress
         console.log('[FileUpload] Starting upload to Firebase Storage...');

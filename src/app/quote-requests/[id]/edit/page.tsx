@@ -14,6 +14,7 @@ import { useCustomers } from '../../../hooks/useCustomers';
 import Link from "next/link";
 import { debounce } from "lodash";
 import Script from "next/script";
+import { createNotification } from '../../../utils/notifications';
 
 // Add Google Maps types
 declare global {
@@ -47,7 +48,7 @@ interface Note {
 interface Customer {
   id: string;
   name: string;
-  address: string;
+    address: string;
   contact?: string;
   phone?: string;
   email?: string;
@@ -178,7 +179,7 @@ export default function EditQuoteRequestPage() {
 
   // Save changes function
   const saveChanges = async (formData: QuoteRequest | null) => {
-    if (!db || isReadOnly || !formData) return;
+    if (!db || isReadOnly || !formData || !userProfile?.businessUnit) return;
     
     try {
       setSaving(true);
@@ -190,6 +191,42 @@ export default function EditQuoteRequestPage() {
         updatedAt: new Date().toISOString(),
         updatedBy: user?.email || ""
       });
+
+      // Create notification for the target country about the changes
+      const targetCountry = formData.creatorCountry === userProfile.businessUnit 
+        ? formData.involvedCountry 
+        : formData.creatorCountry;
+
+      // Determine what changed
+      const changes: string[] = [];
+      if (original) {
+        if (original.status !== formData.status) {
+          changes.push(`Status changed to ${formData.status}`);
+        }
+        if (original.waitingForAnswer !== formData.waitingForAnswer) {
+          changes.push(formData.waitingForAnswer ? 'Marked as waiting for answer' : 'No longer waiting for answer');
+        }
+        if (original.urgent !== formData.urgent) {
+          changes.push(formData.urgent ? 'Marked as urgent' : 'No longer urgent');
+        }
+        if (original.problems !== formData.problems) {
+          changes.push(formData.problems ? 'Marked as having problems' : 'Problems resolved');
+        }
+        // Add more change checks as needed
+      }
+
+      if (changes.length > 0) {
+        await createNotification({
+          type: 'change',
+          quoteRequestId: params.id as string,
+          quoteRequestTitle: formData.title,
+          sender: user?.email || '',
+          senderCountry: userProfile.businessUnit,
+          targetCountry,
+          changeType: 'status',
+          changeDetails: changes.join(', ')
+        });
+      }
       
       setOriginal(formData);
       setHasUnsavedChanges(false);
@@ -199,15 +236,9 @@ export default function EditQuoteRequestPage() {
       setTimeout(() => {
         setSaveMessage("");
       }, 2000);
-      
-    } catch (err) {
-      console.error("Error saving:", err);
+    } catch (error) {
+      console.error("Error saving changes:", error);
       setSaveMessage("Error saving changes");
-      
-      // Clear error message after 3 seconds
-      setTimeout(() => {
-        setSaveMessage("");
-      }, 3000);
     } finally {
       setSaving(false);
     }
@@ -458,36 +489,52 @@ export default function EditQuoteRequestPage() {
     const fetchContacts = async () => {
       if (!db || !form?.customer) return;
       try {
-        // First try to fetch from the subcollection
-        const contactsRef = collection(db as Firestore, `customers/${form.customer}/contacts`);
-        const snapshot = await getDocs(contactsRef);
-        let fetchedContacts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-        // If no contacts found in subcollection, check if there's a contact in the customer document
-        if (fetchedContacts.length === 0) {
-          const customerDoc = await getDoc(doc(db as Firestore, "customers", form.customer));
-          if (customerDoc.exists()) {
-            const customerData = customerDoc.data();
-            if (customerData.contact && customerData.phone) {
-              // Create a contact from the customer's contact info
-              fetchedContacts = [{
-                id: 'main',
-                name: customerData.contact,
-                phone: customerData.phone,
-                email: customerData.email || ''
-              }];
-            }
+        let fetchedContacts = [];
+        
+        // First check if there's a contact in the customer document
+        const customerDoc = await getDoc(doc(db as Firestore, "customers", form.customer));
+        if (customerDoc.exists()) {
+          const customerData = customerDoc.data();
+          if (customerData.contact && customerData.phone) {
+            // Add the first contact to the list
+            fetchedContacts.push({
+              id: 'main',
+              name: customerData.contact,
+              phone: customerData.phone,
+              email: customerData.email || '',
+              type: 'first'
+            });
           }
         }
 
-        setContacts(fetchedContacts);
-        console.log('Fetched contacts:', fetchedContacts);
+        // Then fetch contacts from the subcollection
+        const contactsRef = collection(db as Firestore, `customers/${form.customer}/contacts`);
+        const contactsSnapshot = await getDocs(contactsRef);
+        const subcollectionContacts = contactsSnapshot.docs.map(doc => ({
+          id: doc.id,
+          name: doc.data().name,
+          phone: doc.data().phone,
+          email: doc.data().email || '',
+          type: doc.data().type || 'jobsite'
+        }));
+
+        // Combine contacts
+        const allContacts = [...fetchedContacts, ...subcollectionContacts];
+        setContacts(allContacts);
+        console.log('Fetched contacts:', allContacts);
 
         // If there's exactly one contact and no contact is selected, auto-select it
-        if (fetchedContacts.length === 1 && !form.jobsiteContactId) {
+        if (allContacts.length === 1 && !form.jobsiteContactId) {
           const updatedForm = {
             ...form,
-            jobsiteContactId: fetchedContacts[0].id,
+            jobsiteContactId: allContacts[0].id,
+            jobsiteContact: {
+              id: allContacts[0].id,
+              name: allContacts[0].name,
+              phone: allContacts[0].phone,
+              email: allContacts[0].email || '',
+              type: allContacts[0].type
+            },
             updatedAt: new Date().toISOString(),
             updatedBy: user?.email || ""
           };
@@ -570,7 +617,7 @@ export default function EditQuoteRequestPage() {
       } else {
         setCustomerNumber(form.customerNumber || "");
       }
-    } else {
+        } else {
       setCustomerNumber("");
     }
   }, [form?.customer, form?.involvedCountry, customers, form?.customerNumber]);
@@ -579,7 +626,7 @@ export default function EditQuoteRequestPage() {
     setForm((prev: QuoteRequest | null) => {
       if (!prev) return prev;
       const updated = {
-        ...prev,
+          ...prev,
         products: [...(prev.products || []), { catClass: "", description: "", quantity: 1 }],
         updatedAt: new Date().toISOString(),
         updatedBy: user?.email || ""
@@ -604,7 +651,7 @@ export default function EditQuoteRequestPage() {
     setForm((prev: QuoteRequest | null) => {
       if (!prev) return prev;
       const updated = {
-        ...prev,
+      ...prev,
         products: prev.products.filter((_: any, i: number) => i !== idx),
         updatedAt: new Date().toISOString(),
         updatedBy: user?.email || ""
@@ -661,21 +708,47 @@ export default function EditQuoteRequestPage() {
   };
 
   const handleAddNewContact = async () => {
-    if (!db || !newContact.name || !newContact.phone || !form?.customer) return;
+    if (!form?.customer || !db || !newContact.name || !newContact.phone) {
+      setError("Please fill in all required contact fields");
+      return;
+    }
+
     try {
       const contactsRef = collection(db as Firestore, `customers/${form.customer}/contacts`);
-      const docRef = await addDoc(contactsRef, {
-        ...newContact,
+      const contactData = {
+        name: newContact.name,
+        phone: newContact.phone,
+        type: 'jobsite',
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
-      });
-      const addedContact = { id: docRef.id, ...newContact };
-      setContacts(prev => [...prev, addedContact]);
-      handleChange('jobsiteContactId', docRef.id);
-      setShowNewContact(false);
+      };
+
+      const docRef = await addDoc(contactsRef, contactData);
+
+      // Add the new contact to the contacts list
+      const newContactWithId = {
+        id: docRef.id,
+        ...contactData
+      };
+      
+      setContacts(prev => [...prev, newContactWithId]);
+      
+      // Update the form with the new contact
+      const updatedForm = {
+        ...form,
+        jobsiteContactId: docRef.id,
+        jobsiteContact: newContactWithId,
+        updatedAt: new Date().toISOString(),
+        updatedBy: user?.email || ""
+      };
+      setForm(updatedForm);
+      saveChanges(updatedForm);
+
       setNewContact({ name: "", phone: "" });
+      setShowNewContact(false);
     } catch (err) {
-      console.error("Error adding new contact:", err);
+      console.error("Error creating new contact:", err);
+      setError("Failed to create new contact");
     }
   };
 
@@ -685,10 +758,10 @@ export default function EditQuoteRequestPage() {
         if (!prev) return prev;
         const updated = {
           ...prev,
-          jobsite: {
+      jobsite: {
             ...prev.jobsite,
             address,
-            coordinates: null
+          coordinates: null
           },
           updatedAt: new Date().toISOString(),
           updatedBy: user?.email || ""
@@ -781,7 +854,7 @@ export default function EditQuoteRequestPage() {
           if (!prev) return prev;
           const updated = {
             ...prev,
-            jobsite: {
+        jobsite: {
               ...prev.jobsite,
               address: geocodingData.results[0].formatted_address,
               coordinates: { lat, lng }
@@ -899,14 +972,14 @@ export default function EditQuoteRequestPage() {
     setForm((prev: QuoteRequest | null) => {
       if (!prev) return prev;
       const updated = {
-        ...prev,
-        notes: [
-          ...(prev.notes || []),
-          {
-            text: newNote.trim(),
-            user: user.email,
-            dateTime: new Date().toISOString()
-          }
+      ...prev,
+      notes: [
+        ...(prev.notes || []),
+        {
+          text: newNote.trim(),
+          user: user.email,
+          dateTime: new Date().toISOString()
+        }
         ],
         updatedAt: new Date().toISOString(),
         updatedBy: user?.email || ""
@@ -958,7 +1031,7 @@ export default function EditQuoteRequestPage() {
                     {form.involvedCountry}
                   </>
                 )}
-              </div>
+          </div>
               <div className="flex items-center gap-4">
                 {/* Save status message */}
                 {saveMessage && (
@@ -968,27 +1041,27 @@ export default function EditQuoteRequestPage() {
                     "text-red-600"
                   }`}>
                     {saveMessage}
-                  </div>
+        </div>
                 )}
                 <button
                   onClick={() => handleNavigation("/quote-requests")}
                   className="px-4 py-2 text-gray-700 bg-gray-100 rounded hover:bg-gray-200"
                   disabled={saving}
-                >
-                  Cancel
+          >
+            Cancel
                 </button>
-                <button
+          <button
                   type="button"
                   onClick={() => form && saveChanges(form)}
                   className="px-4 py-2 text-white bg-red-600 rounded hover:bg-red-700 disabled:opacity-50"
                   disabled={saving || isReadOnly || !hasUnsavedChanges}
                 >
                   {saving ? "Saving..." : "Save Changes"}
-                </button>
+          </button>
               </div>
             </div>
-          </div>
         </div>
+      </div>
 
         {/* Main content with padding for fixed header */}
         <div className="pt-20">
@@ -1025,39 +1098,39 @@ export default function EditQuoteRequestPage() {
                   <div className="grid grid-cols-[1fr_2fr_1fr] gap-8">
                     {/* Left Column */}
                     <div className="space-y-6">
-                      <div>
-                        <label className="block mb-1 font-medium">Title</label>
-                        <input
-                          type="text"
+          <div>
+            <label className="block mb-1 font-medium">Title</label>
+            <input
+              type="text"
                           value={form.title || ""}
                           onChange={(e) => handleChange("title", e.target.value)}
-                          disabled={isReadOnly}
+              disabled={isReadOnly}
                           className="w-full p-2 border rounded"
-                        />
-                      </div>
-                      <div>
-                        <label className="block mb-1 font-medium">Creator Country</label>
+            />
+          </div>
+          <div>
+            <label className="block mb-1 font-medium">Creator Country</label>
                         <input
                           type="text"
                           value={form.creatorCountry || ""}
                           disabled
                           className="w-full p-2 border rounded bg-gray-50"
-                        />
-                      </div>
-                      <div>
+            />
+          </div>
+          <div>
                         <label className="block mb-1 font-medium">Target Country</label>
-                        <CountrySelect
+            <CountrySelect
                           value={form.involvedCountry || form.targetCountry || ""}
                           onChange={(value) => {
                             handleChange("involvedCountry", value);
                             handleChange("targetCountry", value);
                           }}
-                          disabled={isReadOnly}
-                        />
-                      </div>
-                      <div>
-                        <label className="block mb-1 font-medium">Customer</label>
-                        <select
+              disabled={isReadOnly}
+            />
+          </div>
+          <div>
+            <label className="block mb-1 font-medium">Customer</label>
+            <select
                           value={form.customer || ""}
                           onChange={(e) => handleChange("customer", e.target.value)}
                           disabled={isReadOnly}
@@ -1065,28 +1138,28 @@ export default function EditQuoteRequestPage() {
                         >
                           <option value="">Select customer...</option>
                           {customers.map(customer => (
-                            <option key={customer.id} value={customer.id}>
-                              {customer.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block mb-1 font-medium">Status</label>
-                        <select
+                <option key={customer.id} value={customer.id}>
+                  {customer.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block mb-1 font-medium">Status</label>
+            <select
                           value={form.status || ""}
                           onChange={(e) => handleChange("status", e.target.value)}
-                          disabled={isReadOnly}
+              disabled={isReadOnly}
                           className="w-full p-2 border rounded"
-                        >
+            >
                           {statuses.map(status => (
-                            <option key={status} value={status}>
-                              {status}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
+                <option key={status} value={status}>
+                  {status}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
                         <label className="block mb-1 font-medium">Labels</label>
                         <div className="flex flex-wrap gap-2">
                           {labels.map(label => (
@@ -1104,7 +1177,7 @@ export default function EditQuoteRequestPage() {
                                     : 1,
                               }}
                             >
-                              <input
+              <input
                                 type="checkbox"
                                 className="hidden"
                                 checked={form.labels?.includes(label.id)}
@@ -1118,7 +1191,7 @@ export default function EditQuoteRequestPage() {
                               {label.name}
                             </label>
                           ))}
-                        </div>
+                </div>
                       </div>
                     </div>
 
@@ -1161,8 +1234,8 @@ export default function EditQuoteRequestPage() {
                                 >
                                   ×
                                 </button>
-                              )}
-                            </div>
+              )}
+            </div>
                           ))}
                         </div>
                         {!isReadOnly && (
@@ -1173,10 +1246,10 @@ export default function EditQuoteRequestPage() {
                           >
                             + Add Product
                           </button>
-                        )}
-                      </div>
+            )}
+          </div>
 
-                      <div>
+          <div>
                         <label className="block mb-1 font-medium">Notes</label>
                         <div className="space-y-2">
                           {form.notes?.map((note: any, index: number) => (
@@ -1196,18 +1269,18 @@ export default function EditQuoteRequestPage() {
                                 placeholder="Add a note..."
                                 className="flex-1 p-2 border rounded"
                               />
-                              <button
+                <button
                                 type="button"
                                 onClick={addNote}
                                 disabled={!newNote.trim()}
                                 className="px-4 py-2 bg-blue-500 text-white rounded disabled:opacity-50"
                               >
                                 Add
-                              </button>
-                            </div>
+                </button>
+            </div>
                           )}
-                        </div>
-                      </div>
+          </div>
+        </div>
 
                       <div>
                         <label className="block mb-1 font-medium">Attachments</label>
@@ -1223,30 +1296,30 @@ export default function EditQuoteRequestPage() {
 
                     {/* Right Column */}
                     <div className="space-y-6">
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <label className="block mb-1 font-medium">Start Date</label>
-                          <input
-                            type="date"
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block mb-1 font-medium">Start Date</label>
+              <input
+                type="date"
                             value={form.startDate || ''}
-                            onChange={(e) => handleChange('startDate', e.target.value)}
+                onChange={(e) => handleChange('startDate', e.target.value)}
                             className="w-full p-2 border rounded"
-                            disabled={isReadOnly}
-                          />
-                        </div>
-                        <div>
-                          <label className="block mb-1 font-medium">End Date</label>
+                disabled={isReadOnly}
+              />
+            </div>
+            <div>
+              <label className="block mb-1 font-medium">End Date</label>
                           <div>
-                            <input
-                              type="date"
-                              value={form.endDate || ''}
-                              onChange={(e) => handleChange('endDate', e.target.value)}
+              <input
+                type="date"
+                value={form.endDate || ''}
+                onChange={(e) => handleChange('endDate', e.target.value)}
                               className="w-full p-2 border rounded"
-                              disabled={isReadOnly || form.customerDecidesEnd}
-                            />
+                disabled={isReadOnly || form.customerDecidesEnd}
+              />
                             <div className="mt-1 flex items-center gap-2">
-                              <input
-                                type="checkbox"
+            <input
+              type="checkbox"
                                 id="customerDecidesEnd"
                                 checked={form.customerDecidesEnd || false}
                                 onChange={(e) => {
@@ -1255,7 +1328,7 @@ export default function EditQuoteRequestPage() {
                                     handleChange('endDate', null);
                                   }
                                 }}
-                                disabled={isReadOnly}
+              disabled={isReadOnly}
                                 className="h-4 w-4"
                               />
                               <label htmlFor="customerDecidesEnd" className="text-sm text-gray-600">
@@ -1264,12 +1337,12 @@ export default function EditQuoteRequestPage() {
                             </div>
                           </div>
                         </div>
-                      </div>
+          </div>
 
-                      <div>
+          <div>
                         <label className="block mb-1 font-medium">Jobsite Address</label>
-                        <input
-                          type="text"
+                  <input
+                    type="text"
                           value={form?.jobsite.address || ''}
                           onChange={(e) => handleChange('jobsite.address', e.target.value)}
                           className="w-full p-2 border rounded"
@@ -1280,7 +1353,7 @@ export default function EditQuoteRequestPage() {
                         <div className="mt-4 grid grid-cols-2 gap-4">
                           <div>
                             <label className="block text-sm font-medium text-gray-700">Latitude</label>
-                            <input
+                  <input
                               type="number"
                               step="any"
                               value={form?.jobsite.coordinates?.lat || ''}
@@ -1291,8 +1364,8 @@ export default function EditQuoteRequestPage() {
                           </div>
                           <div>
                             <label className="block text-sm font-medium text-gray-700">Longitude</label>
-                            <input
-                              type="number"
+                    <input
+                      type="number"
                               step="any"
                               value={form?.jobsite.coordinates?.lng || ''}
                               onChange={(e) => handleChange('jobsite.coordinates.lng', e.target.value)}
@@ -1319,48 +1392,48 @@ export default function EditQuoteRequestPage() {
                           ))}
                         </select>
                         {!isReadOnly && form.customer && (
-                          <button
+                    <button
                             type="button"
                             onClick={() => setShowNewContact(true)}
                             className="mt-2 text-blue-500 hover:text-blue-700"
                           >
                             + Add New Contact
-                          </button>
+                    </button>
                         )}
-                      </div>
+          </div>
 
                       {/* Customer Number */}
                       {form?.customer && form?.involvedCountry && (
-                        <div>
+          <div>
                           <label className="block mb-1 font-medium">
                             Customer Number for {form.involvedCountry}
                           </label>
-                          <input
-                            type="text"
+                <input
+                  type="text"
                             value={customerNumber}
                             readOnly
                             className="w-full p-2 border rounded bg-gray-50"
                           />
-                        </div>
+              </div>
                       )}
                     </div>
                   </div>
-                </div>
+              </div>
               </form>
-            </div>
+        </div>
 
             {/* Messaging panel */}
             <div className="w-[400px] border-l border-gray-200 bg-white">
-              <MessagingPanel
-                quoteRequestId={params.id as string}
-                messages={messages}
+            <MessagingPanel
+              quoteRequestId={params.id as string}
+              messages={messages}
                 onSendMessage={handleSendMessage}
-                loading={messagesLoading}
-                error={messagesError}
-              />
-            </div>
+              loading={messagesLoading}
+              error={messagesError}
+            />
           </div>
         </div>
+    </div>
       </div>
     </>
   );

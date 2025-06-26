@@ -116,7 +116,11 @@ export default function ArchivedPage() {
                         <div className="text-sm text-gray-700">Products: {getProductsSummary(qr.products)}</div>
                         <div className="text-xs text-gray-500 italic">Last note: {getLastNote(qr.notes)}</div>
                         <div className="text-xs mt-2">
-                          <MessageHistoryIndicator quoteRequestId={qr.id} />
+                          <MessageHistoryIndicator 
+                            quoteRequestId={qr.id} 
+                            creatorCountry={qr.creatorCountry}
+                            involvedCountry={qr.involvedCountry}
+                          />
                         </div>
                         <div className="mt-2 flex items-center gap-4">
                           <span className="text-[#e40115] underline">Edit</span>

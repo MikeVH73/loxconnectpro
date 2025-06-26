@@ -11,6 +11,7 @@ import ClearIcon from '@mui/icons-material/Clear';
 import Link from "next/link";
 import DashboardMessaging from "./DashboardMessaging";
 import { Firestore } from 'firebase/firestore';
+import MessageHistoryIndicator from "../components/MessageHistoryIndicator";
 
 interface Message {
   id: string;
@@ -44,13 +45,16 @@ interface QuoteRequest {
   jobsite?: string;
   involvedCountry?: string;
   notes?: string;
+  waitingForAnswer?: boolean;
+  urgent?: boolean;
+  problems?: boolean;
 }
 
 interface QuoteRequestCardProps {
   qr: QuoteRequest;
   customers: Customer[];
   labels: Label[];
-  onCardClick: () => void;
+  onCardClick: (id: string) => void;
   getCustomerName: (id: string) => string;
   getLabelName: (id: string) => string;
 }
@@ -149,12 +153,12 @@ export default function DashboardPage() {
             const message = change.doc.data();
             const quoteRequestId = message.quoteRequestId;
             
-            // Update the quote request's lastMessageAt
+            // Update the quote request's lastMessageAt and set unread flag only if the message is not from current user
             if (quoteRequestId) {
               const quoteRef = doc(db, 'quoteRequests', quoteRequestId);
               updateDoc(quoteRef, {
                 lastMessageAt: message.createdAt,
-                hasUnreadMessages: true
+                hasUnreadMessages: message.sender !== user.email
               }).catch(console.error);
             }
           }
@@ -166,6 +170,23 @@ export default function DashboardPage() {
       console.error('Error setting up message listener:', err);
     }
   }, [user, db]);
+
+  // Add a function to handle message reading
+  const handleQuoteClick = async (id: string) => {
+    setSelectedQuoteId(id);
+    
+    // Mark messages as read when opening the quote
+    if (db && user) {
+      try {
+        const quoteRef = doc(db as Firestore, 'quoteRequests', id);
+        await updateDoc(quoteRef, {
+          hasUnreadMessages: false
+        });
+      } catch (err) {
+        console.error('Error marking messages as read:', err);
+      }
+    }
+  };
 
   if (!isClient || loading) {
     return (
@@ -394,7 +415,7 @@ export default function DashboardPage() {
                   qr={qr}
                   customers={customers}
                   labels={labels}
-                  onCardClick={() => setSelectedQuoteId(qr.id)}
+                  onCardClick={handleQuoteClick}
                   getCustomerName={getCustomerName}
                   getLabelName={getLabelName}
                 />
@@ -414,7 +435,7 @@ export default function DashboardPage() {
                   qr={qr}
                   customers={customers}
                   labels={labels}
-                  onCardClick={() => setSelectedQuoteId(qr.id)}
+                  onCardClick={handleQuoteClick}
                   getCustomerName={getCustomerName}
                   getLabelName={getLabelName}
                 />
@@ -434,7 +455,7 @@ export default function DashboardPage() {
                   qr={qr}
                   customers={customers}
                   labels={labels}
-                  onCardClick={() => setSelectedQuoteId(qr.id)}
+                  onCardClick={handleQuoteClick}
                   getCustomerName={getCustomerName}
                   getLabelName={getLabelName}
                 />
@@ -454,7 +475,7 @@ export default function DashboardPage() {
                   qr={qr}
                   customers={customers}
                   labels={labels}
-                  onCardClick={() => setSelectedQuoteId(qr.id)}
+                  onCardClick={handleQuoteClick}
                   getCustomerName={getCustomerName}
                   getLabelName={getLabelName}
                 />
@@ -465,10 +486,10 @@ export default function DashboardPage() {
       </div>
 
       {/* Messaging Panel */}
-      {selectedQuoteId && (
+      {selectedQuote?.id && (
         <div className="w-full lg:w-[400px] h-[600px] lg:h-auto bg-white border-l">
           <DashboardMessaging
-            quoteRequestId={selectedQuoteId}
+            quoteRequestId={selectedQuote.id}
             onClose={() => setSelectedQuoteId(null)}
           />
         </div>
@@ -479,54 +500,53 @@ export default function DashboardPage() {
 
 function QuoteRequestCard({ qr, customers, labels, onCardClick, getCustomerName, getLabelName }: QuoteRequestCardProps) {
   return (
-    <div className="card-modern border-l-4 border-[#e40115] p-3 min-h-[120px] flex flex-col justify-between relative cursor-pointer" onClick={onCardClick}>
-      <Link
-        href={`/quote-requests/${qr.id}/edit`}
-        className="absolute top-2 right-2 text-gray-400 hover:text-[#e40115] focus:outline-none focus:ring-2 focus:ring-[#e40115] rounded-full text-sm"
-        title="View details"
-        tabIndex={0}
-        aria-label="View Quote Request details"
-        prefetch={false}
-        onClick={e => e.stopPropagation()}
-      >
-        🔍
-      </Link>
-      <div className="font-bold text-sm flex items-center gap-2 pr-6">
-        {qr.title}
+    <div 
+      onClick={() => onCardClick(qr.id)} 
+      className="bg-white rounded-lg shadow-sm p-4 hover:shadow-md transition-shadow cursor-pointer relative min-h-[160px] flex flex-col"
+    >
+      {/* Header with title and status icons */}
+      <div className="flex items-start justify-between mb-3">
+        <h3 className="font-bold text-lg pr-8">{qr.title}</h3>
+        <div className="flex items-center space-x-2">
+          {qr.waitingForAnswer && (
+            <span className="text-yellow-500 text-lg">⌛</span>
+          )}
+          {qr.urgent && (
+            <span className="text-red-500 text-lg">🔥</span>
+          )}
+          {qr.problems && (
+            <span className="text-orange-500 text-lg">⚠️</span>
+          )}
+        </div>
       </div>
-      <div className="text-xs text-gray-500 mb-1">{getCustomerName(qr.customer)}</div>
-      <div className="text-xs text-gray-400 mb-1">{qr.creatorCountry} → {qr.involvedCountry}</div>
-      <div className="flex flex-wrap gap-1 mt-1">
-        {(qr.labels || []).map(id => {
-          const labelName = getLabelName(id)?.toLowerCase?.();
-          let colorClass = "";
-          if (labelName === "urgent") colorClass = "bg-orange-500";
-          else if (labelName === "problems") colorClass = "bg-[#e40115]";
-          else if (labelName === "waiting for answer") colorClass = "bg-blue-600";
-          else colorClass = "pill-modern";
-          return (
-            <span
-              key={id}
-              className={`${colorClass} text-xs px-1.5 py-0.5 rounded font-light text-white`}
-            >
+
+      {/* Customer and country info */}
+      <div className="text-sm text-gray-600 mb-3">
+        <div className="font-medium mb-1">{getCustomerName(qr.customer)}</div>
+        <div className="flex items-center">
+          <span className="text-blue-600">{qr.creatorCountry}</span>
+          <span className="mx-2">→</span>
+          <span className="text-purple-600">{qr.involvedCountry}</span>
+        </div>
+      </div>
+
+      {/* Labels */}
+      <div className="flex flex-wrap gap-2 mt-auto">
+        {(qr.labels || []).map((id: string) => (
+          <span key={id} className="bg-[#e40115] text-white px-2 py-1 rounded-full text-xs">
               {getLabelName(id)}
             </span>
-          );
-        })}
+        ))}
       </div>
-      {Array.isArray(qr.notes) && qr.notes.length > 0 && (
-        <div className="text-xs text-gray-400 italic mt-1 truncate" title={qr.notes[qr.notes.length-1].text}>
-          Last note: {qr.notes[qr.notes.length-1].text}
+
+      {/* Message indicator */}
+      <div className="absolute top-3 right-3">
+        <MessageHistoryIndicator 
+          quoteRequestId={qr.id}
+          creatorCountry={qr.creatorCountry}
+          involvedCountry={qr.involvedCountry}
+        />
         </div>
-      )}
-      {qr.hasUnreadMessages && (
-        <div className="absolute top-2 right-8 w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
-      )}
-      {qr.lastMessageAt && (
-        <div className="text-xs text-gray-500 mt-1">
-          Last message: {new Date(qr.lastMessageAt).toLocaleString()}
-        </div>
-      )}
     </div>
   );
 }
