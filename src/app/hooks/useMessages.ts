@@ -45,44 +45,48 @@ export function useMessages(quoteRequestId: string | null) {
         orderBy("createdAt", "asc")
       );
 
-      const unsubscribe = onSnapshot(q, (snapshot) => {
-        try {
-          const newMessages = snapshot.docs.map(doc => {
-            const data = doc.data();
-            return {
-              id: doc.id,
-              text: data.text || '',
-              createdAt: data.createdAt,
-              sender: data.sender || '',
-              senderCountry: data.senderCountry || '',
-              quoteRequestId: data.quoteRequestId || '',
-              files: data.files || []
-            } as Message;
-          });
-          setMessages(newMessages);
-          setError(null);
-          
-          // Mark messages as read when loaded
-          if (newMessages.length > 0) {
-            const quoteRef = doc(db, "quoteRequests", quoteRequestId);
-            updateDoc(quoteRef, {
-              hasUnreadMessages: false,
-              lastMessageAt: newMessages[newMessages.length - 1].createdAt
-            }).catch(err => {
-              console.error('Error updating quote request read status:', err);
+      const unsubscribe = onSnapshot(
+        q, 
+        (snapshot) => {
+          try {
+            const newMessages = snapshot.docs.map(doc => {
+              const data = doc.data();
+              return {
+                id: doc.id,
+                text: data.text || '',
+                createdAt: data.createdAt,
+                sender: data.sender || '',
+                senderCountry: data.senderCountry || '',
+                quoteRequestId: data.quoteRequestId || '',
+                files: data.files || []
+              } as Message;
             });
+            setMessages(newMessages);
+            setError(null);
+            
+            // Mark messages as read when loaded
+            if (newMessages.length > 0) {
+              const quoteRef = doc(db, "quoteRequests", quoteRequestId);
+              updateDoc(quoteRef, {
+                hasUnreadMessages: false,
+                lastMessageAt: newMessages[newMessages.length - 1].createdAt
+              }).catch(err => {
+                console.error('Error updating quote request read status:', err);
+              });
+            }
+          } catch (err) {
+            console.error('Error processing messages:', err);
+            setError('Failed to process messages');
+          } finally {
+            setLoading(false);
           }
-        } catch (err) {
-          console.error('Error processing messages:', err);
-          setError('Failed to process messages');
-        } finally {
+        },
+        (err) => {
+          console.error('Error in message listener:', err);
+          setError('Failed to load messages');
           setLoading(false);
         }
-      }, (err) => {
-        console.error('Error in message listener:', err);
-        setError('Failed to load messages');
-        setLoading(false);
-      });
+      );
 
       return () => unsubscribe();
     } catch (err) {
@@ -118,10 +122,11 @@ export function useMessages(quoteRequestId: string | null) {
       // Add the message
       const messageDoc = await addDoc(messagesRef, newMessage);
 
-      // Update quote request
+      // Update quote request with changeType for notifications
       await updateDoc(quoteRef, {
         lastMessageAt: serverTimestamp(),
-        hasUnreadMessages: true
+        hasUnreadMessages: true,
+        changeType: 'newMessage' // Add changeType for notifications
       });
 
       return messageDoc.id;
