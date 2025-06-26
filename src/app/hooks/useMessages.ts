@@ -31,7 +31,7 @@ export function useMessages(quoteRequestId: string | null) {
 
   // Load and listen to messages
   useEffect(() => {
-    if (!quoteRequestId) {
+    if (!quoteRequestId || !db) {
       setMessages([]);
       setLoading(false);
       return;
@@ -97,7 +97,7 @@ export function useMessages(quoteRequestId: string | null) {
   }, [quoteRequestId]);
 
   const sendMessage = async (text: string, sender: string, senderCountry: string, files: any[] = []) => {
-    if (!quoteRequestId || !sender || !senderCountry) {
+    if (!quoteRequestId || !sender || !senderCountry || !db) {
       throw new Error('Missing required data for sending message');
     }
 
@@ -122,12 +122,28 @@ export function useMessages(quoteRequestId: string | null) {
       // Add the message
       const messageDoc = await addDoc(messagesRef, newMessage);
 
-      // Update quote request with changeType for notifications
+      // Update quote request status
       await updateDoc(quoteRef, {
         lastMessageAt: serverTimestamp(),
-        hasUnreadMessages: true,
-        changeType: 'newMessage' // Add changeType for notifications
+        hasUnreadMessages: true
       });
+
+      // Create notification separately
+      try {
+        const notificationsRef = collection(db as Firestore, "notifications");
+        await addDoc(notificationsRef, {
+          type: 'newMessage',
+          quoteRequestId,
+          sender,
+          senderCountry,
+          createdAt: serverTimestamp(),
+          messageId: messageDoc.id,
+          isRead: false
+        });
+      } catch (notifError) {
+        console.error('Error creating notification:', notifError);
+        // Don't throw here - we still want the message to be considered sent
+      }
 
       return messageDoc.id;
     } catch (err) {
