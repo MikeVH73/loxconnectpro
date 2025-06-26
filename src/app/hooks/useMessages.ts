@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { collection, query, where, orderBy, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, Timestamp } from 'firebase/firestore';
+import { collection, query, where, orderBy, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, Timestamp, Firestore } from 'firebase/firestore';
 import { db } from '@/firebaseClient';
 
 interface Message {
@@ -38,7 +38,7 @@ export function useMessages(quoteRequestId: string | null) {
     }
 
     try {
-      const messagesRef = collection(db, "messages");
+      const messagesRef = collection(db as Firestore, "messages");
       const q = query(
         messagesRef,
         where("quoteRequestId", "==", quoteRequestId),
@@ -66,7 +66,7 @@ export function useMessages(quoteRequestId: string | null) {
             
             // Mark messages as read when loaded
             if (newMessages.length > 0) {
-              const quoteRef = doc(db, "quoteRequests", quoteRequestId);
+              const quoteRef = doc(db as Firestore, "quoteRequests", quoteRequestId);
               updateDoc(quoteRef, {
                 hasUnreadMessages: false,
                 lastMessageAt: newMessages[newMessages.length - 1].createdAt
@@ -106,8 +106,8 @@ export function useMessages(quoteRequestId: string | null) {
     }
 
     try {
-      const messagesRef = collection(db, "messages");
-      const quoteRef = doc(db, "quoteRequests", quoteRequestId);
+      const messagesRef = collection(db as Firestore, "messages");
+      const quoteRef = doc(db as Firestore, "quoteRequests", quoteRequestId);
       
       // Create the message
       const newMessage = {
