@@ -53,27 +53,21 @@ export default function FileUpload({
         continue;
       }
       
-      // Check if storage is accessible
       try {
-        // Test storage access first
-        const testRef = ref(storage, 'test-connection');
-        console.log('[FileUpload] Testing storage connection...');
-        setUploadProgress(`Testing storage connection for ${file.name}...`);
+        // Generate unique file ID
+        const fileId = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
         
-        // If we reach here, storage is accessible
-        console.log('[FileUpload] Storage accessible, proceeding with upload...');
-      
-      // Generate unique file ID
-      const fileId = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      
-      // For new quote requests, store files temporarily
-      const storagePath = quoteRequestId === "new" 
-          ? `temp-uploads/${fileId}_${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`
-          : `quote-requests/${quoteRequestId}/${fileId}_${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
-      
+        // Sanitize file name - replace any non-alphanumeric characters (except dots and hyphens) with underscores
+        const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+        
+        // Construct storage path
+        const storagePath = quoteRequestId === "new" 
+          ? `temp-uploads/${fileId}_${sanitizedFileName}`
+          : `quote-requests/${quoteRequestId}/${fileId}_${sanitizedFileName}`;
+        
         console.log('[FileUpload] Storage path:', storagePath);
         setUploadProgress(`Uploading ${file.name} to storage...`);
-      const fileRef = ref(storage, storagePath);
+        const fileRef = ref(storage, storagePath);
 
         // Upload with timeout and progress
         console.log('[FileUpload] Starting upload to Firebase Storage...');
@@ -152,14 +146,18 @@ export default function FileUpload({
   };
 
   const handleFileDelete = async (fileData: FileData) => {
-    if (readOnly) return;
+    if (readOnly || !storage || !db) return;
 
     try {
+      // Get the original file name from the URL if available
+      const originalFileName = fileData.url.split('/').pop()?.split('?')[0] || fileData.name;
+      
       // Delete from Firebase Storage
       const storagePath = quoteRequestId === "new" 
-        ? `temp-uploads/${fileData.id}_${fileData.name}`
-        : `quote-requests/${quoteRequestId}/${fileData.id}_${fileData.name}`;
+        ? `temp-uploads/${fileData.id}_${originalFileName}`
+        : `quote-requests/${quoteRequestId}/${fileData.id}_${originalFileName}`;
       
+      console.log('[FileUpload] Attempting to delete file:', storagePath);
       const fileRef = ref(storage, storagePath);
       await deleteObject(fileRef);
 
@@ -175,7 +173,7 @@ export default function FileUpload({
       onFilesChange(updatedFiles);
     } catch (error) {
       console.error('Error deleting file:', error);
-      alert('Failed to delete file');
+      alert('Failed to delete file. Please try again or contact support if the problem persists.');
     }
   };
 

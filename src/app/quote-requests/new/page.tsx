@@ -73,6 +73,16 @@ interface Contact {
   isFirstContact?: boolean;
 }
 
+interface Customer {
+  id: string;
+  name: string;
+  address: string;
+  contact?: string;
+  phone?: string;
+  email?: string;
+  customerNumbers?: { [country: string]: string };
+}
+
 const statuses = ["In Progress", "Won", "Lost", "Cancelled"];
 
 // Add state for archived status
@@ -125,6 +135,7 @@ export default function NewQuoteRequestPage() {
   const [isGeocoding, setIsGeocoding] = useState(false);
   const [geocodingError, setGeocodingError] = useState("");
   const [isGoogleMapsLoaded, setIsGoogleMapsLoaded] = useState(false);
+  const [customerNumber, setCustomerNumber] = useState("");
 
   // Initialize Google Maps
   useEffect(() => {
@@ -277,6 +288,20 @@ export default function NewQuoteRequestPage() {
     }
   }, [db]);
 
+  // Update customer number when involved country or customer changes
+  useEffect(() => {
+    if (customerId && involvedCountry) {
+      const selectedCustomer = customers.find(c => c.id === customerId);
+      if (selectedCustomer?.customerNumbers?.[involvedCountry]) {
+        setCustomerNumber(selectedCustomer.customerNumbers[involvedCountry]);
+      } else {
+        setCustomerNumber("");
+      }
+    } else {
+      setCustomerNumber("");
+    }
+  }, [customerId, involvedCountry, customers]);
+
   // Form submission handler
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -286,11 +311,26 @@ export default function NewQuoteRequestPage() {
     setError("");
 
     try {
+      // Get the selected contact information
+      let jobsiteContactData = null;
+      if (jobsiteContactId) {
+        const selectedContact = contacts.find(c => c.id === jobsiteContactId);
+        if (selectedContact) {
+          jobsiteContactData = {
+            id: selectedContact.id,
+            name: selectedContact.name,
+            phone: selectedContact.phone,
+            email: selectedContact.email || ""
+          };
+        }
+      }
+
       const quoteRequestData = {
         title,
         creatorCountry,
         involvedCountry,
-        customerId,
+        customer: customerId,
+        customerNumber,
         status,
         isArchived,
         products,
@@ -302,6 +342,7 @@ export default function NewQuoteRequestPage() {
         endDate: customerDecidesEnd ? null : endDate,
         customerDecidesEnd,
         jobsiteContactId,
+        jobsiteContact: jobsiteContactData,
         labels: selectedLabels,
         notes,
         attachments,
@@ -312,11 +353,11 @@ export default function NewQuoteRequestPage() {
       };
 
       console.log('Submitting quote request:', quoteRequestData);
-      const docRef = await addDoc(collection(db as Firestore, "quoteRequests"), quoteRequestData);
+      await addDoc(collection(db as Firestore, "quoteRequests"), quoteRequestData);
 
       if (isMounted.current) {
         setSuccess("Quote request created successfully!");
-        router.push(`/quote-requests/${docRef.id}`);
+        router.push("/dashboard"); // Redirect to dashboard instead of individual quote request
       }
     } catch (err) {
       console.error("Error creating quote request:", err);
@@ -543,6 +584,21 @@ export default function NewQuoteRequestPage() {
             </button>
           </div>
         </div>
+
+        {/* Customer Number */}
+        {customerId && involvedCountry && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700">
+              Customer Number for {involvedCountry}
+            </label>
+            <input
+              type="text"
+              value={customerNumber}
+              readOnly
+              className="mt-1 block w-full rounded-md border-gray-300 bg-gray-100 shadow-sm"
+            />
+          </div>
+        )}
 
         {/* Products */}
         <div>
