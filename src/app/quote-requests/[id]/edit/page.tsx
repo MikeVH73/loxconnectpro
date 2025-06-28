@@ -212,19 +212,17 @@ export default function EditQuoteRequestPage() {
         if (original.problems !== formData.problems) {
           changes.push(formData.problems ? 'Marked as having problems' : 'Problems resolved');
         }
-        // Add more change checks as needed
       }
 
       if (changes.length > 0) {
         await createNotification({
-          type: 'change',
           quoteRequestId: params.id as string,
           quoteRequestTitle: formData.title,
           sender: user?.email || '',
           senderCountry: userProfile.businessUnit,
           targetCountry,
-          changeType: 'status',
-          changeDetails: changes.join(', ')
+          content: changes.join(', '),
+          notificationType: original?.status !== formData.status ? 'status_change' : 'property_change'
         });
       }
       
@@ -252,6 +250,20 @@ export default function EditQuoteRequestPage() {
       const updated = { ...prev };
       updated[field] = value;
       updated.updatedAt = new Date().toISOString();
+      
+      // Sync waitingForAnswer flag with "Waiting for Answer" label
+      if (field === 'waitingForAnswer') {
+        const waitingLabelId = labels.find(l => l.name?.toLowerCase() === "waiting for answer")?.id;
+        if (waitingLabelId) {
+          if (value && !updated.labels?.includes(waitingLabelId)) {
+            // Add the label if setting to true and it's not already there
+            updated.labels = [...(updated.labels || []), waitingLabelId];
+          } else if (!value && updated.labels?.includes(waitingLabelId)) {
+            // Remove the label if setting to false and it's there
+            updated.labels = updated.labels.filter(id => id !== waitingLabelId);
+          }
+        }
+      }
       
       // Only trigger save if the value actually changed
       if (prev[field] !== value) {
@@ -672,36 +684,31 @@ export default function EditQuoteRequestPage() {
     setHasUnsavedChanges(true);
   };
 
-  const handleLabelToggle = (id: string) => {
+  const handleLabelChange = (selectedLabelIds: string[]) => {
+    if (!form) return;
+    
     setForm((prev: QuoteRequest | null) => {
       if (!prev) return prev;
       
-      const updatedLabels = prev.labels?.includes(id)
-        ? prev.labels.filter((l: string) => l !== id)
-        : (prev.labels?.length || 0) < 4
-        ? [...(prev.labels || []), id]
-        : prev.labels || [];
+      const updated = { ...prev };
+      updated.labels = selectedLabelIds;
+      updated.updatedAt = new Date().toISOString();
       
-      const updated = {
-        ...prev,
-        labels: updatedLabels,
-        updatedAt: new Date().toISOString()
-      };
+      // Update waitingForAnswer flag based on presence of "Waiting for Answer" label
+      const waitingLabelId = labels.find(l => l.name?.toLowerCase() === "waiting for answer")?.id;
+      updated.waitingForAnswer = selectedLabelIds.includes(waitingLabelId || "");
       
-      // Only trigger save if the labels actually changed
-      if (JSON.stringify(prev.labels) !== JSON.stringify(updatedLabels)) {
-        setHasUnsavedChanges(true);
-        
-        // Clear existing timeout
-        if (saveTimeoutRef.current) {
-          clearTimeout(saveTimeoutRef.current);
-        }
-        
-        // Set new timeout for auto-save
-        saveTimeoutRef.current = setTimeout(() => {
-          saveChanges(updated);
-        }, 2000);
+      setHasUnsavedChanges(true);
+      
+      // Clear existing timeout
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
       }
+      
+      // Set new timeout for auto-save
+      saveTimeoutRef.current = setTimeout(() => {
+        saveChanges(updated);
+      }, 1000);
       
       return updated;
     });
@@ -960,10 +967,22 @@ export default function EditQuoteRequestPage() {
   };
 
   const handleSendMessage = async (text: string) => {
-    if (!user?.email || !userProfile?.businessUnit) {
-      throw new Error('Cannot send message: User not authenticated');
+    if (!user?.email || !userProfile?.businessUnit || !form) {
+      throw new Error('Cannot send message: User not authenticated or form not loaded');
     }
-    await sendMessage(text, user.email, userProfile.businessUnit);
+
+    // Determine the target country based on the sender's country
+    const targetCountry = form.creatorCountry === userProfile.businessUnit 
+      ? form.targetCountry || form.involvedCountry
+      : form.creatorCountry;
+
+    try {
+      // Send the message with the target country and empty files array
+      await sendMessage(text, user.email, userProfile.businessUnit, targetCountry, []);
+    } catch (error) {
+      console.error('Error sending message:', error);
+      throw error;
+    }
   };
 
   const addNote = () => {
@@ -1181,7 +1200,7 @@ export default function EditQuoteRequestPage() {
                                 type="checkbox"
                                 className="hidden"
                                 checked={form.labels?.includes(label.id)}
-                                onChange={() => handleLabelToggle(label.id)}
+                                onChange={() => handleLabelChange(form.labels?.includes(label.id) ? form.labels.filter((l: string) => l !== label.id) : [...(form.labels || []), label.id])}
                                 disabled={
                                   isReadOnly ||
                                   (!form.labels?.includes(label.id) &&
@@ -1423,15 +1442,18 @@ export default function EditQuoteRequestPage() {
         </div>
 
             {/* Messaging panel */}
-            <div className="w-[400px] border-l border-gray-200 bg-white">
-            <MessagingPanel
-              quoteRequestId={params.id as string}
-              messages={messages}
-                onSendMessage={handleSendMessage}
-              loading={messagesLoading}
-              error={messagesError}
-            />
-          </div>
+            <div className="flex justify-center items-center min-h-[600px] h-[70vh] bg-gray-100">
+              <div className="w-full max-w-md h-full bg-white border rounded-lg shadow-lg flex flex-col">
+                <MessagingPanel
+                  messages={messages}
+                  currentUser={user?.email || ''}
+                  currentCountry={userProfile?.businessUnit || ''}
+                  onSendMessage={handleSendMessage}
+                  quoteTitle={form.title}
+                  readOnly={isReadOnly}
+                />
+              </div>
+            </div>
         </div>
     </div>
       </div>

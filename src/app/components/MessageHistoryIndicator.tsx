@@ -41,11 +41,16 @@ export default function MessageHistoryIndicator({ quoteRequestId, creatorCountry
         );
         
         const snapshot = await getDocs(q);
-        const messages = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-          createdAt: doc.data().createdAt?.toDate() || new Date()
-        })) as Message[];
+        const messages = snapshot.docs.map(doc => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            text: data.text || '',
+            senderCountry: data.senderCountry || '',
+            createdAt: data.createdAt?.toDate() || new Date(),
+            readBy: data.readBy || []
+          };
+        }) as Message[];
 
         // Get the most recent message
         if (messages.length > 0) {
@@ -82,15 +87,15 @@ export default function MessageHistoryIndicator({ quoteRequestId, creatorCountry
   }
 
   const isFromCreator = lastMessage?.senderCountry === creatorCountry;
-  const messagePreview = lastMessage?.text && lastMessage.text.length > 30 
-    ? `${lastMessage.text.substring(0, 30)}...`
-    : lastMessage?.text || '';
+  const messageText = lastMessage?.text || '';
+  const messagePreview = messageText.length > 30 
+    ? `${messageText.substring(0, 30)}...`
+    : messageText;
 
   return (
     <div className="flex flex-col">
       {unreadCount > 0 && (
         <div className="flex items-center space-x-2 mb-1">
-          <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
           <span className="text-xs font-medium text-blue-600">
             {unreadCount} new message{unreadCount !== 1 ? 's' : ''}
           </span>
@@ -104,8 +109,8 @@ export default function MessageHistoryIndicator({ quoteRequestId, creatorCountry
           <span className="ml-1 text-gray-600">{messagePreview}</span>
           {lastMessage.createdAt && (
             <span className="text-gray-400 ml-1">
-              ({lastMessage.createdAt.toLocaleTimeString()})
-    </span>
+              ({new Date(lastMessage.createdAt).toLocaleTimeString()})
+            </span>
           )}
         </div>
       )}

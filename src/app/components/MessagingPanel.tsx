@@ -11,12 +11,12 @@ interface Message {
   createdAt: Timestamp;
   sender: string;
   senderCountry: string;
-  files?: {
+  files?: Array<{
     name: string;
     url: string;
     type: string;
     size: number;
-  }[];
+  }>;
 }
 
 interface QuoteFile {
@@ -152,16 +152,16 @@ export default function MessagingPanel({
           </div>
         ) : (
           messages.map((message) => (
-          <div
-            key={message.id}
-            className={`flex ${
-              message.sender === currentUser ? "justify-end" : "justify-start"
-            }`}
-          >
             <div
-              className={`max-w-[70%] rounded-lg p-3 ${
-                message.sender === currentUser
-                  ? "bg-blue-500 text-white"
+              key={message.id}
+              className={`flex ${
+                message.sender === currentUser ? "justify-end" : "justify-start"
+              }`}
+            >
+              <div
+                className={`max-w-[70%] rounded-lg p-3 ${
+                  message.sender === currentUser
+                    ? "bg-blue-500 text-white"
                     : "bg-white border"
                 }`}
               >
@@ -172,10 +172,10 @@ export default function MessagingPanel({
                       : "text-gray-500"
                   } mb-1`}
                 >
-                {message.sender} ({message.senderCountry})
-              </div>
-              <div className="break-words">{message.text}</div>
-                {message.files && message.files.length > 0 && (
+                  {message.sender} ({message.senderCountry})
+                </div>
+                <div className="break-words">{message.text}</div>
+                {message.files && Array.isArray(message.files) && message.files.length > 0 && (
                   <div className="mt-2 space-y-1">
                     {message.files.map((file, index) => (
                       <div

@@ -14,6 +14,12 @@ interface Message {
   sender: string;
   senderCountry: string;
   quoteRequestId?: string;
+  files?: Array<{
+    name: string;
+    url: string;
+    type: string;
+    size: number;
+  }>;
 }
 
 interface QuoteRequest {
@@ -119,11 +125,15 @@ export default function DashboardMessaging({ quoteRequestId, onClose }: Dashboar
       const unsubscribe = onSnapshot(q, (snapshot) => {
         // Convert messages and sort in memory
         const newMessages = snapshot.docs
-          .map(doc => ({
-            id: doc.id,
-            ...doc.data(),
-            createdAt: doc.data().createdAt?.toDate() || new Date()
-          })) as Message[];
+          .map(doc => {
+            const data = doc.data();
+            return {
+              id: doc.id,
+              ...data,
+              createdAt: data.createdAt?.toDate() || new Date(),
+              files: Array.isArray(data.files) ? data.files : []
+            };
+          }) as Message[];
 
         // Sort messages by createdAt in memory
         newMessages.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
@@ -177,13 +187,13 @@ export default function DashboardMessaging({ quoteRequestId, onClose }: Dashboar
         : quoteRequest.creatorCountry;
 
       await createNotification({
-        type: 'message',
+        notificationType: 'message',
         quoteRequestId,
         quoteRequestTitle: quoteRequest.title,
         sender: user.email,
         senderCountry: userProfile.businessUnit,
         targetCountry,
-        message: text.length > 50 ? `${text.substring(0, 50)}...` : text
+        content: `New message: ${text.length > 50 ? `${text.substring(0, 50)}...` : text}`
       });
     } catch (err: any) {
       console.error('Error sending message:', err);

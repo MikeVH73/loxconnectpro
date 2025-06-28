@@ -32,7 +32,6 @@ export function useMessages(quoteRequestId: string | null) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Load and listen to messages
   useEffect(() => {
     if (!quoteRequestId) {
       setMessages([]);
@@ -67,7 +66,6 @@ export function useMessages(quoteRequestId: string | null) {
             setMessages(newMessages);
             setError(null);
             
-            // Mark messages as read when loaded
             if (newMessages.length > 0) {
               const quoteRef = doc(firestore, "quoteRequests", quoteRequestId);
               updateDoc(quoteRef, {
@@ -99,68 +97,68 @@ export function useMessages(quoteRequestId: string | null) {
     }
   }, [quoteRequestId]);
 
-  const sendMessage = async (text: string, sender: string, senderCountry: string, targetCountry: string, files: any[] = []) => {
-    if (!quoteRequestId || !sender || !senderCountry || !targetCountry) {
-      throw new Error('Missing required data for sending message');
-    }
+const sendMessage = async (text: string, sender: string, senderCountry: string, targetCountry: string, files: any[] = []) => {
+  if (!quoteRequestId || !sender || !senderCountry || !targetCountry) {
+    throw new Error('Missing required data for sending message');
+  }
 
-    if (!text.trim() && files.length === 0) {
-      throw new Error('Message cannot be empty');
-    }
+  if (!text.trim() && files.length === 0) {
+    throw new Error('Message cannot be empty');
+  }
 
+  try {
+    const messagesRef = collection(firestore, "messages");
+    const quoteRef = doc(firestore, "quoteRequests", quoteRequestId);
+    
+    // Get quote request data for the title
+    const quoteSnapshot = await getDoc(quoteRef);
+    if (!quoteSnapshot.exists()) {
+      throw new Error('Quote request not found');
+    }
+    
+    const quoteData = quoteSnapshot.data();
+
+    // Create the message
+    const newMessage = {
+      text: text.trim(),
+      quoteRequestId,
+      sender,
+      senderCountry,
+      createdAt: serverTimestamp(),
+      files: files.length > 0 ? files : []
+    };
+
+    // Add the message
+    const messageDoc = await addDoc(messagesRef, newMessage);
+
+    // Update quote request status
+    await updateDoc(quoteRef, {
+      lastMessageAt: serverTimestamp(),
+      hasUnreadMessages: true
+    });
+
+    // Create notification with proper target country
     try {
-      const messagesRef = collection(firestore, "messages");
-      const quoteRef = doc(firestore, "quoteRequests", quoteRequestId);
-      
-      // Get quote request data for the title
-      const quoteSnapshot = await getDoc(quoteRef);
-      if (!quoteSnapshot.exists()) {
-        throw new Error('Quote request not found');
-      }
-      
-      const quoteData = quoteSnapshot.data();
-
-      // Create the message
-      const newMessage = {
-        text: text.trim(),
+      await createNotification({
+        notificationType: 'message',
         quoteRequestId,
+        quoteRequestTitle: quoteData.title,
         sender,
         senderCountry,
-        createdAt: serverTimestamp(),
-        files: files.length > 0 ? files : []
-      };
-
-      // Add the message
-      const messageDoc = await addDoc(messagesRef, newMessage);
-
-      // Update quote request status
-      await updateDoc(quoteRef, {
-        lastMessageAt: serverTimestamp(),
-        hasUnreadMessages: true
+        targetCountry,
+        content: `New message: ${text.length > 50 ? `${text.substring(0, 50)}...` : text}`
       });
-
-      // Create notification with proper target country
-      try {
-        await createNotification({
-          notificationType: 'message',
-          quoteRequestId,
-          quoteRequestTitle: quoteData.title,
-          sender,
-          senderCountry,
-          targetCountry,
-          content: `New message: ${text.length > 50 ? `${text.substring(0, 50)}...` : text}`
-        });
-      } catch (notifError) {
-        console.error('Error creating notification:', notifError);
-        // Don't throw here - we still want the message to be considered sent
-      }
-
-      return messageDoc.id;
-    } catch (err) {
-      console.error('Error sending message:', err);
-      throw new Error('Failed to send message. Please try again.');
+    } catch (notifError) {
+      console.error('Error creating notification:', notifError);
+      // Don't throw here - we still want the message to be considered sent
     }
-  };
+
+    return messageDoc.id;
+  } catch (err) {
+    console.error('Error sending message:', err);
+    throw new Error('Failed to send message. Please try again.');
+  }
+};
 
   return {
     messages,
@@ -168,4 +166,4 @@ export function useMessages(quoteRequestId: string | null) {
     error,
     sendMessage
   };
-}
+} 

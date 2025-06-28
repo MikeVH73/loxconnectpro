@@ -2,48 +2,42 @@ import { addDoc, collection, Firestore, serverTimestamp, doc, updateDoc, query, 
 import { db } from '../../firebaseClient';
 
 interface CreateNotificationParams {
-  type: 'message' | 'change';
   quoteRequestId: string;
   quoteRequestTitle: string;
   sender: string;
   senderCountry: string;
   targetCountry: string;
-  message?: string;
-  changeType?: string;
-  changeDetails?: string;
+  content: string;
+  notificationType: 'message' | 'status_change' | 'property_change';
 }
 
 export async function createNotification({
-  type,
   quoteRequestId,
   quoteRequestTitle,
   sender,
   senderCountry,
   targetCountry,
-  message,
-  changeType,
-  changeDetails,
+  content,
+  notificationType,
 }: CreateNotificationParams) {
   if (!db) throw new Error('Firebase not initialized');
 
   try {
     const notificationsRef = collection(db as Firestore, 'notifications');
     await addDoc(notificationsRef, {
-      type,
       quoteRequestId,
       quoteRequestTitle,
       sender,
       senderCountry,
       targetCountry,
-      message,
-      changeType,
-      changeDetails,
+      content,
+      notificationType,
       createdAt: serverTimestamp(),
       isRead: false,
     });
   } catch (error) {
     console.error('Error creating notification:', error);
-    throw error;
+    // Don't throw the error - we don't want notification failures to break the main flow
   }
 }
 
@@ -67,6 +61,6 @@ export async function markNotificationsAsRead(quoteRequestId: string, targetCoun
     await Promise.all(updatePromises);
   } catch (error) {
     console.error('Error marking notifications as read:', error);
-    throw error;
+    // Don't throw the error - we don't want notification failures to break the main flow
   }
 } 

@@ -1,16 +1,20 @@
 'use client';
 
-import ErrorBoundary from './ErrorBoundary';
 import { ReactNode } from 'react';
-import AuthProvider from '../AuthProvider';
+import ErrorBoundary from './ErrorBoundary';
 import ConditionalLayout from '../ConditionalLayout';
+import AuthProvider from '../AuthProvider';
 
-export default function ClientLayout({ children }: { children: ReactNode }) {
+interface ClientLayoutProps {
+  children: ReactNode;
+}
+
+export default function ClientLayout({ children }: ClientLayoutProps) {
   return (
     <ErrorBoundary>
       <AuthProvider>
         <ConditionalLayout>
-          {children}
+      {children}
         </ConditionalLayout>
       </AuthProvider>
     </ErrorBoundary>

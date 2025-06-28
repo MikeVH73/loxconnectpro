@@ -96,13 +96,13 @@ export default function MessagingWithFiles({ quoteRequestId, currentUser, curren
     const processedFiles: FileData[] = [];
 
     try {
-      for (let i = 0; i < selectedFiles.length; i++) {
-        const file = selectedFiles[i];
-        
-        // Check file size (limit to 3MB for messaging)
-        if (file.size > 3 * 1024 * 1024) {
+    for (let i = 0; i < selectedFiles.length; i++) {
+      const file = selectedFiles[i];
+      
+      // Check file size (limit to 3MB for messaging)
+      if (file.size > 3 * 1024 * 1024) {
           throw new Error(`File ${file.name} is too large. Maximum size is 3MB for messaging.`);
-        }
+      }
 
         // Convert file to base64 for storage
         const base64 = await new Promise<string>((resolve, reject) => {
@@ -121,9 +121,9 @@ export default function MessagingWithFiles({ quoteRequestId, currentUser, curren
           uploadedAt: new Date(),
           uploadedBy: currentUser
         });
-      }
+    }
 
-      if (processedFiles.length > 0) {
+    if (processedFiles.length > 0) {
         await sendMessage('', currentUser, currentCountry, processedFiles);
       }
     } catch (error: any) {
@@ -223,7 +223,7 @@ export default function MessagingWithFiles({ quoteRequestId, currentUser, curren
                   {message.isArchived && (
                     <span className="ml-2 text-xs">(Archived)</span>
                   )}
-                </div>
+              </div>
                 <div className="break-words">{message.text}</div>
                 {message.files && message.files.length > 0 && (
                   <div className="mt-2 space-y-1">
@@ -251,14 +251,14 @@ export default function MessagingWithFiles({ quoteRequestId, currentUser, curren
         <div className="flex space-x-2">
           <input
             type="text"
-            value={messageText}
-            onChange={(e) => setMessageText(e.target.value)}
-            onKeyPress={handleKeyPress}
+              value={messageText}
+              onChange={(e) => setMessageText(e.target.value)}
+              onKeyPress={handleKeyPress}
             placeholder="Type your message..."
             className="flex-1 rounded-lg border p-2"
             disabled={isSending}
-          />
-          <button
+            />
+            <button
             type="submit"
             disabled={isSending || (!messageText.trim())}
             className={`px-4 py-2 rounded-lg bg-blue-600 text-white ${
@@ -266,7 +266,7 @@ export default function MessagingWithFiles({ quoteRequestId, currentUser, curren
             }`}
           >
             {isSending ? 'Sending...' : 'Send'}
-          </button>
+            </button>
         </div>
       </form>
     </div>

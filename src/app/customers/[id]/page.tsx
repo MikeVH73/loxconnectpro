@@ -128,9 +128,9 @@ export default function CustomerDetailPage() {
         setError("This contact already exists");
         return;
       }
-
-      if (editingContact) {
-        // Update existing contact
+    
+    if (editingContact) {
+      // Update existing contact
         if (editingContact.id === 'main') {
           // Update first contact in customer document
           const customerRef = doc(db as Firestore, "customers", params.id as string);
@@ -152,7 +152,7 @@ export default function CustomerDetailPage() {
           ));
         } else {
           // Update contact in subcollection
-          const docRef = doc(db as Firestore, `customers/${params.id}/contacts`, editingContact.id);
+      const docRef = doc(db as Firestore, `customers/${params.id}/contacts`, editingContact.id);
           const updateData = {
             name: newContact.name,
             phone: newContact.phone,
@@ -171,14 +171,14 @@ export default function CustomerDetailPage() {
             } : c
           ));
         }
-      } else {
-        // Add new contact
+    } else {
+      // Add new contact
         const contactData = {
           name: newContact.name,
           phone: newContact.phone,
           email: newContact.email || '',
           type: 'jobsite',
-          createdAt: serverTimestamp(),
+        createdAt: serverTimestamp(),
           updatedAt: serverTimestamp()
         };
         
@@ -190,12 +190,12 @@ export default function CustomerDetailPage() {
           ...contactData,
           type: 'jobsite'
         }]);
-      }
+    }
       
       // Reset form state
-      setShowContactModal(false);
-      setEditingContact(null);
-      setNewContact({ name: "", phone: "", email: "", type: "jobsite" });
+    setShowContactModal(false);
+    setEditingContact(null);
+    setNewContact({ name: "", phone: "", email: "", type: "jobsite" });
       setError("");
     } catch (err) {
       console.error("Error saving contact:", err);
@@ -226,11 +226,11 @@ export default function CustomerDetailPage() {
         setContacts(prev => prev.filter(c => c.id !== 'main'));
       } else {
         // Delete from subcollection
-        const docRef = doc(db as Firestore, `customers/${params.id}/contacts`, contactId);
-        await deleteDoc(docRef);
+    const docRef = doc(db as Firestore, `customers/${params.id}/contacts`, contactId);
+    await deleteDoc(docRef);
         
         // Update contacts list
-        setContacts(prev => prev.filter(c => c.id !== contactId));
+    setContacts(prev => prev.filter(c => c.id !== contactId));
       }
     } catch (err) {
       console.error("Error deleting contact:", err);

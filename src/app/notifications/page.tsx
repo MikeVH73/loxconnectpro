@@ -12,15 +12,13 @@ dayjs.extend(relativeTime);
 
 interface Notification {
   id: string;
-  type: 'message' | 'change';
   quoteRequestId: string;
   quoteRequestTitle: string;
   createdAt: Timestamp;
   sender: string;
   senderCountry: string;
-  message?: string;
-  changeType?: string;
-  changeDetails?: string;
+  content: string;
+  notificationType: 'message' | 'status_change' | 'property_change';
   isRead: boolean;
 }
 
@@ -73,7 +71,7 @@ export default function NotificationsPage() {
           notifications.map((notification) => (
             <Link 
               key={notification.id}
-              href={`/quote-requests/${notification.quoteRequestId}`}
+              href={userProfile?.role === 'readOnly' ? `/quote-requests/${notification.quoteRequestId}` : `/quote-requests/${notification.quoteRequestId}/edit`}
               className={`block p-4 rounded-lg border ${
                 notification.isRead ? 'bg-white' : 'bg-blue-50'
               } hover:shadow-md transition-shadow`}
@@ -84,19 +82,12 @@ export default function NotificationsPage() {
                     {notification.quoteRequestTitle}
                   </div>
                   <div className="text-sm text-gray-600 mt-1">
-                    {notification.type === 'message' ? (
-                      <>
-                        <span className="font-medium text-blue-600">{notification.senderCountry}</span>
-                        {' sent a message: '}
-                        <span className="italic">{notification.message}</span>
-                      </>
-                    ) : (
-                      <>
-                        <span className="font-medium text-purple-600">{notification.senderCountry}</span>
-                        {' made changes: '}
-                        <span className="italic">{notification.changeDetails}</span>
-                      </>
-                    )}
+                    <span className="font-medium text-blue-600">{notification.senderCountry}</span>
+                    {' '}
+                    {notification.notificationType === 'message' && 'sent a message: '}
+                    {notification.notificationType === 'status_change' && 'updated the status: '}
+                    {notification.notificationType === 'property_change' && 'made changes: '}
+                    <span className="italic">{notification.content}</span>
                   </div>
                 </div>
                 <div className="text-sm text-gray-500 whitespace-nowrap">
