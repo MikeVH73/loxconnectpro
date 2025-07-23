@@ -14,13 +14,12 @@ import CountrySelect from "../../components/CountrySelect";
 import MessagingPanel from '@/app/components/MessagingPanel';
 import { useMessages } from '@/app/hooks/useMessages';
 import { debounce } from "lodash";
-import { loadGoogleMaps, geocodeAddress, type Coordinates } from '../../utils/maps';
 import { useCustomers } from "../../hooks/useCustomers";
 
 // Type definitions
 interface Jobsite {
   address: string;
-  coordinates: Coordinates | null;
+  coordinates: { lat: number; lng: number } | null;
 }
 
 interface Product {
@@ -100,7 +99,7 @@ export default function NewQuoteRequestPage() {
   const [title, setTitle] = useState("");
   const creatorCountry = userProfile?.country || userProfile?.businessUnit || "";
   const [involvedCountry, setInvolvedCountry] = useState("");
-  const { customers, loading: customersLoading, error: customersError } = useCustomers();
+  const { customers, loading: customersLoading, error: customersError, refetchCustomers } = useCustomers();
   const [customerId, setCustomerId] = useState("");
   const [showNewCustomer, setShowNewCustomer] = useState(false);
   const [newCustomer, setNewCustomer] = useState({ name: "", address: "", contact: "", phone: "", email: "" });
@@ -112,7 +111,7 @@ export default function NewQuoteRequestPage() {
     { catClass: "", description: "", quantity: 1 },
   ]);
   const [jobsiteAddress, setJobsiteAddress] = useState("");
-  const [jobsiteCoords, setJobsiteCoords] = useState<Coordinates | null>(null);
+  const [jobsiteCoords, setJobsiteCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [customerDecidesEnd, setCustomerDecidesEnd] = useState(false);
@@ -132,82 +131,28 @@ export default function NewQuoteRequestPage() {
   const [success, setSuccess] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [attachments, setAttachments] = useState<FileData[]>([]);
-  const [isGeocoding, setIsGeocoding] = useState(false);
-  const [geocodingError, setGeocodingError] = useState("");
-  const [isGoogleMapsLoaded, setIsGoogleMapsLoaded] = useState(false);
   const [customerNumber, setCustomerNumber] = useState("");
 
-  // Initialize Google Maps
-  useEffect(() => {
-    const initMaps = async () => {
-      if (!window.google) {
-        try {
-          await loadGoogleMaps();
-          if (isMounted.current) {
-            setIsGoogleMapsLoaded(true);
-            console.log('Google Maps loaded successfully');
-          }
-        } catch (error) {
-          console.error('Error loading Google Maps:', error);
-          if (isMounted.current) {
-            setError("Failed to load Google Maps");
-            setGeocodingError("Failed to load Google Maps API");
-          }
-        }
-      }
-    };
-
-    initMaps();
-
-    return () => {
-      isMounted.current = false;
-    };
-  }, []);
-
-  // Handle address changes and geocoding
-  const handleAddressChange = useCallback(async (address: string) => {
+  // Handle address change
+  const handleAddressChange = useCallback((address: string) => {
     if (!address) {
       setJobsiteCoords(null);
-      setGeocodingError("");
       return;
     }
 
-    setIsGeocoding(true);
-    setGeocodingError("");
-
-    try {
-      const coordinates = await geocodeAddress(address);
-      
-      if (isMounted.current) {
-        console.log('Geocoding result:', { address, ...coordinates });
-        setJobsiteCoords(coordinates);
         setJobsiteAddress(address);
-        setGeocodingError("");
-      }
-    } catch (err) {
-      console.error("Geocoding error:", err);
-      if (isMounted.current) {
-        setGeocodingError("Failed to get coordinates. Please check the address and try again.");
+    // Coordinates must be entered manually
         setJobsiteCoords(null);
-      }
-    } finally {
-      if (isMounted.current) {
-        setIsGeocoding(false);
-      }
-    }
-  }, [isMounted]);
+  }, []);
 
   // Debounce the address change handler
-  const debouncedHandleAddressChange = useCallback(
-    debounce((address: string) => handleAddressChange(address), 1000),
-    [handleAddressChange]
-  );
+  const debouncedAddressChange = debounce(handleAddressChange, 500);
 
-  // Update jobsite address input
+  // Handle jobsite address change
   const handleJobsiteAddressChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const address = e.target.value;
     setJobsiteAddress(address);
-    debouncedHandleAddressChange(address);
+    debouncedAddressChange(address);
   };
 
   // Fetch contacts when customer changes
@@ -337,7 +282,7 @@ export default function NewQuoteRequestPage() {
   // Update customer number when involved country or customer changes
   useEffect(() => {
     if (customerId && involvedCountry) {
-      const selectedCustomer = customers.find(c => c.id === customerId);
+      const selectedCustomer = customers.find(c => c.id === customerId) as Customer;
       if (selectedCustomer?.customerNumbers?.[involvedCountry]) {
         setCustomerNumber(selectedCustomer.customerNumbers[involvedCountry]);
       } else {
@@ -360,6 +305,7 @@ export default function NewQuoteRequestPage() {
     if (!customerId) errors.push("Customer is required");
     if (!products.length || !products[0].catClass) errors.push("At least one product with Cat. Class is required");
     if (!startDate) errors.push("Start Date is required");
+    if (!jobsiteAddress.trim()) errors.push("Jobsite Address is required");
     if (!jobsiteContactId) errors.push("Jobsite Contact is required");
 
     if (errors.length > 0) {
@@ -418,7 +364,7 @@ export default function NewQuoteRequestPage() {
 
       if (isMounted.current) {
         setSuccess("Quote request created successfully!");
-        router.push(`/quote-requests/${docRef.id}`);
+        router.push(`/quote-requests/${docRef.id}/edit`);
       }
     } catch (err) {
       console.error("Error creating quote request:", err);
@@ -463,13 +409,21 @@ export default function NewQuoteRequestPage() {
       const customersCollection = collection(db as Firestore, "customers");
       const customerRef = await addDoc(customersCollection, {
         ...newCustomer,
+        countries: [creatorCountry], // Associate customer with creator country
+        customerNumbers: { [creatorCountry]: "" }, // Initialize customer numbers for creator country
         createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
       });
+      
+      // Refresh the customer list to include the newly created customer
+      await refetchCustomers();
+      
       setCustomerId(customerRef.id);
       setShowNewCustomer(false);
       setNewCustomer({ name: "", address: "", contact: "", phone: "", email: "" });
     } catch (error) {
       console.error("Error adding customer:", error);
+      setError("Failed to add customer");
     }
   };
 
@@ -509,9 +463,11 @@ export default function NewQuoteRequestPage() {
       const docRef = await addDoc(contactsRef, contactData);
 
       // Add the new contact to the contacts list
-      const newContactWithId = {
+      const newContactWithId: Contact = {
         id: docRef.id,
-        ...contactData
+        name: newContact.name,
+        phone: newContact.phone,
+        type: 'jobsite'
       };
       
       setContacts(prev => [...prev, newContactWithId]);
@@ -705,13 +661,16 @@ export default function NewQuoteRequestPage() {
 
         {/* Jobsite Address */}
         <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-700">Jobsite Address</label>
+          <label className="block text-sm font-medium text-gray-700">
+            Jobsite Address <span className="text-red-500">*</span>
+          </label>
           <input
             type="text"
             value={jobsiteAddress}
             onChange={(e) => setJobsiteAddress(e.target.value)}
             className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
             placeholder="Enter full address"
+            required
           />
           
           <div className="mt-4 grid grid-cols-2 gap-4">
@@ -771,7 +730,7 @@ export default function NewQuoteRequestPage() {
               <option value="">Select a contact</option>
               {contacts.map((contact) => (
                 <option key={contact.id} value={contact.id}>
-                  {contact.name} ({contact.phone}){contact.isFirstContact ? ' (First Contact)' : ''}
+                  {contact.name} ({contact.phone}){contact.type === 'first' ? ' (First Contact)' : ''}
                 </option>
               ))}
             </select>

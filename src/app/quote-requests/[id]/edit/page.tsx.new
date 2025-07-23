@@ -1,0 +1,576 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useRouter, useParams } from 'next/navigation';
+import { doc, getDoc, updateDoc, collection, getDocs, query, where, serverTimestamp, addDoc, Firestore } from 'firebase/firestore';
+import { db } from '@/firebaseClient';
+import { useAuth } from '../../../AuthProvider';
+import FileUpload from '../../../components/FileUpload';
+import FileUploadSimple from '../../../components/FileUploadSimple';
+import ArchivedMessaging from '../../../components/ArchivedMessaging';
+import CountrySelect from '../../../components/CountrySelect';
+import MessagingPanel from '@/app/components/MessagingPanel';
+import { useMessages } from '@/app/hooks/useMessages';
+import { useCustomers } from '../../../hooks/useCustomers';
+import Link from 'next/link';
+import { debounce } from 'lodash';
+import Script from 'next/script';
+import { createNotification } from '../../../utils/notifications';
+
+interface QuoteRequest {
+  id: string;
+  title: string;
+  products: Array<{
+    code: string;
+    description: string;
+    quantity: number;
+  }>;
+  creatorCountry: string;
+  involvedCountries: string[];
+  startDate: string;
+  endDate: string;
+  status: string;
+  customer: string;
+  labels: string[];
+  attachments: Array<{
+    name: string;
+    url: string;
+    type: string;
+    size: number;
+  }>;
+  jobsite?: {
+    address?: string;
+    coordinates?: {
+      lat: number;
+      lng: number;
+    };
+  };
+  jobsiteContact?: {
+    name: string;
+    phone: string;
+  };
+  notes?: Array<{
+    text: string;
+    user: string;
+    dateTime: Date;
+  }>;
+  customerNumber?: string;
+  updatedAt?: Date;
+  updatedBy?: string;
+}
+
+export default function EditQuoteRequest() {
+  const router = useRouter();
+  const params = useParams();
+  const id = params?.id as string;
+  const { user, userProfile } = useAuth();
+  const [quoteRequest, setQuoteRequest] = useState<QuoteRequest | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [newNote, setNewNote] = useState('');
+  const { messages, loading: messagesLoading, error: messagesError, sendMessage, isOffline } = useMessages(id);
+  const { customers } = useCustomers();
+
+  useEffect(() => {
+    async function fetchQuoteRequest() {
+      if (!user || !db) return;
+      
+      try {
+        const quoteRef = doc(db as Firestore, 'quoteRequests', id);
+        const quoteDoc = await getDoc(quoteRef);
+        
+        if (quoteDoc.exists()) {
+          const data = quoteDoc.data();
+          setQuoteRequest({
+            id: quoteDoc.id,
+            title: data.title || '',
+            products: data.products || [],
+            creatorCountry: data.creatorCountry || '',
+            involvedCountries: data.involvedCountries || [],
+            startDate: data.startDate || '',
+            endDate: data.endDate || '',
+            status: data.status || '',
+            customer: data.customer || '',
+            labels: data.labels || [],
+            attachments: data.attachments || [],
+            jobsite: data.jobsite || {},
+            jobsiteContact: data.jobsiteContact || {},
+            customerNumber: data.customerNumber || '',
+            notes: data.notes || [],
+            updatedAt: data.updatedAt,
+            updatedBy: data.updatedBy
+          } as QuoteRequest);
+        } else {
+          setError('Quote request not found');
+        }
+      } catch (err) {
+        console.error('Error fetching quote request:', err);
+        setError('Failed to load quote request');
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchQuoteRequest();
+  }, [id, user, db]);
+
+  const handleStatusChange = async (status: string) => {
+    if (!quoteRequest || isSaving) return;
+
+    setIsSaving(true);
+    try {
+      const quoteRef = doc(db as Firestore, 'quoteRequests', id);
+      await updateDoc(quoteRef, {
+        status,
+        updatedAt: new Date()
+      });
+
+      setQuoteRequest(prev => prev ? {
+        ...prev,
+        status
+      } : null);
+    } catch (err) {
+      console.error('Error updating status:', err);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleSendMessage = async (text: string, files: any[] = []) => {
+    if (!user?.email || !userProfile?.businessUnit || !quoteRequest) {
+      throw new Error('Missing required data');
+    }
+
+    const targetCountry = quoteRequest.involvedCountries.find(country => country !== userProfile.businessUnit);
+    if (!targetCountry) {
+      throw new Error('No target country found');
+    }
+
+    await sendMessage(text, user.email, userProfile.businessUnit, targetCountry, files);
+  };
+
+  const handleInputChange = (field: keyof QuoteRequest | string, value: any) => {
+    if (!quoteRequest) return;
+
+    // Handle nested fields (e.g., products.0.code)
+    if (field.includes('.')) {
+      const [parent, index, child] = field.split('.');
+      setQuoteRequest(prev => {
+        if (!prev) return prev;
+        const newArray = [...(prev[parent as keyof QuoteRequest] as any[] || [])];
+        newArray[parseInt(index)][child] = value;
+        return {
+          ...prev,
+          [parent]: newArray
+        };
+      });
+    } else {
+      setQuoteRequest(prev => prev ? {
+        ...prev,
+        [field]: value
+      } : null);
+    }
+  };
+
+  const handleAddProduct = () => {
+    setQuoteRequest(prev => prev ? {
+      ...prev,
+      products: [
+        ...prev.products,
+        { code: '', description: '', quantity: 1 }
+      ]
+    } : null);
+  };
+
+  const handleRemoveProduct = (index: number) => {
+    setQuoteRequest(prev => prev ? {
+      ...prev,
+      products: prev.products.filter((_, i) => i !== index)
+    } : null);
+  };
+
+  const handleAddNote = () => {
+    if (!newNote.trim() || !user?.email) return;
+
+    setQuoteRequest(prev => {
+      if (!prev) return prev;
+      const newNotes = [...(prev.notes || []), {
+        text: newNote.trim(),
+        user: user.email!,
+        dateTime: new Date()
+      }];
+      return {
+        ...prev,
+        notes: newNotes
+      };
+    });
+    setNewNote('');
+  };
+
+  const handleSave = async () => {
+    if (!quoteRequest || isSaving || !user?.email) return;
+
+    setIsSaving(true);
+    try {
+      const quoteRef = doc(db as Firestore, 'quoteRequests', id);
+      await updateDoc(quoteRef, {
+        ...quoteRequest,
+        updatedAt: new Date(),
+        updatedBy: user.email
+      });
+
+      router.push(`/quote-requests/${id}`);
+    } catch (err) {
+      console.error('Error saving quote request:', err);
+      setError('Failed to save changes. Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-6">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <h3 className="text-red-800 font-medium">Error</h3>
+          <p className="text-red-600 mt-1">{error}</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!quoteRequest) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <div className="text-gray-600">Quote request not found.</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex h-full overflow-hidden">
+      {/* Left Column - 200px fixed width */}
+      <div className="w-[200px] bg-white border-r border-gray-200 overflow-y-auto">
+        <nav className="p-4 space-y-2">
+          <button
+            onClick={() => handleStatusChange('In Progress')}
+            className={`w-full text-left px-3 py-2 rounded ${
+              quoteRequest.status === 'In Progress' ? 'bg-red-500 text-white' : 'hover:bg-gray-100'
+            }`}
+          >
+            In Progress
+          </button>
+          <button
+            onClick={() => handleStatusChange('Waiting for Answer')}
+            className={`w-full text-left px-3 py-2 rounded ${
+              quoteRequest.status === 'Waiting for Answer' ? 'bg-red-500 text-white' : 'hover:bg-gray-100'
+            }`}
+          >
+            Waiting for Answer
+          </button>
+          <button
+            onClick={() => handleStatusChange('Urgent')}
+            className={`w-full text-left px-3 py-2 rounded ${
+              quoteRequest.status === 'Urgent' ? 'bg-red-500 text-white' : 'hover:bg-gray-100'
+            }`}
+          >
+            Urgent
+          </button>
+          <button
+            onClick={() => handleStatusChange('Problems')}
+            className={`w-full text-left px-3 py-2 rounded ${
+              quoteRequest.status === 'Problems' ? 'bg-red-500 text-white' : 'hover:bg-gray-100'
+            }`}
+          >
+            Problems
+          </button>
+        </nav>
+      </div>
+
+      {/* Middle Content - Flexible width */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        {/* Header */}
+        <div className="bg-white border-b border-gray-200 flex-none">
+          <div className="flex items-center justify-between px-6 py-2">
+            <div className="flex items-center gap-2 text-sm text-gray-600">
+              <span>Quote Request</span>
+              <span>/</span>
+              <span>{quoteRequest.creatorCountry}</span>
+              <span>→</span>
+              <span>{quoteRequest.involvedCountries.find(country => country !== quoteRequest.creatorCountry)}</span>
+            </div>
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => router.back()}
+                className="text-gray-600 hover:text-gray-800"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={isSaving}
+                className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 disabled:opacity-50"
+              >
+                Save Changes
+              </button>
+            </div>
+          </div>
+          <div className="px-6 py-4">
+            <div className="flex items-center gap-4">
+              <h1 className="text-xl font-semibold">{quoteRequest.title}</h1>
+              <button className="px-3 py-1 bg-red-500 text-white text-sm rounded">
+                Edit Quote Request
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Form Content - Scrollable */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="p-6 space-y-6">
+            {/* Basic Information */}
+            <div className="bg-white rounded-lg shadow p-4">
+              <h2 className="text-lg font-semibold mb-4">Basic Information</h2>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
+                  <input
+                    type="text"
+                    value={quoteRequest.title}
+                    onChange={(e) => handleInputChange('title', e.target.value)}
+                    className="w-full border border-gray-300 rounded-md shadow-sm py-2 px-3"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Creator Country</label>
+                    <input
+                      type="text"
+                      value={quoteRequest.creatorCountry}
+                      readOnly
+                      className="w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 bg-gray-50"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Target Country</label>
+                    <input
+                      type="text"
+                      value={quoteRequest.involvedCountries.find(country => country !== quoteRequest.creatorCountry) || ''}
+                      readOnly
+                      className="w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 bg-gray-50"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Customer</label>
+                  <select
+                    value={quoteRequest.customer}
+                    onChange={(e) => handleInputChange('customer', e.target.value)}
+                    className="w-full border border-gray-300 rounded-md shadow-sm py-2 px-3"
+                  >
+                    {customers.map(customer => (
+                      <option key={customer.id} value={customer.id}>
+                        {customer.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Customer Number</label>
+                  <input
+                    type="text"
+                    value={quoteRequest.customerNumber || ''}
+                    onChange={(e) => handleInputChange('customerNumber', e.target.value)}
+                    className="w-full border border-gray-300 rounded-md shadow-sm py-2 px-3"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+                    <input
+                      type="date"
+                      value={quoteRequest.startDate}
+                      onChange={(e) => handleInputChange('startDate', e.target.value)}
+                      className="w-full border border-gray-300 rounded-md shadow-sm py-2 px-3"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
+                    <input
+                      type="date"
+                      value={quoteRequest.endDate}
+                      onChange={(e) => handleInputChange('endDate', e.target.value)}
+                      className="w-full border border-gray-300 rounded-md shadow-sm py-2 px-3"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Products Section */}
+            <div className="bg-white rounded-lg shadow p-4">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold">Products</h2>
+                <button
+                  onClick={handleAddProduct}
+                  className="px-3 py-1 bg-red-500 text-white text-sm rounded hover:bg-red-600"
+                >
+                  + Add Product
+                </button>
+              </div>
+              <div className="space-y-3">
+                {quoteRequest.products.map((product, index) => (
+                  <div key={index} className="flex flex-col gap-2 bg-gray-50 p-3 rounded-lg">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={product.code}
+                        onChange={(e) => handleInputChange(`products.${index}.code`, e.target.value)}
+                        className="w-32 border border-gray-300 rounded-md shadow-sm py-2 px-3"
+                        placeholder="Product Code"
+                      />
+                      <input
+                        type="number"
+                        value={product.quantity}
+                        onChange={(e) => handleInputChange(`products.${index}.quantity`, parseInt(e.target.value))}
+                        className="w-20 border border-gray-300 rounded-md shadow-sm py-2 px-3"
+                        placeholder="Qty"
+                      />
+                      <button
+                        onClick={() => handleRemoveProduct(index)}
+                        className="text-red-500 hover:text-red-700 ml-auto"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                    <input
+                      type="text"
+                      value={product.description}
+                      onChange={(e) => handleInputChange(`products.${index}.description`, e.target.value)}
+                      className="w-full border border-gray-300 rounded-md shadow-sm py-2 px-3"
+                      placeholder="Description"
+                    />
+                  </div>
+                ))}
+                {quoteRequest.products.length === 0 && (
+                  <div className="text-gray-500 text-center py-4 bg-gray-50 rounded-lg">
+                    No products added
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Jobsite Information */}
+            <div className="bg-white rounded-lg shadow p-4">
+              <h2 className="text-lg font-semibold mb-4">Jobsite Information</h2>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Contact Name</label>
+                  <input
+                    type="text"
+                    value={quoteRequest.jobsiteContact?.name || ''}
+                    onChange={(e) => handleInputChange('jobsiteContact.name', e.target.value)}
+                    className="w-full border border-gray-300 rounded-md shadow-sm py-2 px-3"
+                    placeholder="Contact Name"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Contact Phone</label>
+                  <input
+                    type="tel"
+                    value={quoteRequest.jobsiteContact?.phone || ''}
+                    onChange={(e) => handleInputChange('jobsiteContact.phone', e.target.value)}
+                    className="w-full border border-gray-300 rounded-md shadow-sm py-2 px-3"
+                    placeholder="Contact Phone"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
+                  <textarea
+                    value={quoteRequest.jobsite?.address || ''}
+                    onChange={(e) => handleInputChange('jobsite.address', e.target.value)}
+                    className="w-full border border-gray-300 rounded-md shadow-sm py-2 px-3"
+                    rows={3}
+                    placeholder="Jobsite Address"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Notes Section */}
+            <div className="bg-white rounded-lg shadow p-4">
+              <h2 className="text-lg font-semibold mb-4">Notes</h2>
+              <div className="space-y-4">
+                {quoteRequest.notes?.map((note, index) => (
+                  <div key={index} className="bg-gray-50 p-3 rounded-lg">
+                    <div className="text-sm text-gray-500 mb-1">
+                      {note.user} - {new Date(note.dateTime).toLocaleString()}
+                    </div>
+                    <div className="text-gray-700">{note.text}</div>
+                  </div>
+                ))}
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newNote}
+                    onChange={(e) => setNewNote(e.target.value)}
+                    className="flex-1 border border-gray-300 rounded-md shadow-sm py-2 px-3"
+                    placeholder="Add a note..."
+                  />
+                  <button
+                    onClick={handleAddNote}
+                    disabled={!newNote.trim()}
+                    className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 disabled:opacity-50"
+                  >
+                    Add
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Attachments Section */}
+            <div className="bg-white rounded-lg shadow p-4">
+              <h2 className="text-lg font-semibold mb-4">Attachments</h2>
+              <FileUploadSimple
+                quoteRequestId={id}
+                files={quoteRequest.attachments}
+                onFilesChange={(files) => handleInputChange('attachments', files)}
+                currentUser={user.email || ''}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Right Column - 400px fixed width */}
+      <div className="w-[400px] border-l border-gray-200 overflow-hidden">
+        <MessagingPanel
+          messages={messages}
+          currentUser={user.email || ''}
+          currentCountry={userProfile?.businessUnit || ''}
+          onSendMessage={handleSendMessage}
+          quoteTitle={quoteRequest.title}
+          quoteRequestFiles={quoteRequest.attachments}
+          loading={messagesLoading}
+          error={messagesError}
+          isOffline={isOffline}
+        />
+      </div>
+    </div>
+  );
+} 

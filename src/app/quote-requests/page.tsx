@@ -1,21 +1,25 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { collection, getDocs, query, orderBy, deleteDoc, doc, DocumentData, QueryDocumentSnapshot } from "firebase/firestore";
+import { collection, getDocs, query, orderBy, deleteDoc, doc, DocumentData, QueryDocumentSnapshot, updateDoc } from "firebase/firestore";
 import { db } from "../../firebaseClient";
 import { useAuth } from "../AuthProvider";
+import dayjs from "dayjs";
+import relativeTime from "dayjs/plugin/relativeTime";
+import { Firestore } from "firebase/firestore";
 
-interface QuoteRequest {
+// Initialize dayjs plugins
+dayjs.extend(relativeTime);
+
+interface Customer {
   id: string;
-  title: string;
-  creatorCountry: string;
-  involvedCountry: string;
-  customer: string;
-  status: string;
-  labels?: string[];
-  products?: any[];
-  notes?: any[];
-  updatedAt?: any;
+  name: string;
+  address?: string;
+  contact?: string;
+  phone?: string;
+  email?: string;
+  countries?: string[];
+  customerNumbers?: Record<string, string>;
 }
 
 interface Label {
@@ -23,9 +27,35 @@ interface Label {
   name: string;
 }
 
-interface Customer {
+interface QuoteRequest {
   id: string;
+  title: string;
+  creatorCountry: string;
+  involvedCountry: string;
+  customer: string;
+  customerNumber?: string;
+  status: string;
+  labels: string[];
+  products?: any[];
+  notes?: any[];
+  updatedAt?: any;
+  waitingForAnswer: boolean;
+  urgent: boolean;
+  problems: boolean;
+  planned: boolean;
+  hasUnreadMessages?: boolean;
+  lastMessageAt?: any;
+  jobsite?: {
+    address?: string;
+    coordinates?: {
+      lat: number;
+      lng: number;
+    };
+  };
+  jobsiteContact?: {
   name: string;
+    phone: string;
+  };
 }
 
 export default function QuoteRequestsPage() {
@@ -47,7 +77,10 @@ export default function QuoteRequestsPage() {
         getDocs(query(collection(db, "quoteRequests"), orderBy("createdAt", "desc"))),
         getDocs(collection(db, "customers")),
       ]);
-      const customersArr = custSnap.docs.map((doc: QueryDocumentSnapshot<DocumentData>) => ({ id: doc.id, ...doc.data() }));
+      const customersArr = custSnap.docs.map((doc: QueryDocumentSnapshot<DocumentData>) => ({ 
+        id: doc.id, 
+        ...doc.data() 
+      } as Customer));
       setCustomers(customersArr);
       let allRequests = qrSnap.docs
         .map((doc: QueryDocumentSnapshot<DocumentData>) => ({ id: doc.id, ...doc.data() } as QuoteRequest))
@@ -75,7 +108,11 @@ export default function QuoteRequestsPage() {
   useEffect(() => {
     const fetchLabels = async () => {
       const snap = await getDocs(collection(db, "labels"));
-      setLabels(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      const labelsArr = snap.docs.map(doc => ({ 
+        id: doc.id, 
+        ...doc.data() 
+      } as Label));
+      setLabels(labelsArr);
     };
     fetchLabels();
   }, []);
@@ -88,6 +125,37 @@ export default function QuoteRequestsPage() {
   const getLabelName = (id: string) => labels.find(l => l.id === id)?.name || id;
   const getProductsSummary = (products: any[]) => products?.map(p => `${p.catClass || ''} ${p.description || ''} x${p.quantity || 1}`).join('; ');
   const getLastNote = (notes: any[]) => notes?.length ? notes[notes.length - 1].text : '';
+
+  // Helper function to get all labels for a quote request
+  const getQuoteLabels = (qr: QuoteRequest) => {
+    const labelIds = new Set(qr.labels || []);
+    const labelNames = Array.from(labelIds).map(getLabelName);
+
+    // Add boolean flags if they're true
+    if (qr.waitingForAnswer) labelNames.push('Waiting for Answer');
+    if (qr.urgent) labelNames.push('Urgent');
+    if (qr.problems) labelNames.push('Problems');
+    if (qr.planned) labelNames.push('Planned');
+
+    return labelNames;
+  };
+
+  // Helper function to get label style
+  const getLabelStyle = (labelName: string) => {
+    const lowerName = labelName.toLowerCase();
+    switch (lowerName) {
+      case 'waiting for answer':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'urgent':
+        return 'bg-red-100 text-red-800';
+      case 'problems':
+        return 'bg-orange-100 text-orange-800';
+      case 'planned':
+        return 'bg-red-100 text-red-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  };
 
   const handleDelete = async (quoteRequestId: string) => {
     try {
@@ -113,117 +181,205 @@ export default function QuoteRequestsPage() {
 
   const canDelete = userProfile?.role === "admin" || userProfile?.role === "superAdmin";
 
+  // Get the user's business unit for filtering
+  const businessUnit = userProfile?.businessUnit || (userProfile?.countries && userProfile.countries[0]) || '';
+
+  // Find special label IDs
+  const urgentLabelId = labels.find(l => l.name.toLowerCase() === 'urgent')?.id || '';
+  const problemsLabelId = labels.find(l => l.name.toLowerCase() === 'problems')?.id || '';
+  const waitingLabelId = labels.find(l => l.name.toLowerCase() === 'waiting for answer')?.id || '';
+  const plannedLabelId = labels.find(l => l.name.toLowerCase() === 'planned')?.id || '';
+  const snoozeLabelId = labels.find(l => l.name.toLowerCase() === 'snooze')?.id || '';
+
+  // Filter out special labels for regular labels display
+  const specialLabelIds = [urgentLabelId, problemsLabelId, waitingLabelId, plannedLabelId, snoozeLabelId].filter(id => id !== '');
+
+  // Helper function to format date
+  const formatDate = (date: any) => {
+    if (!date) return null;
+    try {
+      // If it's a Firestore Timestamp
+      if (typeof date.toDate === 'function') {
+        return dayjs(date.toDate()).fromNow();
+      }
+      // If it's a Date object or string
+      return dayjs(date).fromNow();
+    } catch (err) {
+      console.error('Error formatting date:', err);
+      return null;
+    }
+  };
+
   return (
-    <div className="p-8">
-      {deleteError && (
-        <div className="mb-4 p-4 bg-red-100 text-red-700 rounded-md">
-          {deleteError}
-        </div>
-      )}
-      {deleteSuccess && (
-        <div className="mb-4 p-4 bg-green-100 text-green-700 rounded-md">
-          {deleteSuccess}
-        </div>
-      )}
-      <div className="flex items-center justify-between mb-6">
+    <div className="p-6">
+      <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-[#e40115]">Quote Requests</h1>
-        {userProfile?.role !== "readOnly" && (
         <Link
           href="/quote-requests/new"
           className="bg-[#e40115] text-white px-4 py-2 rounded hover:bg-red-700 transition"
         >
           + New Quote Request
         </Link>
-        )}
       </div>
+
       {loading ? (
         <div>Loading...</div>
-      ) : quoteRequests.length === 0 ? (
-        <div>No quote requests found.</div>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="min-w-full bg-white rounded shadow">
-            <tbody>
-              {quoteRequests.map(qr => (
-                <tr key={qr.id} className="border-t align-top">
-                  <td colSpan={6} className="px-4 py-4">
-                    <div
-                      className="flex flex-col gap-2 bg-gray-50 rounded-lg p-4 shadow-sm cursor-pointer hover:bg-gray-100 transition relative"
+        <div className="space-y-4">
+          {quoteRequests.map((qr) => {
+            // Check both boolean flags and label IDs
+            const hasUrgentLabel = qr.urgent || (qr.labels || []).includes(urgentLabelId);
+            const hasProblemsLabel = qr.problems || (qr.labels || []).includes(problemsLabelId);
+            const hasWaitingLabel = qr.waitingForAnswer || (qr.labels || []).includes(waitingLabelId);
+            const hasPlannedLabel = qr.planned || (qr.labels || []).includes(plannedLabelId);
+            const hasSnoozeLabel = qr.status === "Snoozed" || (qr.labels || []).includes(snoozeLabelId);
+
+            // Update the quote request's flags to match the label state
+            const updatedQr = {
+              ...qr,
+              urgent: hasUrgentLabel,
+              problems: hasProblemsLabel,
+              waitingForAnswer: hasWaitingLabel,
+              labels: [...new Set([
+                ...(qr.labels || []),
+                ...(hasUrgentLabel && urgentLabelId ? [urgentLabelId] : []),
+                ...(hasProblemsLabel && problemsLabelId ? [problemsLabelId] : []),
+                ...(hasWaitingLabel && waitingLabelId ? [waitingLabelId] : []),
+                ...(hasSnoozeLabel && snoozeLabelId ? [snoozeLabelId] : [])
+              ])]
+            } as QuoteRequest;
+
+            // Save the updated flags and labels back to Firestore
+            if (db) {
+              const quoteRef = doc(db as Firestore, 'quoteRequests', qr.id);
+              updateDoc(quoteRef, {
+                urgent: updatedQr.urgent,
+                problems: updatedQr.problems,
+                waitingForAnswer: updatedQr.waitingForAnswer,
+                labels: updatedQr.labels
+              }).catch(err => {
+                console.error('[DEBUG] Error updating quote request flags:', err);
+              });
+            }
+
+            // Filter out special labels for regular labels display
+            const regularLabels = (qr.labels || []).filter(labelId => !specialLabelIds.includes(labelId));
+
+            return (
+              <div key={qr.id} className="bg-white rounded-lg shadow-sm p-4">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <Link
+                      href={userProfile?.role === 'readOnly' ? `/quote-requests/${qr.id}` : `/quote-requests/${qr.id}/edit`}
+                      className="text-lg font-medium text-gray-900 hover:text-[#e40115]"
                     >
-                      <div 
-                        onClick={() => window.location.href = userProfile?.role === "readOnly" ? `/quote-requests/${qr.id}` : `/quote-requests/${qr.id}/edit`}
-                        className="flex-1"
+                      {qr.title}
+                    </Link>
+                    <div className="text-sm text-gray-600 mt-1">
+                      {qr.creatorCountry} → {qr.involvedCountry}
+                    </div>
+                  </div>
+                  {userProfile?.role === 'admin' || userProfile?.role === 'superAdmin' ? (
+                    <button
+                      onClick={() => setShowDeleteConfirm(qr.id)}
+                      className="text-red-600 hover:text-red-800"
                     >
-                      <div className="flex items-center gap-4">
-                        <span className="font-bold text-lg">{qr.title}</span>
-                        <span className="text-sm text-gray-500">{getCustomerName(qr.customer)}</span>
-                        <span className="text-sm text-gray-500">{qr.creatorCountry} → {qr.involvedCountry}</span>
-                        <span className="text-sm text-gray-500">{qr.status}</span>
+                      Delete
+                    </button>
+                  ) : null}
+                </div>
+
+                {/* Status Indicators and Special Labels */}
+                <div className="flex flex-wrap items-center gap-2 mt-2">
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                    qr.status === "In Progress" ? "bg-green-100 text-green-800" :
+                    qr.status === "Snoozed" ? "bg-gray-100 text-gray-800" :
+                    qr.status === "Won" ? "bg-blue-100 text-blue-800" :
+                    qr.status === "Lost" ? "bg-red-100 text-red-800" :
+                    "bg-yellow-100 text-yellow-800"
+                  }`}>
+                    {qr.status}
+                  </span>
+
+                  {hasUrgentLabel && (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                      Urgent
+                    </span>
+                  )}
+                  {hasProblemsLabel && (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+                      Problems
+                    </span>
+                  )}
+                  {hasWaitingLabel && (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                      Waiting
+                    </span>
+                  )}
+                  {hasPlannedLabel && (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                      Planned
+                    </span>
+                  )}
                       </div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        {(qr.labels || []).map((id: string) => (
-                          <span key={id} className="bg-[#e40115] text-white px-2 py-1 rounded-full text-xs">{getLabelName(id)}</span>
-                        ))}
-                      </div>
-                      <div className="text-sm text-gray-700">Products: {getProductsSummary(qr.products || [])}</div>
-                      <div className="text-xs text-gray-500 italic">Last note: {getLastNote(qr.notes || [])}</div>
-                      {qr.updatedAt && (
-                        <div className="text-xs text-gray-400 mt-1">
-                          Latest Update: {
-                            typeof qr.updatedAt === 'string'
-                              ? qr.updatedAt.slice(0, 10)
-                              : (qr.updatedAt?.toDate ? qr.updatedAt.toDate().toISOString().slice(0, 10) : '')
-                          }
+
+                {/* Regular Labels */}
+                {regularLabels.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-2">
+                    {regularLabels.map((labelId) => (
+                      <span
+                        key={labelId}
+                        className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800"
+                      >
+                        {labels.find(l => l.id === labelId)?.name || labelId}
+                      </span>
+                    ))}
                           </div>
                         )}
-                      </div>
-                      {canDelete && (
-                        <div className="absolute top-2 right-2">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setShowDeleteConfirm(qr.id);
-                            }}
-                            className="text-red-600 hover:text-red-800 p-2"
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                              <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
-                            </svg>
-                          </button>
+
+                {/* Last Update */}
+                {qr.updatedAt && formatDate(qr.updatedAt) && (
+                  <div className="text-xs text-gray-500 mt-2">
+                    Last updated: {formatDate(qr.updatedAt)}
                         </div>
                       )}
                     </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+            );
+          })}
         </div>
       )}
 
       {/* Delete Confirmation Modal */}
       {showDeleteConfirm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full">
-            <h3 className="text-lg font-semibold mb-4">Delete Quote Request</h3>
-            <p className="text-gray-600 mb-6">
-              Are you sure you want to delete this quote request? This action cannot be undone.
-            </p>
-            <div className="flex justify-end gap-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg p-6 max-w-sm w-full">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">
+              Are you sure you want to delete this quote request?
+            </h3>
+            <div className="flex justify-end space-x-4">
               <button
                 onClick={() => setShowDeleteConfirm(null)}
-                className="px-4 py-2 text-gray-600 hover:text-gray-800 font-medium"
+                className="px-4 py-2 text-gray-600 hover:text-gray-800"
               >
                 Cancel
               </button>
               <button
                 onClick={() => handleDelete(showDeleteConfirm)}
-                className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 font-medium"
+                className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
               >
                 Delete
               </button>
             </div>
+            {deleteError && (
+              <p className="mt-2 text-sm text-red-600">{deleteError}</p>
+            )}
           </div>
+        </div>
+      )}
+
+      {deleteSuccess && (
+        <div className="fixed bottom-4 right-4 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded">
+          {deleteSuccess}
         </div>
       )}
     </div>

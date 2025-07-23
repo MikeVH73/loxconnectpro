@@ -26,8 +26,34 @@ interface QuoteRequest {
   id: string;
   title: string;
   creatorCountry: string;
-  targetCountry: string;
+  involvedCountry: string;
   attachments?: any[];
+  waitingForAnswer: boolean;
+  urgent: boolean;
+  problems: boolean;
+  planned: boolean;
+  hasUnreadMessages?: boolean;
+  lastMessageAt?: string | null;
+  jobsite?: {
+    address?: string;
+    coordinates?: {
+      lat: number;
+      lng: number;
+    };
+  };
+  jobsiteContact?: {
+    name: string;
+    phone: string;
+  };
+  customerNumber?: string;
+  customerDecidesEndDate?: boolean;
+  latitude?: string;
+  longitude?: string;
+  updatedAt?: Date;
+  updatedBy?: string;
+  status: string;
+  labels: string[];
+  customer: string;
 }
 
 interface DashboardMessagingProps {
@@ -155,7 +181,7 @@ export default function DashboardMessaging({ quoteRequestId, onClose }: Dashboar
     }
   }, [user, db, quoteRequestId]);
 
-  const handleSendMessage = async (text: string) => {
+  const handleSendMessage = async (text: string, files: Array<{ name: string; url: string; type: string; size: number; }> = []) => {
     if (!user?.email || !userProfile?.businessUnit || !db || !quoteRequestId || !quoteRequest) {
       throw new Error('User not authenticated, database not initialized, or quote request not found');
     }
@@ -170,22 +196,37 @@ export default function DashboardMessaging({ quoteRequestId, onClose }: Dashboar
         senderCountry: userProfile.businessUnit,
         createdAt: serverTimestamp(),
         quoteRequestId,
-        readBy: [user.email] // Mark as read by sender
+        readBy: [user.email], // Mark as read by sender
+        files: files // Add files to the message
       });
 
       // Mark the quote request as having been responded to
       const quoteRef = doc(db as Firestore, 'quoteRequests', quoteRequestId);
       await updateDoc(quoteRef, {
-        hasUnreadMessages: false,
+        hasUnreadMessages: true, // Set to true since this is a new message
         lastResponseAt: serverTimestamp(),
         lastRespondedBy: user.email
       });
 
-      // Create notification for the target country
-      const targetCountry = quoteRequest.creatorCountry === userProfile.businessUnit 
-        ? quoteRequest.targetCountry 
-        : quoteRequest.creatorCountry;
+      // Fix target country logic: determine which country should receive the notification
+      // If I'm the creator, notify the involved country. If I'm involved, notify the creator.
+      const targetCountries: string[] = [];
+      
+      if (userProfile.businessUnit === quoteRequest.creatorCountry) {
+        // I'm the creator, notify the involved country
+        if (quoteRequest.involvedCountry && quoteRequest.involvedCountry !== userProfile.businessUnit) {
+          targetCountries.push(quoteRequest.involvedCountry);
+        }
+      } else if (userProfile.businessUnit === quoteRequest.involvedCountry) {
+        // I'm the involved country, notify the creator
+        if (quoteRequest.creatorCountry && quoteRequest.creatorCountry !== userProfile.businessUnit) {
+          targetCountries.push(quoteRequest.creatorCountry);
+        }
+      }
 
+      // Send notifications to all target countries
+      for (const targetCountry of targetCountries) {
+        if (targetCountry) {
       await createNotification({
         notificationType: 'message',
         quoteRequestId,
@@ -193,8 +234,10 @@ export default function DashboardMessaging({ quoteRequestId, onClose }: Dashboar
         sender: user.email,
         senderCountry: userProfile.businessUnit,
         targetCountry,
-        content: `New message: ${text.length > 50 ? `${text.substring(0, 50)}...` : text}`
+            content: `New message: ${text.length > 50 ? `${text.substring(0, 50)}...` : text}${files.length > 0 ? ` (${files.length} file${files.length > 1 ? 's' : ''} attached)` : ''}`
       });
+        }
+      }
     } catch (err: any) {
       console.error('Error sending message:', err);
       throw new Error('Failed to send message');
@@ -268,7 +311,7 @@ export default function DashboardMessaging({ quoteRequestId, onClose }: Dashboar
         currentUser={user?.email || ''}
         currentCountry={userProfile?.businessUnit || ''}
         onSendMessage={handleSendMessage}
-        quoteTitle={quoteRequest ? `${quoteRequest.title} (${quoteRequest.creatorCountry} → ${quoteRequest.targetCountry})` : ''}
+        quoteTitle={quoteRequest ? `${quoteRequest.title} (${quoteRequest.creatorCountry} → ${quoteRequest.involvedCountry})` : ''}
         onBack={onClose}
         quoteRequestFiles={quoteRequest?.attachments || []}
       />

@@ -10,13 +10,19 @@ interface Country {
 }
 
 const initialCountries = [
-  "Netherlands",
-  "France", 
-  "Germany",
-  "UK",
-  "Belgium",
-  "Sweden",
-  "Switzerland"
+  "Loxcall Netherlands",
+  "Loxcall France", 
+  "Loxcall Germany",
+  "Loxcall UK",
+  "Loxcall Belgium",
+  "Loxcall Sweden",
+  "Loxcall Switzerland",
+  "Loxcall Spain",
+  "Loxcall Italy",
+  "Loxcall Poland",
+  "Loxcall Austria",
+  "Loxcall Denmark",
+  "Loxcall Norway"
 ];
 
 export const useCountries = () => {

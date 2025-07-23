@@ -2,12 +2,17 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { doc, getDoc, Firestore } from "firebase/firestore";
+import { doc, getDoc, Firestore, getDocs, collection, updateDoc } from "firebase/firestore";
 import { db } from "../../../firebaseClient";
 import { useAuth } from "../../AuthProvider";
 import { useCustomers } from "../../hooks/useCustomers";
 import { useMessages } from "../../hooks/useMessages";
 import MessagingPanel from "../../components/MessagingPanel";
+import dayjs from "dayjs";
+import relativeTime from "dayjs/plugin/relativeTime";
+
+// Initialize dayjs plugins
+dayjs.extend(relativeTime);
 
 interface QuoteRequest {
   id: string;
@@ -32,10 +37,17 @@ interface QuoteRequest {
   attachments: any[];
   createdAt: any;
   updatedAt: any;
-  waitingForAnswer?: boolean;
-  urgent?: boolean;
-  problems?: boolean;
+  waitingForAnswer: boolean;
+  urgent: boolean;
+  problems: boolean;
+  planned: boolean;
   targetCountry?: string;
+  hasUnreadMessages?: boolean;
+  lastMessageAt?: string | null;
+  customerDecidesEndDate?: boolean;
+  latitude?: string;
+  longitude?: string;
+  updatedBy?: string;
 }
 
 interface Customer {
@@ -60,45 +72,95 @@ export default function QuoteRequestPage() {
 
   useEffect(() => {
     const fetchData = async () => {
-      setLoading(true);
-      if (!db) {
-        setError("Database not initialized");
-        setLoading(false);
-        return;
-      }
-
+      if (!params.id || !db) return;
+      
       try {
-        const docRef = doc(db as Firestore, "quoteRequests", params.id as string);
-        const snap = await getDoc(docRef);
+        setLoading(true);
+        const firestore = db as Firestore;
+        const quoteRef = doc(firestore, "quoteRequests", params.id);
+        const snap = await getDoc(quoteRef);
+        
         if (snap.exists()) {
           const data = snap.data();
+
+          // Get labels to check for special labels
+          const labelsRef = collection(firestore, "labels");
+          const labelsSnap = await getDocs(labelsRef);
+          const labels = labelsSnap.docs.map(doc => ({ 
+            id: doc.id, 
+            name: doc.data().name 
+          }));
+
+          // Find special label IDs
+          const urgentLabelId = labels.find(l => l.name.toLowerCase() === 'urgent')?.id || '';
+          const problemsLabelId = labels.find(l => l.name.toLowerCase() === 'problems')?.id || '';
+          const waitingLabelId = labels.find(l => l.name.toLowerCase() === 'waiting for answer')?.id || '';
+          const plannedLabelId = labels.find(l => l.name.toLowerCase() === 'planned')?.id || '';
+          const snoozeLabelId = labels.find(l => l.name.toLowerCase() === 'snooze')?.id || '';
+
+          // Check both boolean flags and label IDs
+          const hasUrgentLabel = data.urgent || (data.labels || []).includes(urgentLabelId);
+          const hasProblemsLabel = data.problems || (data.labels || []).includes(problemsLabelId);
+          const hasWaitingLabel = data.waitingForAnswer || (data.labels || []).includes(waitingLabelId);
+          const hasPlannedLabel = data.planned || (data.labels || []).includes(plannedLabelId);
+          const hasSnoozeLabel = data.status === "Snoozed" || (data.labels || []).includes(snoozeLabelId);
+
+          // Update the quote request's flags to match the label state
+          const updatedData = {
+            ...data,
+            urgent: hasUrgentLabel,
+            problems: hasProblemsLabel,
+            waitingForAnswer: hasWaitingLabel,
+            planned: hasPlannedLabel,
+            labels: [...new Set([
+              ...(data.labels || []),
+              ...(hasUrgentLabel && urgentLabelId ? [urgentLabelId] : []),
+              ...(hasProblemsLabel && problemsLabelId ? [problemsLabelId] : []),
+              ...(hasWaitingLabel && waitingLabelId ? [waitingLabelId] : []),
+              ...(hasPlannedLabel && plannedLabelId ? [plannedLabelId] : []),
+              ...(hasSnoozeLabel && snoozeLabelId ? [snoozeLabelId] : [])
+            ])]
+          } as any; // Type assertion needed because data has dynamic properties
+
+          // Save the updated flags and labels back to Firestore
+          await updateDoc(quoteRef, {
+            urgent: updatedData.urgent,
+            problems: updatedData.problems,
+            waitingForAnswer: updatedData.waitingForAnswer,
+            planned: updatedData.planned,
+            labels: updatedData.labels
+          }).catch(err => {
+            console.error('[DEBUG] Error updating quote request flags:', err);
+          });
+
           const formattedData: QuoteRequest = {
             id: snap.id,
-            title: data.title || "",
-            creatorCountry: data.creatorCountry || "",
-            involvedCountry: data.involvedCountry || "",
-            customer: data.customer || "",
-            customerNumber: data.customerNumber || "",
-            status: data.status || "",
-            products: data.products || [],
+            title: updatedData.title || "",
+            creatorCountry: updatedData.creatorCountry || "",
+            involvedCountry: updatedData.involvedCountry || "",
+            customer: updatedData.customer || "",
+            customerNumber: updatedData.customerNumber || "",
+            status: updatedData.status || "",
+            products: updatedData.products || [],
             jobsite: {
-              address: data.jobsite?.address || data.jobsiteAddress || "",
-              coordinates: data.jobsite?.coordinates || null
+              address: updatedData.jobsite?.address || updatedData.jobsiteAddress || "",
+              coordinates: updatedData.jobsite?.coordinates || null
             },
-            startDate: data.startDate || "",
-            endDate: data.endDate || null,
-            customerDecidesEnd: data.customerDecidesEnd || false,
-            jobsiteContactId: data.jobsiteContactId || "",
-            jobsiteContact: data.jobsiteContact || null,
-            labels: data.labels || [],
-            notes: data.notes || [],
-            attachments: data.attachments || [],
-            createdAt: data.createdAt,
-            updatedAt: data.updatedAt,
-            waitingForAnswer: data.waitingForAnswer || false,
-            urgent: data.urgent || false,
-            problems: data.problems || false,
-            targetCountry: data.targetCountry || ""
+            startDate: updatedData.startDate || "",
+            endDate: updatedData.endDate || null,
+            customerDecidesEnd: updatedData.customerDecidesEnd || false,
+            jobsiteContactId: updatedData.jobsiteContactId || "",
+            jobsiteContact: updatedData.jobsiteContact || null,
+            labels: updatedData.labels || [],
+            notes: updatedData.notes || [],
+            attachments: updatedData.attachments || [],
+            createdAt: updatedData.createdAt,
+            updatedAt: updatedData.updatedAt,
+            waitingForAnswer: updatedData.waitingForAnswer || false,
+            urgent: updatedData.urgent || false,
+            problems: updatedData.problems || false,
+            planned: updatedData.planned || false,
+            targetCountry: updatedData.targetCountry || ""
           };
           setQuoteRequest(formattedData);
         } else {
@@ -112,13 +174,19 @@ export default function QuoteRequestPage() {
     };
 
     fetchData();
-  }, [params.id]);
+  }, [params.id, db]);
 
-  const handleSendMessage = async (text: string) => {
-    if (!user?.email || !userProfile?.businessUnit) {
-      throw new Error('Cannot send message: User not authenticated');
+  const handleSendMessage = async (text: string, files: Array<{ name: string; url: string; type: string; size: number; }> = []) => {
+    if (!user?.email || !userProfile?.businessUnit || !quoteRequest) {
+      throw new Error('Cannot send message: Missing required data');
     }
-    await sendMessage(text, user.email, userProfile.businessUnit);
+
+    // Determine target country based on user's role
+    const targetCountry = userProfile.businessUnit === quoteRequest.creatorCountry
+      ? quoteRequest.involvedCountry
+      : quoteRequest.creatorCountry;
+
+    await sendMessage(text, user.email, userProfile.businessUnit, targetCountry, files);
   };
 
   if (loading) {
@@ -134,9 +202,9 @@ export default function QuoteRequestPage() {
   }
 
   return (
-    <div className="flex h-full">
+    <div className="flex h-screen">
       {/* Main content */}
-      <div className="flex-1 p-6 overflow-auto">
+      <div className="flex-1 p-6 overflow-y-auto">
         <div className="space-y-6">
           {/* Header */}
           <div className="flex items-center justify-between mb-6">
@@ -413,15 +481,19 @@ export default function QuoteRequestPage() {
           </div>
 
       {/* Messaging panel */}
-      <div className="w-[400px] border-l border-gray-200 bg-white">
+      <div className="w-96 bg-white border-l border-gray-200">
         <MessagingPanel
-              quoteRequestId={params.id as string}
           messages={messages}
           onSendMessage={handleSendMessage}
-          loading={messagesLoading}
-          error={messagesError}
-            />
-          </div>
+          loading={loading}
+          error={error}
+          readOnly={false}
+          currentUser={user?.email || ''}
+          currentCountry={userProfile?.businessUnit || ''}
+          quoteTitle={quoteRequest?.title || ''}
+          quoteRequestFiles={quoteRequest?.attachments || []}
+        />
+      </div>
     </div>
   );
 } 

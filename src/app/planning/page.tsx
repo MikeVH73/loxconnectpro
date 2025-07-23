@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { collection, query, where, getDocs, Firestore } from 'firebase/firestore';
+import { collection, query, where, getDocs, Firestore, updateDoc, doc } from 'firebase/firestore';
 import { db } from '../../firebaseClient';
 import { useAuth } from '../AuthProvider';
 import Link from 'next/link';
@@ -38,6 +38,30 @@ interface QuoteRequest {
   endDate: string | null;
   customerDecidesEnd: boolean;
   labels: string[];
+  planned: boolean;
+  customer: string;
+  waitingForAnswer: boolean;
+  urgent: boolean;
+  problems: boolean;
+  hasUnreadMessages?: boolean;
+  lastMessageAt?: string | null;
+  jobsite?: {
+    address?: string;
+    coordinates?: {
+      lat: number;
+      lng: number;
+    };
+  };
+  jobsiteContact?: {
+    name: string;
+    phone: string;
+  };
+  customerNumber?: string;
+  customerDecidesEndDate?: boolean;
+  latitude?: string;
+  longitude?: string;
+  updatedAt?: Date;
+  updatedBy?: string;
 }
 
 interface PositionedQuoteRequest extends QuoteRequest {
@@ -76,23 +100,80 @@ export default function PlanningPage() {
           return;
         }
 
-        const quotesRef = collection(db as Firestore, "quoteRequests");
-        const q = query(
-          quotesRef,
-          where("status", "==", "In Progress")
-        );
+        const labelsSnapshot = await getDocs(collection(db, "labels"));
+        const labels = labelsSnapshot.docs.map(doc => ({ 
+          id: doc.id, 
+          ...doc.data() 
+        } as Label));
+        setLabels(labels);
         
-        const snapshot = await getDocs(q);
-        let requests = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        } as QuoteRequest));
+        const plannedLabelId = labels.find(label => 
+          label.name.toLowerCase() === "planned"
+        )?.id;
 
-        requests = requests.filter(qr => 
-          userCountries.includes(qr.creatorCountry) || 
-          userCountries.includes(qr.involvedCountry)
+        const quotesRef = collection(db as Firestore, "quoteRequests");
+        
+        // Get all quote requests for user's countries
+        const creatorQueries = userCountries.map(country => 
+          query(quotesRef, where("creatorCountry", "==", country))
+        );
+        const involvedQueries = userCountries.map(country => 
+          query(quotesRef, where("involvedCountry", "==", country))
         );
 
+        const allQueries = [...creatorQueries, ...involvedQueries];
+        const querySnapshots = await Promise.all(allQueries.map(q => getDocs(q)));
+
+        // Combine and deduplicate results
+        const seenIds = new Set<string>();
+        let requests: QuoteRequest[] = [];
+
+        querySnapshots.forEach(snapshot => {
+          snapshot.docs.forEach(doc => {
+            const data = doc.data() as QuoteRequest;
+            if (!seenIds.has(doc.id)) {
+              requests.push({
+                ...data,
+                id: doc.id,
+                // Ensure planned status is set based on both flag and label
+                planned: data.planned || (data.labels || []).includes(plannedLabelId || '')
+              });
+              seenIds.add(doc.id);
+            }
+          });
+        });
+
+        // Update quotes to ensure consistency between flag and label
+        const updatePromises = requests.map(async qr => {
+          const quoteRef = doc(db as Firestore, "quoteRequests", qr.id);
+          const hasPlannedLabel = (qr.labels || []).includes(plannedLabelId || '');
+          
+          // If either the flag or label indicates planned status, ensure both are set
+          if (qr.planned || hasPlannedLabel) {
+            const updatedQr = {
+              ...qr,
+              planned: true,
+              labels: [...new Set([
+                ...(qr.labels || []),
+                ...(plannedLabelId ? [plannedLabelId] : [])
+              ])]
+            } as QuoteRequest;
+
+            try {
+              await updateDoc(quoteRef, {
+                planned: true,
+                labels: updatedQr.labels
+              });
+              return updatedQr;
+            } catch (err) {
+              console.error('Error updating quote request:', err);
+              return qr;
+            }
+          }
+          return qr;
+        });
+
+        requests = await Promise.all(updatePromises);
         console.log("[Planning] Filtered quote requests:", requests);
         setQuoteRequests(requests);
         setLoading(false);
@@ -104,7 +185,7 @@ export default function PlanningPage() {
     };
 
     fetchQuoteRequests();
-  }, [userProfile]);
+  }, [userProfile, db]);
 
   useEffect(() => {
     const fetchLabels = async () => {
@@ -151,33 +232,45 @@ export default function PlanningPage() {
 
   // Get all quotes that appear in this week
   const weekQuotes = quoteRequests.filter(quote => {
-    const startDate = parseISO(quote.startDate);
-    const endDate = quote.endDate ? parseISO(quote.endDate) : addDays(startDate, 1);
-    return weekDays.some(day => 
-      isWithinInterval(day, { start: startDate, end: endDate })
-    );
+    try {
+      if (!quote.startDate) return false;
+      const startDate = parseISO(quote.startDate);
+      const endDate = quote.endDate ? parseISO(quote.endDate) : addDays(startDate, 1);
+      return weekDays.some(day => 
+        isWithinInterval(day, { start: startDate, end: endDate })
+      );
+    } catch (err) {
+      console.error('Error parsing dates for quote:', quote.id, err);
+      return false;
+    }
   });
 
   // Position quotes to avoid overlaps
   const positionedQuotes: PositionedQuoteRequest[] = [];
   weekQuotes.forEach(quote => {
-    const startDate = parseISO(quote.startDate);
-    const endDate = quote.endDate ? parseISO(quote.endDate) : addDays(startDate, 1);
-    
-    let row = 0;
-    while (positionedQuotes.some(pQuote => {
-      const pStartDate = parseISO(pQuote.startDate);
-      const pEndDate = pQuote.endDate ? parseISO(pQuote.endDate) : addDays(pStartDate, 1);
-      return pQuote.row === row && (
-        isWithinInterval(startDate, { start: pStartDate, end: pEndDate }) ||
-        isWithinInterval(endDate, { start: pStartDate, end: pEndDate }) ||
-        isWithinInterval(pStartDate, { start: startDate, end: endDate })
-      );
-    })) {
-      row++;
+    try {
+      if (!quote.startDate) return;
+      const startDate = parseISO(quote.startDate);
+      const endDate = quote.endDate ? parseISO(quote.endDate) : addDays(startDate, 1);
+      
+      let row = 0;
+      while (positionedQuotes.some(pQuote => {
+        if (!pQuote.startDate) return false;
+        const pStartDate = parseISO(pQuote.startDate);
+        const pEndDate = pQuote.endDate ? parseISO(pQuote.endDate) : addDays(pStartDate, 1);
+        return pQuote.row === row && (
+          isWithinInterval(startDate, { start: pStartDate, end: pEndDate }) ||
+          isWithinInterval(endDate, { start: pStartDate, end: pEndDate }) ||
+          isWithinInterval(pStartDate, { start: startDate, end: endDate })
+        );
+      })) {
+        row++;
+      }
+      
+      positionedQuotes.push({ ...quote, row });
+    } catch (err) {
+      console.error('Error positioning quote:', quote.id, err);
     }
-    
-    positionedQuotes.push({ ...quote, row });
   });
 
   // Get the "Planned" label ID
@@ -248,50 +341,38 @@ export default function PlanningPage() {
         </div>
 
         <div className="flex-1 relative" style={{ height: calculatedHeight }}>
-          {positionedQuotes.map((quote) => {
+          {positionedQuotes.map(quote => {
             const startDate = parseISO(quote.startDate);
             const endDate = quote.endDate ? parseISO(quote.endDate) : addDays(startDate, 1);
+            const duration = differenceInDays(endDate, startDate) + 1;
+            const startOffset = differenceInDays(startDate, weekStart);
+            const width = `${(duration / 7) * 100}%`;
+            const left = `${(startOffset / 7) * 100}%`;
             
-            let startDayIndex = weekDays.findIndex(day => 
-              isSameDay(day, startDate) || 
-              (isAfter(startDate, day) && isBefore(startDate, addDays(day, 1)))
-            );
-            if (startDayIndex === -1) startDayIndex = 0;
-
-            const daysInWeek = Math.min(
-              7 - startDayIndex,
-              differenceInDays(
-                isBefore(endDate, addDays(weekDays[6], 1)) ? endDate : addDays(weekDays[6], 1),
-                isSameDay(startDate, weekDays[startDayIndex]) ? startDate : weekDays[startDayIndex]
-              ) + 1
-            );
-
-            const isPlanned = plannedLabelId && quote.labels?.includes(plannedLabelId);
-
             return (
               <Link
                 key={quote.id}
                 href={`/quote-requests/${quote.id}/edit`}
-                className={`
-                  absolute z-10 px-3 py-2 text-sm rounded-lg
-                  ${isPlanned 
-                    ? 'bg-red-50 text-red-700 hover:bg-red-100 border-red-200' 
-                    : 'bg-gray-50 text-gray-700 hover:bg-gray-100 border-gray-200'
-                  }
-                  transition-all duration-200 ease-in-out
-                  overflow-hidden text-ellipsis whitespace-nowrap
-                  border shadow-sm
-                  hover:shadow-md hover:-translate-y-0.5
-                `}
+                className={`absolute p-2 rounded-lg shadow-sm transition-all
+                  hover:shadow-md hover:z-10 cursor-pointer
+                  ${quote.planned 
+                    ? 'bg-red-100 hover:bg-red-200 text-red-900' 
+                    : 'bg-gray-100 hover:bg-gray-200 text-gray-900'
+                  }`}
                 style={{
-                  top: `${padding + quote.row * rowHeight}px`,
-                  left: `calc(${startDayIndex} * 100% / 7 + 8px)`,
-                  width: `calc(${daysInWeek} * 100% / 7 - 16px)`,
-                  height: `${rowHeight - 8}px`,
+                  top: `${quote.row * rowHeight + padding}px`,
+                  left,
+                  width,
+                  height: `${rowHeight - 4}px`,
+                  display: startOffset >= 7 || startOffset < -7 ? 'none' : 'block'
                 }}
-                title={`${quote.title} (${format(startDate, 'MMM d')} - ${format(endDate, 'MMM d')})`}
               >
-                {quote.title}
+                <div className="text-sm font-medium truncate">
+                  {quote.title}
+                </div>
+                <div className={`text-xs truncate ${quote.planned ? 'text-red-700' : 'text-gray-600'}`}>
+                  {quote.customer}
+                </div>
               </Link>
             );
           })}

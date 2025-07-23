@@ -5,9 +5,12 @@ import { collection, query, where, orderBy, onSnapshot, Firestore, Timestamp } f
 import { db } from '../../firebaseClient';
 import { useAuth } from '../AuthProvider';
 import Link from 'next/link';
-import dayjs from 'dayjs';
-import relativeTime from 'dayjs/plugin/relativeTime';
+import dayjs from "dayjs";
+import relativeTime from "dayjs/plugin/relativeTime";
+import { clearNotifications } from '../utils/notifications';
+import toast from 'react-hot-toast';
 
+// Initialize dayjs plugins
 dayjs.extend(relativeTime);
 
 interface Notification {
@@ -26,6 +29,41 @@ export default function NotificationsPage() {
   const { user, userProfile } = useAuth();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
+  const [clearing, setClearing] = useState(false);
+
+  const handleClearAll = async () => {
+    if (!userProfile?.businessUnit) {
+      toast.error('No business unit found');
+      return;
+    }
+    
+    try {
+      setClearing(true);
+      await clearNotifications(userProfile.businessUnit);
+      toast.success('All notifications cleared');
+    } catch (error) {
+      console.error('Error clearing notifications:', error);
+      toast.error('Failed to clear notifications');
+    } finally {
+      setClearing(false);
+    }
+  };
+
+  // Helper function to format date
+  const formatDate = (date: any) => {
+    if (!date) return null;
+    try {
+      // If it's a Firestore Timestamp
+      if (typeof date.toDate === 'function') {
+        return dayjs(date.toDate()).fromNow();
+      }
+      // If it's a Date object or string
+      return dayjs(date).fromNow();
+    } catch (err) {
+      console.error('Error formatting date:', err);
+      return null;
+    }
+  };
 
   useEffect(() => {
     if (!user || !db || !userProfile?.businessUnit) return;
@@ -60,7 +98,27 @@ export default function NotificationsPage() {
 
   return (
     <div className="p-8 max-w-4xl mx-auto">
-      <h1 className="text-2xl font-bold text-[#e40115] mb-6">Notifications</h1>
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold text-[#e40115]">Notifications</h1>
+        {notifications.length > 0 && (
+          <button
+            onClick={handleClearAll}
+            disabled={clearing}
+            className={`px-4 py-2 text-sm text-gray-600 hover:text-gray-900 bg-white hover:bg-gray-100 rounded-lg border shadow-sm transition-all ${
+              clearing ? 'opacity-50 cursor-not-allowed' : ''
+            }`}
+          >
+            {clearing ? (
+              <span className="flex items-center">
+                <span className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-gray-900 mr-2"></span>
+                Clearing...
+              </span>
+            ) : (
+              'Clear All'
+            )}
+          </button>
+        )}
+      </div>
       
       <div className="space-y-4">
         {notifications.length === 0 ? (
@@ -91,7 +149,7 @@ export default function NotificationsPage() {
                   </div>
                 </div>
                 <div className="text-sm text-gray-500 whitespace-nowrap">
-                  {notification.createdAt && dayjs(notification.createdAt.toDate()).fromNow()}
+                  {notification.createdAt && formatDate(notification.createdAt)}
                 </div>
               </div>
             </Link>

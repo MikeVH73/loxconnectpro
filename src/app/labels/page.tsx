@@ -1,13 +1,27 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useAuth } from "../AuthProvider";
-import { collection, getDocs, addDoc } from "firebase/firestore";
+import { collection, getDocs, addDoc, query, where } from "firebase/firestore";
 import { db } from "../../firebaseClient";
+
+// Define required labels
+const REQUIRED_LABELS = [
+  "Urgent",
+  "Problems",
+  "Waiting for Answer",
+  "Planned",
+  "Snooze"
+];
+
+interface Label {
+  id: string;
+  name: string;
+}
 
 export default function LabelsPage() {
   const { userProfile } = useAuth();
   console.log("[LabelsPage] userProfile:", userProfile);
-  const [labels, setLabels] = useState<any[]>([]);
+  const [labels, setLabels] = useState<Label[]>([]);
   const [newLabel, setNewLabel] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -15,9 +29,49 @@ export default function LabelsPage() {
   useEffect(() => {
     const fetchLabels = async () => {
       setLoading(true);
-      const snap = await getDocs(collection(db, "labels"));
-      setLabels(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      setLoading(false);
+      try {
+        // First fetch all existing labels
+        const snap = await getDocs(collection(db, "labels"));
+        const existingLabels = snap.docs.map(doc => ({ 
+          id: doc.id, 
+          ...doc.data()
+        } as Label));
+        setLabels(existingLabels);
+
+        // Check which required labels are missing
+        const existingLabelNames = new Set(existingLabels.map(l => l.name.toLowerCase()));
+        const missingLabels = REQUIRED_LABELS.filter(label => 
+          !existingLabelNames.has(label.toLowerCase())
+        );
+
+        console.log('[DEBUG] Labels check:', {
+          existing: existingLabelNames,
+          missing: missingLabels
+        });
+
+        // Add any missing required labels
+        if (missingLabels.length > 0) {
+          console.log('[DEBUG] Adding missing labels:', missingLabels);
+          const labelsRef = collection(db, "labels");
+          const addPromises = missingLabels.map(name => 
+            addDoc(labelsRef, { name })
+          );
+          await Promise.all(addPromises);
+
+          // Refresh labels after adding missing ones
+          const newSnap = await getDocs(collection(db, "labels"));
+          const updatedLabels = newSnap.docs.map(doc => ({ 
+            id: doc.id, 
+            ...doc.data() 
+          } as Label));
+          setLabels(updatedLabels);
+        }
+      } catch (err) {
+        console.error('Error managing labels:', err);
+        setError('Failed to manage labels');
+      } finally {
+        setLoading(false);
+      }
     };
     fetchLabels();
   }, []);
@@ -31,7 +85,10 @@ export default function LabelsPage() {
       setNewLabel("");
       // Refresh labels
       const snap = await getDocs(collection(db, "labels"));
-      setLabels(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setLabels(snap.docs.map(doc => ({ 
+        id: doc.id, 
+        ...doc.data() 
+      } as Label)));
     } catch (err: any) {
       setError(err.message || "Failed to add label");
     }

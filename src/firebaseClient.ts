@@ -2,8 +2,6 @@ import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
 import { getFirestore, Firestore } from 'firebase/firestore';
 import { getAuth, Auth } from 'firebase/auth';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
-import { getAnalytics } from 'firebase/analytics';
-import { FirebaseError } from 'firebase/app';
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
@@ -16,48 +14,36 @@ const firebaseConfig = {
   measurementId: "G-5P1C1YTGQT"
 };
 
-console.log('Firebase configuration:', {
-  ...firebaseConfig,
-  apiKey: firebaseConfig.apiKey ? '(present)' : '(missing)',
-});
+// Initialize Firebase only on client side
+let app: FirebaseApp;
+let auth: Auth;
+let db: Firestore;
+let storage: FirebaseStorage;
 
-// Initialize Firebase
-let app: FirebaseApp | undefined;
-let db: Firestore | undefined;
-let auth: Auth | undefined;
-let storage: FirebaseStorage | undefined;
+const initializeFirebase = async () => {
+  if (typeof window === 'undefined') {
+    return { app: undefined, auth: undefined, db: undefined, storage: undefined };
+  }
 
 try {
-  // Initialize Firebase only if it hasn't been initialized already
-  if (!getApps().length) {
-    app = initializeApp(firebaseConfig);
-    // Only initialize analytics on the client side
-    if (typeof window !== 'undefined') {
-      getAnalytics(app);
-    }
-    console.log('Firebase app initialized successfully');
-  } else {
-    app = getApps()[0];
-    console.log('Using existing Firebase app');
-  }
+    // Initialize Firebase app if not already initialized
+    app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
   
   // Initialize services
+    auth = getAuth(app);
   db = getFirestore(app);
-  auth = getAuth(app);
   storage = getStorage(app);
-  console.log('Firebase services initialized');
 
+    return { app, auth, db, storage };
 } catch (error) {
   console.error('Error initializing Firebase:', error);
-  if (error instanceof FirebaseError) {
-    throw new Error(`Failed to initialize Firebase: ${error.message}`);
-  } else {
-    throw new Error('Failed to initialize Firebase: Unknown error');
+    throw error;
   }
+};
+
+// Initialize Firebase on import in client
+if (typeof window !== 'undefined') {
+  initializeFirebase().catch(console.error);
 }
 
-if (!db || !auth || !storage) {
-  throw new Error('Firebase services not initialized properly');
-}
-
-export { db, auth, storage }; 
+export { app, auth, db, storage, initializeFirebase }; 

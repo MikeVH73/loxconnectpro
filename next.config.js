@@ -1,7 +1,10 @@
 ﻿/** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  webpack: (config) => {
+  compiler: {
+    styledComponents: true,
+  },
+  webpack: (config, { isServer }) => {
     // Ignore specific modules that cause issues with SSR
     config.resolve.fallback = {
       ...config.resolve.fallback,
@@ -9,6 +12,7 @@ const nextConfig = {
       net: false,
       tls: false,
     };
+
     return config;
   },
   typescript: {
@@ -18,8 +22,14 @@ const nextConfig = {
     ignoreDuringBuilds: true
   },
   images: {
-    domains: ['firebasestorage.googleapis.com'],
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'firebasestorage.googleapis.com',
+      },
+    ],
   },
+  poweredByHeader: false,
   async headers() {
     return [
       {
@@ -27,7 +37,7 @@ const nextConfig = {
         headers: [
           {
             key: 'Content-Security-Policy',
-            value: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://maps.googleapis.com https://*.googletagmanager.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https://*.googleapis.com https://*.gstatic.com https://firebasestorage.googleapis.com https://i.ibb.co; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.cloudfunctions.net https://firestore.googleapis.com wss://*.firebaseio.com https://*.google-analytics.com https://*.analytics.google.com https://*.googletagmanager.com; frame-src 'self' https://*.firebaseapp.com;"
+            value: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.googletagmanager.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https://*.googleapis.com https://*.gstatic.com https://firebasestorage.googleapis.com https://i.ibb.co; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.cloudfunctions.net https://firestore.googleapis.com wss://*.firebaseio.com https://*.google-analytics.com https://*.analytics.google.com https://*.googletagmanager.com; frame-src 'self' https://*.firebaseapp.com;"
           },
           {
             key: 'X-Frame-Options',
@@ -41,6 +51,14 @@ const nextConfig = {
             key: 'Referrer-Policy',
             value: 'origin-when-cross-origin',
           },
+          {
+            key: 'Strict-Transport-Security',
+            value: 'max-age=31536000; includeSubDomains'
+          },
+          {
+            key: 'X-XSS-Protection',
+            value: '1; mode=block'
+          }
         ],
       },
       {

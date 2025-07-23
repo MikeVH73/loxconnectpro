@@ -550,7 +550,8 @@ export default function UsersPage() {
                         <span className={`pill-modern ${
                           userData.role === "superAdmin" ? "bg-red-600" :
                           userData.role === "admin" ? "bg-orange-500" :
-                          "bg-blue-500"
+                          userData.role === "user" ? "bg-blue-500" :
+                          "bg-gray-500"
                         }`}>
                           {userData.role || "—"}
                         </span>
@@ -639,6 +640,7 @@ export default function UsersPage() {
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#e40115]"
                 >
                   <option value="readOnly">Read Only</option>
+                  <option value="user">User</option>
                   <option value="admin">Admin</option>
                   <option value="superAdmin">Super Admin</option>
                 </select>
@@ -733,6 +735,7 @@ export default function UsersPage() {
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#e40115]"
                 >
                   <option value="readOnly">Read Only</option>
+                  <option value="user">User</option>
                   <option value="admin">Admin</option>
                   <option value="superAdmin">Super Admin</option>
                 </select>

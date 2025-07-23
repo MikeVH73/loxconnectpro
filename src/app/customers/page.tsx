@@ -1,9 +1,9 @@
 "use client";
 import { useEffect, useState } from "react";
-import { collection, getDocs, query, orderBy, deleteDoc, doc, updateDoc } from "firebase/firestore";
+import { collection, getDocs, query, orderBy, deleteDoc, doc, updateDoc, addDoc, Firestore } from "firebase/firestore";
 import { db } from "../../firebaseClient";
-import Link from "next/link";
 import { useAuth } from "../AuthProvider";
+import { useCountries } from "../hooks/useCountries";
 
 interface Customer {
   id: string;
@@ -12,219 +12,265 @@ interface Customer {
   contact?: string;
   phone?: string;
   email?: string;
-  customerNumbers?: { [country: string]: string };
+  customerNumbers: { [country: string]: string };
+  countries?: string[];
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
+type CustomerDataForFirestore = Omit<Customer, 'id' | 'createdAt' | 'updatedAt'> & {
+  createdAt?: Date | null;
+  updatedAt?: Date | null;
 }
 
 export default function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
-  const [showEditModal, setShowEditModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState<string | null>(null);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
-  const [countries, setCountries] = useState<string[]>([]);
-  const [deleteError, setDeleteError] = useState("");
-  const [deleteSuccess, setDeleteSuccess] = useState("");
-  const [editError, setEditError] = useState("");
-  const [editSuccess, setEditSuccess] = useState("");
   const { userProfile } = useAuth();
+  const { countryNames: countries, loading: countriesLoading } = useCountries();
 
   useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      const [customersSnap, countriesSnap] = await Promise.all([
-        getDocs(query(collection(db, "customers"), orderBy("name"))),
-        getDocs(collection(db, "countries"))
-      ]);
+    const fetchCustomers = async () => {
+      if (!db) {
+        console.error('Firebase DB not initialized');
+        return;
+      }
       
-      const countriesList = countriesSnap.docs.map(doc => doc.data().name);
-      setCountries(countriesList);
-      
-      setCustomers(customersSnap.docs.map(doc => ({ 
+      try {
+        console.log('Fetching customers...');
+        const customersRef = collection(db as Firestore, "customers");
+        const q = query(customersRef, orderBy("name"));
+        const snapshot = await getDocs(q);
+        console.log(`Found ${snapshot.size} customers in database`);
+        
+        let fetchedCustomers = snapshot.docs.map(doc => {
+          const data = doc.data();
+          console.log('Customer data:', data);
+          return {
         id: doc.id, 
-        ...doc.data(),
-        customerNumbers: doc.data().customerNumbers || {} 
-      } as Customer)));
-      
+            name: data.name || '',
+            address: data.address || '',
+            contact: data.contact || '',
+            phone: data.phone || '',
+            email: data.email || '',
+            customerNumbers: data.customerNumbers || {},
+            countries: Array.isArray(data.countries) ? data.countries : 
+                      Object.keys(data.customerNumbers || {}).filter(k => data.customerNumbers[k]),
+            createdAt: data.createdAt?.toDate() || null,
+            updatedAt: data.updatedAt?.toDate() || null
+          } as Customer;
+        });
+
+        console.log('Fetched customers:', fetchedCustomers);
+        console.log('User profile:', userProfile);
+
+        // Filter customers based on user role and countries
+        if (userProfile?.role === "user" && userProfile.countries?.length > 0) {
+          console.log('Filtering customers for user countries:', userProfile.countries);
+          fetchedCustomers = fetchedCustomers.filter(customer => {
+            const customerCountries = customer.countries || Object.keys(customer.customerNumbers || {});
+            const hasMatchingCountry = customerCountries.some(country => userProfile.countries?.includes(country));
+            console.log(`Customer ${customer.name} countries:`, customerCountries, 'Has matching country:', hasMatchingCountry);
+            return hasMatchingCountry;
+          });
+        }
+
+        console.log('Final customers after filtering:', fetchedCustomers);
+        setCustomers(fetchedCustomers);
+      } catch (error) {
+        console.error("Error fetching customers:", error);
+      } finally {
       setLoading(false);
+      }
     };
-    fetchData();
-  }, []);
+
+    if (!countriesLoading) {
+      fetchCustomers();
+    }
+  }, [userProfile, countriesLoading]);
+
+  // Group customers by country
+  const groupedCustomers = customers.reduce<{ [country: string]: Customer[] }>((acc, customer) => {
+    const customerCountries = customer.countries || Object.keys(customer.customerNumbers || {});
+    
+    customerCountries.forEach((country: string) => {
+      if (!acc[country]) {
+        acc[country] = [];
+      }
+      if (!acc[country].find(c => c.id === customer.id)) {
+        acc[country].push(customer);
+      }
+    });
+    
+    return acc;
+  }, {});
+
+  console.log('Available countries:', countries);
+  console.log('Grouped customers:', groupedCustomers);
 
   const handleDelete = async (customerId: string) => {
+    if (!db) return;
+    
     try {
-      await deleteDoc(doc(db, "customers", customerId));
+      await deleteDoc(doc(db as Firestore, "customers", customerId));
       setCustomers(prev => prev.filter(c => c.id !== customerId));
-      setDeleteSuccess("Customer deleted successfully");
       setShowDeleteConfirm(null);
-      
-      // Clear success message after 3 seconds
-      setTimeout(() => {
-        setDeleteSuccess("");
-      }, 3000);
     } catch (error) {
       console.error("Error deleting customer:", error);
-      setDeleteError("Failed to delete customer. Please try again.");
-      
-      // Clear error message after 3 seconds
-      setTimeout(() => {
-        setDeleteError("");
-      }, 3000);
     }
   };
 
   const handleEdit = async () => {
-    if (!editingCustomer) return;
+    if (!db || !editingCustomer) return;
 
     try {
-      await updateDoc(doc(db, "customers", editingCustomer.id), {
-        name: editingCustomer.name,
-        address: editingCustomer.address,
-        contact: editingCustomer.contact || "",
-        phone: editingCustomer.phone || "",
-        email: editingCustomer.email || "",
-        customerNumbers: editingCustomer.customerNumbers || {}
-      });
+      const customerData: CustomerDataForFirestore = {
+        name: editingCustomer.name || '',
+        address: editingCustomer.address || '',
+        contact: editingCustomer.contact || '',
+        phone: editingCustomer.phone || '',
+        email: editingCustomer.email || '',
+        customerNumbers: editingCustomer.customerNumbers || {},
+        countries: Object.keys(editingCustomer.customerNumbers || {}).filter(k => editingCustomer.customerNumbers[k]),
+        updatedAt: new Date()
+      };
 
-      setCustomers(prev => 
-        prev.map(c => c.id === editingCustomer.id ? editingCustomer : c)
-      );
-
-      setEditSuccess("Customer updated successfully");
-      setShowEditModal(false);
+      if (editingCustomer.id) {
+        await updateDoc(doc(db as Firestore, "customers", editingCustomer.id), customerData);
+        setCustomers(prev => prev.map(c => c.id === editingCustomer.id ? { ...customerData, id: editingCustomer.id } as Customer : c));
+      } else {
+        customerData.createdAt = new Date();
+        const docRef = await addDoc(collection(db as Firestore, "customers"), customerData);
+        setCustomers(prev => [...prev, { ...customerData, id: docRef.id } as Customer]);
+      }
+      setShowEditModal(null);
       setEditingCustomer(null);
-
-      // Clear success message after 3 seconds
-      setTimeout(() => {
-        setEditSuccess("");
-      }, 3000);
     } catch (error) {
-      console.error("Error updating customer:", error);
-      setEditError("Failed to update customer. Please try again.");
-
-      // Clear error message after 3 seconds
-      setTimeout(() => {
-        setEditError("");
-      }, 3000);
+      console.error("Error saving customer:", error);
     }
   };
 
-  const canManageCustomers = userProfile?.role === "admin" || userProfile?.role === "superAdmin";
+  if (loading || countriesLoading) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+      </div>
+    );
+  }
+
+  // Filter countries based on user role
+  const availableCountries = userProfile?.role === "user" 
+    ? (userProfile.countries || [])
+    : countries;
+
+  const createInitialCustomerNumbers = (countries: string[]): { [key: string]: string } => {
+    return countries.reduce((acc: { [key: string]: string }, country: string) => {
+      acc[country] = "";
+      return acc;
+    }, {});
+  };
 
   return (
-    <div className="p-8">
-      {deleteError && (
-        <div className="mb-4 p-4 bg-red-100 text-red-700 rounded-md">
-          {deleteError}
-        </div>
-      )}
-      {deleteSuccess && (
-        <div className="mb-4 p-4 bg-green-100 text-green-700 rounded-md">
-          {deleteSuccess}
-        </div>
-      )}
-      {editError && (
-        <div className="mb-4 p-4 bg-red-100 text-red-700 rounded-md">
-          {editError}
-        </div>
-      )}
-      {editSuccess && (
-        <div className="mb-4 p-4 bg-green-100 text-green-700 rounded-md">
-          {editSuccess}
-        </div>
-      )}
-      <div className="flex justify-between items-center mb-4">
-        <h1 className="text-2xl font-bold text-[#e40115]">Customers</h1>
-        {canManageCustomers && (
-          <Link
-            href="/customers/new"
-            className="bg-[#e40115] text-white px-4 py-2 rounded hover:bg-red-700 transition"
+    <div className="p-6 max-w-7xl mx-auto">
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-semibold">Customers</h1>
+        {/* Only show Add Customer button for users who can create customers */}
+        {userProfile?.businessUnit && (
+        <button
+          onClick={() => {
+            setEditingCustomer({
+              id: "",
+              name: "",
+              address: "",
+              customerNumbers: createInitialCustomerNumbers(availableCountries),
+                countries: [userProfile.businessUnit] // Default to user's country
+            } as Customer);
+            setShowEditModal("new");
+          }}
+          className="px-4 py-2 bg-[#e40115] text-white rounded hover:bg-red-700"
           >
-            + New Customer
-          </Link>
+          Add Customer
+        </button>
         )}
       </div>
-      {loading ? (
-        <div>Loading...</div>
-      ) : customers.length === 0 ? (
-        <div>No customers found.</div>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="min-w-full bg-white rounded shadow">
-            <thead>
-              <tr>
-                <th className="px-4 py-2 text-left">Name</th>
-                <th className="px-4 py-2 text-left">Address</th>
-                <th className="px-4 py-2 text-left">Contact</th>
-                <th className="px-4 py-2 text-left">Customer Numbers</th>
-                <th className="px-4 py-2 text-left">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {customers.map(c => (
-                <tr key={c.id} className="border-t">
-                  <td className="px-4 py-2 font-medium">{c.name}</td>
-                  <td className="px-4 py-2">{c.address}</td>
-                  <td className="px-4 py-2">{c.contact || '—'}</td>
-                  <td className="px-4 py-2">
-                    <div className="flex flex-col gap-1">
-                      {Object.entries(c.customerNumbers || {}).map(([country, number]) => (
-                        <div key={country} className="text-sm">
-                          <span className="font-medium">{country}:</span> {number}
-                        </div>
-                      ))}
-                    </div>
-                  </td>
-                  <td className="px-4 py-2">
-                    <div className="flex gap-2">
-                      <Link href={`/customers/${c.id}`} className="text-blue-600 hover:text-blue-800">
-                        View
-                      </Link>
-                      {canManageCustomers && (
+
+      {/* Display customers grouped by country */}
+      {availableCountries.map((country: string) => {
+        // Only render country section if there are customers for this country
+        const countryCustomers = groupedCustomers[country] || [];
+        console.log(`Customers for country ${country}:`, countryCustomers);
+        
+        return (
+          <div key={`country-${country}`} className="mb-8">
+            <h2 className="text-xl font-semibold mb-4">{country}</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {countryCustomers.length > 0 ? (
+                countryCustomers.map(customer => (
+                  <div key={`customer-${customer.id}`} className="bg-white p-4 rounded-lg shadow">
+                    <h3 className="font-semibold text-lg mb-2">{customer.name}</h3>
+                    <p className="text-gray-600 mb-2">{customer.address}</p>
+                    {customer.contact && <p className="text-gray-600 mb-1">Contact: {customer.contact}</p>}
+                    {customer.phone && <p className="text-gray-600 mb-1">Phone: {customer.phone}</p>}
+                    {customer.email && <p className="text-gray-600 mb-1">Email: {customer.email}</p>}
+                    <div className="mt-4 flex justify-end gap-2">
+                      {/* Only allow editing if user's country matches the customer's creator country */}
+                      {userProfile?.businessUnit && customer.countries?.includes(userProfile.businessUnit) && (
                         <>
                           <button
                             onClick={() => {
-                              setEditingCustomer(c);
-                              setShowEditModal(true);
+                          setEditingCustomer(customer);
+                          setShowEditModal(customer.id);
                             }}
-                            className="text-orange-600 hover:text-orange-800"
+                        className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
                           >
                             Edit
                           </button>
                           <button
-                            onClick={() => setShowDeleteConfirm(c.id)}
-                            className="text-red-600 hover:text-red-800"
+                        onClick={() => setShowDeleteConfirm(customer.id)}
+                        className="px-3 py-1 text-sm bg-red-100 text-red-700 rounded hover:bg-red-200"
                           >
                             Delete
                           </button>
                         </>
                       )}
+                      {/* Show read-only indicator for customers from other countries */}
+                      {userProfile?.businessUnit && !customer.countries?.includes(userProfile.businessUnit) && (
+                        <span className="px-3 py-1 text-sm bg-gray-50 text-gray-500 rounded">
+                          Read-only
+                        </span>
+                      )}
                     </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  </div>
+                ))
+              ) : (
+                <div className="col-span-3 text-center text-gray-500">
+                  No customers found for {country}
         </div>
       )}
+            </div>
+          </div>
+        );
+      })}
 
       {/* Delete Confirmation Modal */}
       {showDeleteConfirm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full">
-            <h3 className="text-lg font-semibold mb-4">Delete Customer</h3>
-            <p className="text-gray-600 mb-6">
-              Are you sure you want to delete this customer? This action cannot be undone.
-            </p>
-            <div className="flex justify-end gap-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg p-6 max-w-sm w-full">
+            <h3 className="text-lg font-semibold mb-4">Confirm Delete</h3>
+            <p>Are you sure you want to delete this customer?</p>
+            <div className="mt-6 flex justify-end gap-3">
               <button
                 onClick={() => setShowDeleteConfirm(null)}
-                className="px-4 py-2 text-gray-600 hover:text-gray-800 font-medium"
+                className="px-4 py-2 text-gray-600 hover:text-gray-800"
               >
                 Cancel
               </button>
               <button
                 onClick={() => handleDelete(showDeleteConfirm)}
-                className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 font-medium"
+                className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
               >
                 Delete
               </button>
@@ -235,18 +281,19 @@ export default function CustomersPage() {
 
       {/* Edit Modal */}
       {showEditModal && editingCustomer && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-lg p-6 max-w-2xl w-full">
-            <h3 className="text-lg font-semibold mb-4">Edit Customer</h3>
-            <div className="grid grid-cols-2 gap-4">
+            <h3 className="text-lg font-semibold mb-4">
+              {editingCustomer.id ? 'Edit Customer' : 'Add Customer'}
+            </h3>
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium mb-1">Name</label>
                   <input
                     type="text"
                     value={editingCustomer.name}
-                    onChange={(e) => setEditingCustomer({ ...editingCustomer, name: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  onChange={e => setEditingCustomer({ ...editingCustomer, name: e.target.value })}
+                  className="w-full border rounded px-3 py-2"
                   />
                 </div>
                 <div>
@@ -254,17 +301,17 @@ export default function CustomersPage() {
                   <input
                     type="text"
                     value={editingCustomer.address}
-                    onChange={(e) => setEditingCustomer({ ...editingCustomer, address: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  onChange={e => setEditingCustomer({ ...editingCustomer, address: e.target.value })}
+                  className="w-full border rounded px-3 py-2"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-1">Contact Name</label>
+                <label className="block text-sm font-medium mb-1">Contact Person</label>
                   <input
                     type="text"
                     value={editingCustomer.contact || ''}
-                    onChange={(e) => setEditingCustomer({ ...editingCustomer, contact: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  onChange={e => setEditingCustomer({ ...editingCustomer, contact: e.target.value })}
+                  className="w-full border rounded px-3 py-2"
                   />
                 </div>
                 <div>
@@ -272,8 +319,8 @@ export default function CustomersPage() {
                   <input
                     type="text"
                     value={editingCustomer.phone || ''}
-                    onChange={(e) => setEditingCustomer({ ...editingCustomer, phone: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  onChange={e => setEditingCustomer({ ...editingCustomer, phone: e.target.value })}
+                  className="w-full border rounded px-3 py-2"
                   />
                 </div>
                 <div>
@@ -281,53 +328,48 @@ export default function CustomersPage() {
                   <input
                     type="email"
                     value={editingCustomer.email || ''}
-                    onChange={(e) => setEditingCustomer({ ...editingCustomer, email: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  onChange={e => setEditingCustomer({ ...editingCustomer, email: e.target.value })}
+                  className="w-full border rounded px-3 py-2"
                   />
-                </div>
               </div>
               <div>
-                <label className="block text-sm font-medium mb-2">Customer Numbers</label>
-                <div className="space-y-2 max-h-[300px] overflow-y-auto">
-                  {countries.map(country => (
-                    <div key={country} className="flex gap-2 items-center">
-                      <span className="w-24 text-sm font-medium">{country}:</span>
+                <label className="block text-sm font-medium mb-1">Customer Numbers</label>
+                <div className="space-y-2">
+                  {availableCountries.map((country: string) => (
+                    <div key={country} className="flex items-center gap-2">
+                      <span className="w-24">{country}:</span>
                       <input
                         type="text"
-                        value={editingCustomer.customerNumbers?.[country] || ''}
-                        onChange={(e) => {
-                          const newNumbers = {
+                        value={editingCustomer.customerNumbers[country] || ''}
+                        onChange={e => setEditingCustomer({
+                          ...editingCustomer,
+                          customerNumbers: {
                             ...editingCustomer.customerNumbers,
                             [country]: e.target.value
-                          };
-                          setEditingCustomer({
-                            ...editingCustomer,
-                            customerNumbers: newNumbers
-                          });
-                        }}
-                        placeholder={`${country} Number`}
-                        className="flex-1 px-3 py-1 border border-gray-300 rounded-md text-sm"
+                          }
+                        })}
+                        className="flex-1 border rounded px-3 py-1"
                       />
                     </div>
                   ))}
                 </div>
               </div>
             </div>
-            <div className="flex justify-end gap-4 mt-6">
+            <div className="mt-6 flex justify-end gap-3">
               <button
                 onClick={() => {
-                  setShowEditModal(false);
+                  setShowEditModal(null);
                   setEditingCustomer(null);
                 }}
-                className="px-4 py-2 text-gray-600 hover:text-gray-800 font-medium"
+                className="px-4 py-2 text-gray-600 hover:text-gray-800"
               >
                 Cancel
               </button>
               <button
                 onClick={handleEdit}
-                className="px-4 py-2 bg-[#e40115] text-white rounded hover:bg-red-700 font-medium"
+                className="px-4 py-2 bg-[#e40115] text-white rounded hover:bg-red-700"
               >
-                Save Changes
+                Save
               </button>
             </div>
           </div>

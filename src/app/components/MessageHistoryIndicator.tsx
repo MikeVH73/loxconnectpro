@@ -2,6 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { collection, query, getDocs, where, orderBy, limit, Firestore } from 'firebase/firestore';
 import { db } from '../../firebaseClient';
 import { useAuth } from '../AuthProvider';
+import dayjs from "dayjs";
+import relativeTime from "dayjs/plugin/relativeTime";
+
+// Initialize dayjs plugins
+dayjs.extend(relativeTime);
 
 interface MessageHistoryIndicatorProps {
   quoteRequestId: string;
@@ -109,7 +114,7 @@ export default function MessageHistoryIndicator({ quoteRequestId, creatorCountry
           <span className="ml-1 text-gray-600">{messagePreview}</span>
           {lastMessage.createdAt && (
             <span className="text-gray-400 ml-1">
-              ({new Date(lastMessage.createdAt).toLocaleTimeString()})
+              ({dayjs(lastMessage.createdAt).fromNow()})
             </span>
           )}
         </div>

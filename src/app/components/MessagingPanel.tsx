@@ -3,6 +3,7 @@ import { Timestamp } from "firebase/firestore";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 
+// Initialize dayjs plugins
 dayjs.extend(relativeTime);
 
 interface Message {
@@ -30,12 +31,15 @@ interface MessagingPanelProps {
   messages: Message[];
   currentUser: string;
   currentCountry: string;
-  onSendMessage: (text: string) => Promise<void>;
+  onSendMessage: (text: string, files?: Array<{ name: string; url: string; type: string; size: number; }>) => Promise<void>;
   quoteTitle?: string;
   onBack?: () => void;
   quoteRequestFiles?: QuoteFile[];
   onFilesChange?: (files: QuoteFile[]) => void;
   readOnly?: boolean;
+  loading?: boolean;
+  error?: string | null;
+  isOffline?: boolean;
 }
 
 export default function MessagingPanel({
@@ -47,11 +51,14 @@ export default function MessagingPanel({
   onBack,
   quoteRequestFiles = [],
   onFilesChange,
-  readOnly = false
+  readOnly = false,
+  loading = false,
+  error = null,
+  isOffline = false
 }: MessagingPanelProps) {
   const [messageText, setMessageText] = useState("");
   const [isSending, setIsSending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [localError, setLocalError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messageListRef = useRef<HTMLDivElement>(null);
   const [autoScroll, setAutoScroll] = useState(true);
@@ -83,14 +90,14 @@ export default function MessagingPanel({
     if (isSending || !messageText.trim()) return;
 
     setIsSending(true);
-    setError(null);
+    setLocalError(null);
 
     try {
-      await onSendMessage(messageText);
+      await onSendMessage(messageText, []);
         setMessageText("");
       setAutoScroll(true); // Enable auto-scroll when sending a new message
     } catch (err) {
-      setError("Failed to send message. Please try again.");
+      setLocalError("Failed to send message. Please try again.");
       console.error("Error sending message:", err);
     } finally {
         setIsSending(false);
@@ -125,125 +132,113 @@ export default function MessagingPanel({
   };
 
   return (
-    <div className="flex flex-col h-full bg-gray-50">
+    <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b bg-white">
-        <div className="flex items-center space-x-2">
-          {onBack && (
-            <button
-              onClick={onBack}
-              className="p-2 hover:bg-gray-100 rounded-full"
-            >
-              ←
-            </button>
-          )}
-          <h2 className="font-semibold text-gray-800">{quoteTitle}</h2>
+      <div className="flex items-center justify-between p-4 border-b">
+        <div className="flex-1 min-w-0">
+          <h2 className="text-lg font-medium text-gray-900 truncate">
+            {quoteTitle}
+          </h2>
         </div>
+        {onBack && (
+          <button
+            onClick={onBack}
+            className="ml-4 text-gray-400 hover:text-gray-500"
+          >
+            <span className="sr-only">Close panel</span>
+            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        )}
       </div>
 
-      {/* Messages Section */}
-      <div
-        ref={messageListRef}
-        className="flex-1 overflow-y-auto p-4 space-y-4"
-      >
-        {messages.length === 0 ? (
-          <div className="flex items-center justify-center h-full text-gray-500">
+      {/* Messages Area */}
+      <div className="flex-1 p-4 overflow-y-auto" style={{ maxHeight: 'calc(90vh - 180px)' }}>
+        {loading ? (
+          <div className="flex items-center justify-center h-full">
+            <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-gray-900"></div>
+          </div>
+        ) : error ? (
+          <div className="text-red-500 p-4">
+            Error loading messages: {error}
+          </div>
+        ) : messages.length === 0 ? (
+          <div className="text-gray-500 text-center py-4">
             No messages yet
           </div>
         ) : (
-          messages.map((message) => (
-            <div
-              key={message.id}
-              className={`flex ${
-                message.sender === currentUser ? "justify-end" : "justify-start"
-              }`}
-            >
+          <div className="space-y-4">
+            {messages.map((message) => (
               <div
-                className={`max-w-[70%] rounded-lg p-3 ${
-                  message.sender === currentUser
-                    ? "bg-blue-500 text-white"
-                    : "bg-white border"
+                key={message.id}
+                className={`flex ${
+                  message.sender === currentUser ? 'justify-end' : 'justify-start'
                 }`}
               >
                 <div
-                  className={`text-xs ${
+                  className={`rounded-lg px-4 py-2 max-w-[80%] ${
                     message.sender === currentUser
-                      ? "text-blue-100"
-                      : "text-gray-500"
-                  } mb-1`}
-                >
-                  {message.sender} ({message.senderCountry})
-                </div>
-                <div className="break-words">{message.text}</div>
-                {message.files && Array.isArray(message.files) && message.files.length > 0 && (
-                  <div className="mt-2 space-y-1">
-                    {message.files.map((file, index) => (
-                      <div
-                        key={index}
-                        className="flex items-center space-x-2 text-sm"
-                      >
-                        <a
-                          href={file.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className={`underline ${
-                            message.sender === currentUser
-                              ? "text-blue-100"
-                              : "text-blue-500"
-                          }`}
-                        >
-                          {file.name}
-                        </a>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <div
-                  className={`text-xs mt-1 ${
-                    message.sender === currentUser
-                      ? "text-blue-100"
-                      : "text-gray-400"
+                      ? 'bg-blue-500 text-white'
+                      : 'bg-gray-100 text-gray-900'
                   }`}
                 >
-                  {formatTimestamp(message.createdAt)}
+                  <div className="text-sm mb-1">
+                    {message.sender === currentUser ? 'You' : message.senderCountry}
+                  </div>
+                  <div className="break-words">{message.text}</div>
+                  {message.files && message.files.length > 0 && (
+                    <div className="mt-2 space-y-1">
+                      {message.files.map((file, index) => (
+                        <div key={index} className="flex items-center text-sm">
+                          <a
+                            href={file.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="underline hover:no-underline"
+                          >
+                            {file.name}
+                          </a>
+                          <span className="ml-2 text-xs opacity-75">
+                            ({Math.round(file.size / 1024)}KB)
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div className="text-xs mt-1 opacity-75">
+                    {dayjs(message.createdAt).fromNow()}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))
+            ))}
+          </div>
         )}
-        <div ref={messagesEndRef} />
       </div>
 
-      {/* Input Section */}
-      {!readOnly && (
-        <div className="flex-none p-4 bg-white border-t">
-          <form onSubmit={handleSubmit} className="flex space-x-2">
-            <input
-              type="text"
+      {/* Input Area */}
+      <div className="border-t p-4 bg-white">
+        <div className="flex items-start space-x-4">
+          <div className="flex-1">
+            <textarea
               value={messageText}
               onChange={(e) => setMessageText(e.target.value)}
               onKeyPress={handleKeyPress}
               placeholder="Type a message..."
-              className="flex-1 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              disabled={isSending}
+              className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+              rows={2}
+              disabled={readOnly}
             />
-            <button
-              type="submit"
-              disabled={isSending || !messageText.trim()}
-              className={`px-6 py-2 rounded-lg font-medium ${
-                isSending || !messageText.trim()
-                  ? "bg-gray-300 cursor-not-allowed"
-                  : "bg-blue-500 hover:bg-blue-600 text-white"
-              }`}
-            >
-              {isSending ? "Sending..." : "Send"}
-            </button>
-          </form>
-          {error && (
-            <div className="mt-2 text-sm text-red-500">{error}</div>
-          )}
+          </div>
+          <button
+            onClick={handleSubmit}
+            disabled={!messageText.trim() || readOnly}
+            className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Send
+          </button>
         </div>
-      )}
+      </div>
     </div>
   );
 }

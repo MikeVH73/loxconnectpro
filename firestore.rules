@@ -1,0 +1,35 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Users can read/write their own data
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Quote requests accessible by assigned countries
+    match /quoteRequests/{requestId} {
+      allow read, write: if request.auth != null;
+      
+      // Messages within quote requests
+      match /messages/{messageId} {
+        allow read, write: if request.auth != null;
+      }
+    }
+
+    // Notifications accessible by target country
+    match /notifications/{notificationId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+
+    // Labels accessible by all authenticated users
+    match /labels/{labelId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // Customers accessible by all authenticated users
+    match /customers/{customerId} {
+      allow read, write: if request.auth != null;
+    }
+  }
+} 

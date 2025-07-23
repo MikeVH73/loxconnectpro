@@ -20,12 +20,18 @@ interface Message {
   }[];
 }
 
-// Ensure db is available
-if (!db) {
-  throw new Error('Firestore is not initialized');
-}
-
-const firestore = db as Firestore;
+// Initialize firestore with retry mechanism
+let firestore: Firestore;
+const initializeFirestore = async (retries = 3, delay = 1000) => {
+  for (let i = 0; i < retries; i++) {
+    if (db) {
+      firestore = db as Firestore;
+      return true;
+    }
+    await new Promise(resolve => setTimeout(resolve, delay));
+  }
+  return false;
+};
 
 export function useMessages(quoteRequestId: string | null) {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -40,7 +46,18 @@ export function useMessages(quoteRequestId: string | null) {
       return;
     }
 
+    let retryCount = 0;
+    const maxRetries = 3;
+    const retryDelay = 1000; // 1 second
+
+    const setupListener = async () => {
     try {
+        // Wait for Firestore initialization
+        const isInitialized = await initializeFirestore();
+        if (!isInitialized) {
+          throw new Error('Failed to initialize Firestore after retries');
+        }
+
       const messagesRef = collection(firestore, "messages");
       const q = query(
         messagesRef,
@@ -66,8 +83,8 @@ export function useMessages(quoteRequestId: string | null) {
             });
             setMessages(newMessages);
             setError(null);
+              retryCount = 0; // Reset retry count on successful connection
             
-            // Mark messages as read when loaded
             if (newMessages.length > 0) {
               const quoteRef = doc(firestore, "quoteRequests", quoteRequestId);
               updateDoc(quoteRef, {
@@ -84,19 +101,46 @@ export function useMessages(quoteRequestId: string | null) {
             setLoading(false);
           }
         },
-        (err) => {
+          async (err) => {
           console.error('Error in message listener:', err);
           setError('Failed to load messages');
           setLoading(false);
+
+            // Attempt to reconnect if we haven't exceeded max retries
+            if (retryCount < maxRetries) {
+              retryCount++;
+              console.log(`Attempting to reconnect (attempt ${retryCount}/${maxRetries})...`);
+              await new Promise(resolve => setTimeout(resolve, retryDelay));
+              setupListener();
+            }
         }
       );
 
-      return () => unsubscribe();
+        return () => {
+          unsubscribe();
+          retryCount = 0; // Reset retry count when cleaning up
+        };
     } catch (err) {
       console.error('Error setting up message listener:', err);
       setError('Failed to initialize message listener');
       setLoading(false);
-    }
+
+        // Attempt to reconnect if we haven't exceeded max retries
+        if (retryCount < maxRetries) {
+          retryCount++;
+          console.log(`Attempting to reconnect (attempt ${retryCount}/${maxRetries})...`);
+          await new Promise(resolve => setTimeout(resolve, retryDelay));
+          return setupListener();
+        }
+      }
+    };
+
+    const cleanup = setupListener();
+    return () => {
+      if (cleanup && typeof cleanup === 'function') {
+        cleanup();
+      }
+    };
   }, [quoteRequestId]);
 
   const sendMessage = async (text: string, sender: string, senderCountry: string, targetCountry: string, files: any[] = []) => {
@@ -109,6 +153,12 @@ export function useMessages(quoteRequestId: string | null) {
     }
 
     try {
+      // Wait for Firestore initialization
+      const isInitialized = await initializeFirestore();
+      if (!isInitialized) {
+        throw new Error('Firestore not initialized when sending message');
+      }
+
       const messagesRef = collection(firestore, "messages");
       const quoteRef = doc(firestore, "quoteRequests", quoteRequestId);
       
@@ -127,7 +177,8 @@ export function useMessages(quoteRequestId: string | null) {
         sender,
         senderCountry,
         createdAt: serverTimestamp(),
-        files: files.length > 0 ? files : []
+        files: files.length > 0 ? files : [],
+        readBy: [sender] // Mark as read by sender
       };
 
       // Add the message
@@ -136,7 +187,7 @@ export function useMessages(quoteRequestId: string | null) {
       // Update quote request status
       await updateDoc(quoteRef, {
         lastMessageAt: serverTimestamp(),
-        hasUnreadMessages: true
+        hasUnreadMessages: true // Set to true since this is a new message
       });
 
       // Create notification with proper target country
@@ -148,7 +199,7 @@ export function useMessages(quoteRequestId: string | null) {
           sender,
           senderCountry,
           targetCountry,
-          content: `New message: ${text.length > 50 ? `${text.substring(0, 50)}...` : text}`
+          content: `New message: ${text.length > 50 ? `${text.substring(0, 50)}...` : text}${files.length > 0 ? ` (${files.length} file${files.length > 1 ? 's' : ''} attached)` : ''}`
         });
       } catch (notifError) {
         console.error('Error creating notification:', notifError);

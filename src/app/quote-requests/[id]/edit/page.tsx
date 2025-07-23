@@ -1,1462 +1,1169 @@
-"use client";
-import { useEffect, useState, useCallback, useRef } from "react";
-import { useParams, useRouter } from "next/navigation";
-import { doc, getDoc, updateDoc, collection, getDocs, query, where, serverTimestamp, addDoc, Firestore, DocumentData } from "firebase/firestore";
-import { db } from "@/firebaseClient";
-import { useAuth } from "../../../AuthProvider";
-import FileUpload from "../../../components/FileUpload";
-import FileUploadSimple from "../../../components/FileUploadSimple";
-import ArchivedMessaging from "../../../components/ArchivedMessaging";
-import CountrySelect from "../../../components/CountrySelect";
+'use client';
+
+import { useEffect, useState, Suspense, useCallback, useMemo, useRef } from 'react';
+import { useRouter, useParams } from 'next/navigation';
+import { doc, getDoc, updateDoc, collection, getDocs, query, where, serverTimestamp, addDoc, Firestore } from 'firebase/firestore';
+import { db } from '@/firebaseClient';
+import { useAuth } from '../../../AuthProvider';
+import FileUpload from '../../../components/FileUpload';
+
+import ArchivedMessaging from '../../../components/ArchivedMessaging';
+import CountrySelect from '../../../components/CountrySelect';
 import MessagingPanel from '@/app/components/MessagingPanel';
 import { useMessages } from '@/app/hooks/useMessages';
 import { useCustomers } from '../../../hooks/useCustomers';
-import Link from "next/link";
-import { debounce } from "lodash";
-import Script from "next/script";
+import Link from 'next/link';
+import { debounce } from 'lodash';
+import Script from 'next/script';
 import { createNotification } from '../../../utils/notifications';
+import dynamic from 'next/dynamic';
+import dayjs from "dayjs";
+import relativeTime from "dayjs/plugin/relativeTime";
 
-// Add Google Maps types
-declare global {
-  interface Window {
-    google: any;
-  }
-}
+// Initialize dayjs plugins
+dayjs.extend(relativeTime);
 
-interface Coordinates {
-  lat: number;
-  lng: number;
-}
+// Dynamically import components that might cause hydration issues
+const QuoteRequestNotifications = dynamic(
+  () => import('../../../components/QuoteRequestNotifications'),
+  { ssr: false }
+);
 
-interface Jobsite {
-  address: string;
-  coordinates: { lat: number; lng: number } | null;
-}
-
-interface Product {
-  catClass: string;
-  description: string;
-  quantity: number;
-}
-
-interface Note {
-  text: string;
-  user: string | null;
-  dateTime: string;
-}
-
-interface Customer {
-  id: string;
-  name: string;
-    address: string;
-  contact?: string;
-  phone?: string;
-  email?: string;
-  customerNumbers?: { [country: string]: string };
-}
+const LoadingSpinner = dynamic(() => import('../../../components/LoadingSpinner'), { ssr: false });
 
 interface QuoteRequest {
   id: string;
   title: string;
+  products: Array<{
+    catClass: string;
+    description: string;
+    quantity: number;
+  }>;
   creatorCountry: string;
   involvedCountry: string;
-  customer: string;
-  customerNumber?: string;
-  status: string;
-  products: Product[];
-  jobsite: Jobsite;
   startDate: string;
-  endDate: string | null;
-  customerDecidesEnd: boolean;
-  jobsiteContactId: string;
-  jobsiteContact: any;
+  endDate: string;
+  status: string;
+  customer: string;
   labels: string[];
-  notes: Note[];
-  attachments: any[];
-  createdAt: string;
-  updatedAt: string;
-  waitingForAnswer?: boolean;
-  urgent?: boolean;
-  problems?: boolean;
-  targetCountry?: string;
-  createdBy: string;
-  updatedBy: string;
-  [key: string]: any; // Add index signature for dynamic access
-}
-
-type StatusType = "In Progress" | "Snoozed" | "Won" | "Lost" | "Cancelled";
-
-if (!db) {
-  throw new Error("Firestore is not initialized");
+  attachments: Array<{
+    name: string;
+    url: string;
+    type: string;
+    size: number;
+  }>;
+  jobsite?: {
+    address?: string;
+    coordinates?: {
+      lat: number;
+      lng: number;
+    };
+  };
+  jobsiteContact?: {
+    name: string;
+    phone: string;
+  };
+  notes?: Array<{
+    text: string;
+    user: string;
+    dateTime: Date;
+  }>;
+  customerNumber?: string;
+  customerDecidesEndDate?: boolean;
+  latitude?: string;
+  longitude?: string;
+  updatedAt?: Date;
+  updatedBy?: string;
+  waitingForAnswer: boolean;
+  urgent: boolean;
+  problems: boolean;
+  planned: boolean;
 }
 
 const statuses = ["In Progress", "Snoozed", "Won", "Lost", "Cancelled"];
-const GEOCODING_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 
-// Custom Link component that handles unsaved changes
-const SafeLink = ({ href, children, className }: { href: string; children: React.ReactNode; className?: string }) => {
-  const [hasUnsavedChanges] = useGlobalState();
+const labelTexts: Record<keyof Pick<QuoteRequest, 'waitingForAnswer' | 'urgent' | 'problems' | 'planned'>, string> = {
+  waitingForAnswer: "Waiting for Answer",
+  urgent: "Urgent",
+  problems: "Problems",
+  planned: "Planned"
+};
+
+interface QuoteRequestWithDynamicKeys extends QuoteRequest {
+  [key: string]: any;
+  updatedAt?: Date;
+  updatedBy?: string;
+  creatorCountry: string;
+  involvedCountry: string;
+  labels: string[];
+}
+
+export default function EditQuoteRequest() {
   const router = useRouter();
-
-  const handleClick = (e: React.MouseEvent) => {
-    if (hasUnsavedChanges && !window.confirm('You have unsaved changes. Are you sure you want to leave?')) {
-      e.preventDefault();
-      return;
-    }
-    router.push(href);
-  };
-
-  return (
-    <a href={href} onClick={handleClick} className={className}>
-      {children}
-    </a>
-  );
-};
-
-// Global state for unsaved changes
-let globalHasUnsavedChanges = false;
-const useGlobalState = () => {
-  const [state, setState] = useState(globalHasUnsavedChanges);
-  
-  const setGlobalState = (value: boolean) => {
-    globalHasUnsavedChanges = value;
-    setState(value);
-  };
-  
-  return [state, setGlobalState] as const;
-};
-
-export default function EditQuoteRequestPage() {
   const params = useParams();
-  const router = useRouter();
+  const id = params?.id as string;
   const { user, userProfile } = useAuth();
   const isReadOnly = userProfile?.role === "readOnly";
+  const [quoteRequest, setQuoteRequest] = useState<QuoteRequest | null>(null);
   const [loading, setLoading] = useState(true);
-  const [form, setForm] = useState<QuoteRequest | null>(null);
-  const [original, setOriginal] = useState<QuoteRequest | null>(null);
-  const [error, setError] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const [saveMessage, setSaveMessage] = useState<string>("");
-  const { customers, loading: customersLoading, error: customersError } = useCustomers();
-  const [contacts, setContacts] = useState<any[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isAutoSaving, setIsAutoSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [newNote, setNewNote] = useState('');
+  const [isMounted, setIsMounted] = useState(false);
+  const { messages, loading: messagesLoading, error: messagesError, sendMessage } = useMessages(id);
+  const { customers } = useCustomers();
   const [labels, setLabels] = useState<any[]>([]);
-  const [showNewContact, setShowNewContact] = useState(false);
-  const [newContact, setNewContact] = useState({ name: "", phone: "" });
-  const [isArchived, setIsArchived] = useState(false);
-  const [attachments, setAttachments] = useState<any[]>([]);
-  const [newNote, setNewNote] = useState("");
-  const { messages, loading: messagesLoading, error: messagesError, sendMessage } = useMessages(params.id as string);
-  const [isGeocoding, setIsGeocoding] = useState(false);
-  const [geocodingError, setGeocodingError] = useState("");
-  const [isGoogleMapsLoaded, setIsGoogleMapsLoaded] = useState(false);
-  const addressInputRef = useRef<HTMLInputElement>(null);
-  const saveTimeoutRef = useRef<NodeJS.Timeout>();
-  const [customerNumber, setCustomerNumber] = useState("");
 
-  // Add navigation warning
   useEffect(() => {
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (hasUnsavedChanges) {
-        e.preventDefault();
-        e.returnValue = '';
-        return '';
-      }
-    };
-
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [hasUnsavedChanges]);
-
-  // Handle internal navigation
-  const handleNavigation = (path: string) => {
-    if (hasUnsavedChanges) {
-      const confirmed = window.confirm("You have unsaved changes. Are you sure you want to leave?");
-      if (!confirmed) return;
-    }
-    router.push(path);
-  };
-
-  // Save changes function
-  const saveChanges = async (formData: QuoteRequest | null) => {
-    if (!db || isReadOnly || !formData || !userProfile?.businessUnit) return;
-    
-    try {
-      setSaving(true);
-      setSaveMessage("Saving...");
-      
-      const docRef = doc(db as Firestore, "quoteRequests", params.id as string);
-      await updateDoc(docRef, {
-        ...formData,
-        updatedAt: new Date().toISOString(),
-        updatedBy: user?.email || ""
-      });
-
-      // Create notification for the target country about the changes
-      const targetCountry = formData.creatorCountry === userProfile.businessUnit 
-        ? formData.involvedCountry 
-        : formData.creatorCountry;
-
-      // Determine what changed
-      const changes: string[] = [];
-      if (original) {
-        if (original.status !== formData.status) {
-          changes.push(`Status changed to ${formData.status}`);
-        }
-        if (original.waitingForAnswer !== formData.waitingForAnswer) {
-          changes.push(formData.waitingForAnswer ? 'Marked as waiting for answer' : 'No longer waiting for answer');
-        }
-        if (original.urgent !== formData.urgent) {
-          changes.push(formData.urgent ? 'Marked as urgent' : 'No longer urgent');
-        }
-        if (original.problems !== formData.problems) {
-          changes.push(formData.problems ? 'Marked as having problems' : 'Problems resolved');
-        }
-      }
-
-      if (changes.length > 0) {
-        await createNotification({
-          quoteRequestId: params.id as string,
-          quoteRequestTitle: formData.title,
-          sender: user?.email || '',
-          senderCountry: userProfile.businessUnit,
-          targetCountry,
-          content: changes.join(', '),
-          notificationType: original?.status !== formData.status ? 'status_change' : 'property_change'
-        });
-      }
-      
-      setOriginal(formData);
-      setHasUnsavedChanges(false);
-      setSaveMessage("Changes saved");
-      
-      // Clear save message after 2 seconds
-      setTimeout(() => {
-        setSaveMessage("");
-      }, 2000);
-    } catch (error) {
-      console.error("Error saving changes:", error);
-      setSaveMessage("Error saving changes");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleStatusChange = (field: 'waitingForAnswer' | 'urgent' | 'problems', value: boolean) => {
-    if (!form) return;
-    
-    setForm((prev: QuoteRequest | null) => {
-      if (!prev) return prev;
-      const updated = { ...prev };
-      updated[field] = value;
-      updated.updatedAt = new Date().toISOString();
-      
-      // Sync waitingForAnswer flag with "Waiting for Answer" label
-      if (field === 'waitingForAnswer') {
-        const waitingLabelId = labels.find(l => l.name?.toLowerCase() === "waiting for answer")?.id;
-        if (waitingLabelId) {
-          if (value && !updated.labels?.includes(waitingLabelId)) {
-            // Add the label if setting to true and it's not already there
-            updated.labels = [...(updated.labels || []), waitingLabelId];
-          } else if (!value && updated.labels?.includes(waitingLabelId)) {
-            // Remove the label if setting to false and it's there
-            updated.labels = updated.labels.filter(id => id !== waitingLabelId);
-          }
-        }
-      }
-      
-      // Only trigger save if the value actually changed
-      if (prev[field] !== value) {
-        setHasUnsavedChanges(true);
-        
-        // Clear existing timeout
-        if (saveTimeoutRef.current) {
-          clearTimeout(saveTimeoutRef.current);
-        }
-        
-        // Set new timeout for auto-save with a longer delay for status changes
-        saveTimeoutRef.current = setTimeout(() => {
-          saveChanges(updated);
-        }, 3000); // Longer delay for status changes
-      }
-      
-      return updated;
-    });
-  };
-
-  // Modify the handleChange function to include save status
-  const handleChange = (field: string, value: any) => {
-    if (!form) return;
-    
-    setForm((prev: QuoteRequest | null) => {
-      if (!prev) return prev;
-      const updated = { ...prev };
-      
-      if (field.includes('.')) {
-        const [parent, child] = field.split('.');
-        updated[parent] = {
-          ...updated[parent],
-          [child]: value
-        };
-      } else {
-        updated[field] = value;
-      }
-      
-      updated.updatedAt = new Date().toISOString();
-      
-      // Only set unsaved changes if the value actually changed
-      if (JSON.stringify(prev[field]) !== JSON.stringify(value)) {
-        setHasUnsavedChanges(true);
-        
-        // Clear existing timeout
-        if (saveTimeoutRef.current) {
-          clearTimeout(saveTimeoutRef.current);
-        }
-        
-        // Set new timeout for auto-save
-        saveTimeoutRef.current = setTimeout(() => {
-          saveChanges(updated);
-        }, 2000);
-      }
-      
-      return updated;
-    });
-  };
-
-  const handleProductChange = (idx: number, field: string, value: any) => {
-    if (!form) return;
-    
-    const updatedProducts = [...(form.products || [])];
-    const oldProduct = updatedProducts[idx];
-    
-    // If changing cat-class, store the old value for comparison
-    const oldCatClass = field === 'catClass' ? oldProduct.catClass : null;
-    
-    updatedProducts[idx] = {
-      ...updatedProducts[idx],
-      [field]: value
-    };
-    
-    const updatedForm: QuoteRequest = {
-      ...form,
-      products: updatedProducts,
-      updatedAt: new Date().toISOString()
-    };
-    
-    // Only show warning if cat-class is being changed significantly
-    if (field === 'catClass' && oldCatClass) {
-      // Remove any non-alphanumeric characters for comparison
-      const cleanOld = oldCatClass.replace(/[^a-zA-Z0-9]/g, '');
-      const cleanNew = value.replace(/[^a-zA-Z0-9]/g, '');
-      
-      // Only show warning if:
-      // 1. The numbers actually changed
-      // 2. The old value had at least 3 characters (to avoid warnings while typing)
-      // 3. The new value is "complete" (hasn't changed in the last 2 seconds)
-      if (cleanOld !== cleanNew && cleanOld.length >= 3) {
-        // Clear existing timeout
-        if (saveTimeoutRef.current) {
-          clearTimeout(saveTimeoutRef.current);
-        }
-        
-        // Set new timeout to show confirmation after 2 seconds of no changes
-        saveTimeoutRef.current = setTimeout(() => {
-          const confirmed = window.confirm(
-            `Are you sure you want to change the Cat-Class from "${oldCatClass}" to "${value}"? This change cannot be undone.`
-          );
-          if (!confirmed) {
-            // Revert the change if not confirmed
-            setForm((prevForm: QuoteRequest | null) => {
-              if (!prevForm) return prevForm;
-              const revertedProducts = [...prevForm.products];
-              revertedProducts[idx] = {
-                ...revertedProducts[idx],
-                catClass: oldCatClass
-              };
-              return {
-                ...prevForm,
-                products: revertedProducts
-              };
-            });
-            return;
-          } else {
-            // If confirmed, save the change
-            saveChanges(updatedForm);
-          }
-        }, 2000);
-        
-        // Update the form immediately but don't save yet
-        setForm((prevForm: QuoteRequest | null) => prevForm ? updatedForm : null);
-        setHasUnsavedChanges(true);
-        return;
-      }
-    }
-    
-    setForm((prevForm: QuoteRequest | null) => prevForm ? updatedForm : null);
-    setHasUnsavedChanges(true);
-    
-    // Clear existing timeout
-    if (saveTimeoutRef.current) {
-      clearTimeout(saveTimeoutRef.current);
-    }
-    
-    // Set new timeout for auto-save
-    saveTimeoutRef.current = setTimeout(() => {
-      saveChanges(updatedForm);
-    }, 2000);
-  };
-
-  // Handle file changes
-  const handleFilesChange = async (files: any[]) => {
-    setAttachments(files);
-    if (!form) return;
-
-    const updatedForm: QuoteRequest = {
-      ...form,
-      attachments: files,
-      updatedAt: new Date().toISOString(),
-      updatedBy: user?.email || ""
-    };
-    
-    setForm((prev: QuoteRequest | null) => prev ? updatedForm : null);
-    // Immediate save for file changes
-    await saveChanges(updatedForm);
-  };
-
-  // Clean up timeout on unmount
-  useEffect(() => {
-    return () => {
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-      }
-    };
+    setIsMounted(true);
   }, []);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      if (!db) {
-        setError("Database not initialized");
-        setLoading(false);
-        return;
-      }
-
-      // Redirect read-only users to the quote requests list
-      if (userProfile?.role === "readOnly") {
-        router.push("/quote-requests");
-        return;
-      }
-
-      try {
-        const docRef = doc(db as Firestore, "quoteRequests", params.id as string);
-        const snap = await getDoc(docRef);
-        if (snap.exists()) {
-          const data = snap.data();
-          const formattedData: QuoteRequest = {
-            id: snap.id,
-            title: data.title || "",
-            creatorCountry: data.creatorCountry || "",
-            involvedCountry: data.involvedCountry || "",
-            customer: data.customer || "",
-            status: data.status || "",
-            products: data.products || [],
-            jobsite: {
-              address: data.jobsite?.address || data.jobsiteAddress || "",
-              coordinates: data.jobsite?.coordinates || null
-            },
-            startDate: data.startDate || "",
-            endDate: data.endDate || null,
-            customerDecidesEnd: data.customerDecidesEnd || false,
-            jobsiteContactId: data.jobsiteContactId || "",
-            jobsiteContact: data.jobsiteContact || null,
-            labels: data.labels || [],
-            notes: data.notes || [],
-            attachments: data.attachments || [],
-            createdAt: data.createdAt || "",
-            updatedAt: data.updatedAt || "",
-            waitingForAnswer: data.waitingForAnswer || false,
-            urgent: data.urgent || false,
-            problems: data.problems || false,
-            targetCountry: data.targetCountry || "",
-            createdBy: data.createdBy || "",
-            updatedBy: data.updatedBy || "",
-            customerNumber: data.customerNumber || ""
-          };
-          setForm(formattedData);
-          setOriginal(formattedData);
-          setAttachments(formattedData.attachments);
-        } else {
-          setError("Quote Request not found");
-        }
-      } catch (err) {
-        console.error("Error fetching quote request:", err);
-        setError("Failed to load quote request");
-      }
-      setLoading(false);
-    };
-    fetchData();
-  }, [params.id, db, userProfile?.role, router]);
-
-  useEffect(() => {
-    const fetchContacts = async () => {
-      if (!db || !form?.customer) return;
-      try {
-        let fetchedContacts = [];
-        
-        // First check if there's a contact in the customer document
-        const customerDoc = await getDoc(doc(db as Firestore, "customers", form.customer));
-        if (customerDoc.exists()) {
-          const customerData = customerDoc.data();
-          if (customerData.contact && customerData.phone) {
-            // Add the first contact to the list
-            fetchedContacts.push({
-              id: 'main',
-              name: customerData.contact,
-              phone: customerData.phone,
-              email: customerData.email || '',
-              type: 'first'
-            });
-          }
-        }
-
-        // Then fetch contacts from the subcollection
-        const contactsRef = collection(db as Firestore, `customers/${form.customer}/contacts`);
-        const contactsSnapshot = await getDocs(contactsRef);
-        const subcollectionContacts = contactsSnapshot.docs.map(doc => ({
-          id: doc.id,
-          name: doc.data().name,
-          phone: doc.data().phone,
-          email: doc.data().email || '',
-          type: doc.data().type || 'jobsite'
-        }));
-
-        // Combine contacts
-        const allContacts = [...fetchedContacts, ...subcollectionContacts];
-        setContacts(allContacts);
-        console.log('Fetched contacts:', allContacts);
-
-        // If there's exactly one contact and no contact is selected, auto-select it
-        if (allContacts.length === 1 && !form.jobsiteContactId) {
-          const updatedForm = {
-            ...form,
-            jobsiteContactId: allContacts[0].id,
-            jobsiteContact: {
-              id: allContacts[0].id,
-              name: allContacts[0].name,
-              phone: allContacts[0].phone,
-              email: allContacts[0].email || '',
-              type: allContacts[0].type
-            },
-            updatedAt: new Date().toISOString(),
-            updatedBy: user?.email || ""
-          };
-          setForm(updatedForm);
-          saveChanges(updatedForm);
-        }
-      } catch (err) {
-        console.error("Error fetching contacts:", err);
-      }
-    };
-    fetchContacts();
-  }, [form?.customer, db, form, user?.email]);
-
+  // Fetch labels
   useEffect(() => {
     const fetchLabels = async () => {
       if (!db) return;
       try {
-        const snapshot = await getDocs(collection(db as Firestore, "labels"));
-        setLabels(snapshot.docs.map(doc => ({
-          id: doc.id,
-          name: doc.data().name
-        })));
+        const snap = await getDocs(collection(db, "labels"));
+        const labelsData = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        console.log('[DEBUG] Labels loaded:', labelsData);
+        setLabels(labelsData);
       } catch (err) {
-        console.error("Error fetching labels:", err);
+        console.error('Error fetching labels:', err);
       }
     };
     fetchLabels();
-  }, []);
+  }, [db]);
 
   useEffect(() => {
-    setIsArchived(form?.status !== "In Progress");
-  }, [form?.status]);
-
-  useEffect(() => {
-    if (!window.google) {
-      // Initialize Google Maps
-      const script = document.createElement('script');
-      const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
-      script.async = true;
-      script.defer = true;
-      script.onload = () => {
-        setIsGoogleMapsLoaded(true);
+    async function fetchQuoteRequest() {
+      if (!user || !db) return;
+      
+      try {
+        const quoteRef = doc(db as Firestore, 'quoteRequests', id);
+        const quoteDoc = await getDoc(quoteRef);
         
-        // Initialize Places Autocomplete
-        if (addressInputRef.current) {
-          const autocomplete = new google.maps.places.Autocomplete(addressInputRef.current, {
-            types: ['address'],
-            fields: ['geometry', 'formatted_address']
-          });
-
-          autocomplete.addListener('place_changed', () => {
-            const place = autocomplete.getPlace();
-            if (place.geometry?.location) {
-              const lat = place.geometry.location.lat();
-              const lng = place.geometry.location.lng();
-              const coordinates = `${lat.toFixed(6)}° N, ${lng.toFixed(6)}° E`;
-              handleChange("gpsCoordinates", coordinates);
-              handleChange("jobsiteAddress", place.formatted_address);
-            }
-          });
-        }
-      };
-      document.head.appendChild(script);
-
-      return () => {
-        document.head.removeChild(script);
-      };
-    } else {
-      setIsGoogleMapsLoaded(true);
-    }
-  }, []);
-
-  // Update customer number when involved country or customer changes
-  useEffect(() => {
-    if (form?.customer && form?.involvedCountry) {
-      const selectedCustomer = customers.find(c => c.id === form.customer);
-      if (selectedCustomer?.customerNumbers?.[form.involvedCountry]) {
-        setCustomerNumber(selectedCustomer.customerNumbers[form.involvedCountry]);
-      } else {
-        setCustomerNumber(form.customerNumber || "");
-      }
+        if (quoteDoc.exists()) {
+          const data = quoteDoc.data();
+          setQuoteRequest({
+            id: quoteDoc.id,
+            title: data.title || '',
+            products: data.products || [],
+            creatorCountry: data.creatorCountry || '',
+            involvedCountry: data.involvedCountry || '',
+            startDate: data.startDate || '',
+            endDate: data.endDate || '',
+            status: data.status || '',
+            customer: data.customer || '',
+            labels: data.labels || [],
+            attachments: data.attachments || [],
+            jobsite: data.jobsite || {},
+            jobsiteContact: data.jobsiteContact || {},
+            customerNumber: data.customerNumber || '',
+            customerDecidesEndDate: data.customerDecidesEndDate || false,
+            latitude: data.latitude || '',
+            longitude: data.longitude || '',
+            notes: data.notes || [],
+            updatedAt: data.updatedAt,
+            updatedBy: data.updatedBy,
+            waitingForAnswer: data.waitingForAnswer || false,
+            urgent: data.urgent || false,
+            problems: data.problems || false,
+            planned: data.planned || false
+          } as QuoteRequest);
         } else {
-      setCustomerNumber("");
-    }
-  }, [form?.customer, form?.involvedCountry, customers, form?.customerNumber]);
-
-  const handleAddProduct = () => {
-    setForm((prev: QuoteRequest | null) => {
-      if (!prev) return prev;
-      const updated = {
-          ...prev,
-        products: [...(prev.products || []), { catClass: "", description: "", quantity: 1 }],
-        updatedAt: new Date().toISOString(),
-        updatedBy: user?.email || ""
-      };
-      
-      // Clear existing timeout
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-      }
-      
-      // Set new timeout for auto-save
-      saveTimeoutRef.current = setTimeout(() => {
-        saveChanges(updated);
-      }, 2000);
-      
-      return updated;
-    });
-    setHasUnsavedChanges(true);
-  };
-
-  const handleRemoveProduct = (idx: number) => {
-    setForm((prev: QuoteRequest | null) => {
-      if (!prev) return prev;
-      const updated = {
-      ...prev,
-        products: prev.products.filter((_: any, i: number) => i !== idx),
-        updatedAt: new Date().toISOString(),
-        updatedBy: user?.email || ""
-      };
-      
-      // Clear existing timeout
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-      }
-      
-      // Set new timeout for auto-save
-      saveTimeoutRef.current = setTimeout(() => {
-        saveChanges(updated);
-      }, 2000);
-      
-      return updated;
-    });
-    setHasUnsavedChanges(true);
-  };
-
-  const handleLabelChange = (selectedLabelIds: string[]) => {
-    if (!form) return;
-    
-    setForm((prev: QuoteRequest | null) => {
-      if (!prev) return prev;
-      
-      const updated = { ...prev };
-      updated.labels = selectedLabelIds;
-      updated.updatedAt = new Date().toISOString();
-      
-      // Update waitingForAnswer flag based on presence of "Waiting for Answer" label
-      const waitingLabelId = labels.find(l => l.name?.toLowerCase() === "waiting for answer")?.id;
-      updated.waitingForAnswer = selectedLabelIds.includes(waitingLabelId || "");
-      
-      setHasUnsavedChanges(true);
-      
-      // Clear existing timeout
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-      }
-      
-      // Set new timeout for auto-save
-      saveTimeoutRef.current = setTimeout(() => {
-        saveChanges(updated);
-      }, 1000);
-      
-      return updated;
-    });
-  };
-
-  const handleAddNewContact = async () => {
-    if (!form?.customer || !db || !newContact.name || !newContact.phone) {
-      setError("Please fill in all required contact fields");
-      return;
-    }
-
-    try {
-      const contactsRef = collection(db as Firestore, `customers/${form.customer}/contacts`);
-      const contactData = {
-        name: newContact.name,
-        phone: newContact.phone,
-        type: 'jobsite',
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
-      };
-
-      const docRef = await addDoc(contactsRef, contactData);
-
-      // Add the new contact to the contacts list
-      const newContactWithId = {
-        id: docRef.id,
-        ...contactData
-      };
-      
-      setContacts(prev => [...prev, newContactWithId]);
-      
-      // Update the form with the new contact
-      const updatedForm = {
-        ...form,
-        jobsiteContactId: docRef.id,
-        jobsiteContact: newContactWithId,
-        updatedAt: new Date().toISOString(),
-        updatedBy: user?.email || ""
-      };
-      setForm(updatedForm);
-      saveChanges(updatedForm);
-
-      setNewContact({ name: "", phone: "" });
-      setShowNewContact(false);
-    } catch (err) {
-      console.error("Error creating new contact:", err);
-      setError("Failed to create new contact");
-    }
-  };
-
-  const handleAddressChange = async (address: string) => {
-    if (!address || address.length < 5) {
-      setForm((prev: QuoteRequest | null) => {
-        if (!prev) return prev;
-        const updated = {
-          ...prev,
-      jobsite: {
-            ...prev.jobsite,
-            address,
-          coordinates: null
-          },
-          updatedAt: new Date().toISOString(),
-          updatedBy: user?.email || ""
-        };
-        
-        // Clear existing timeout
-        if (saveTimeoutRef.current) {
-          clearTimeout(saveTimeoutRef.current);
+          setError('Quote request not found');
         }
-        
-        // Set new timeout for auto-save
-        saveTimeoutRef.current = setTimeout(() => {
-          saveChanges(updated);
-        }, 2000);
-        
-        return updated;
+      } catch (err) {
+        console.error('Error fetching quote request:', err);
+        setError('Failed to load quote request');
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchQuoteRequest();
+  }, [id, user, db]);
+
+  const saveChanges = useCallback(async (isAutoSave = false) => {
+    if (!quoteRequest || isSaving || !db) {
+      console.log('[SAVE] Skipping save - quoteRequest or isSaving check failed:', { 
+        hasQuoteRequest: !!quoteRequest, 
+        isSaving 
       });
-      setGeocodingError("");
-      setHasUnsavedChanges(true);
       return;
     }
 
-    setIsGeocoding(true);
-    setGeocodingError("");
+    console.log('[SAVE] Save triggered:', isAutoSave ? 'Auto-save' : 'Manual save');
+    console.log('[SAVE] Current quote request:', quoteRequest);
+
+    if (isAutoSave) {
+      setIsAutoSaving(true);
+    } else {
+    setIsSaving(true);
+    }
+    
+    setSaveSuccess(false);
+    setError(null);
+    
+    let originalData: QuoteRequestWithDynamicKeys | null = null;
     
     try {
-      // Format address to improve geocoding accuracy
-      const formattedAddress = address.trim().replace(/\s+/g, ' ');
+      const quoteRef = doc(db as Firestore, 'quoteRequests', id);
       
-      // First try Places API Autocomplete
-      const placesResponse = await fetch(
-        `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(formattedAddress)}&types=address&key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}`
+      // Get original data for comparison
+      const docSnapshot = await getDoc(quoteRef);
+      if (!docSnapshot.exists()) {
+        throw new Error('Quote request no longer exists');
+      }
+      originalData = docSnapshot.data() as QuoteRequestWithDynamicKeys;
+      
+      console.log('[SAVE] Original data:', originalData);
+      
+      // Create update object with all fields
+      const updateData = {
+        ...quoteRequest,
+        updatedAt: new Date(),
+        updatedBy: user?.email || ''
+      };
+
+      // Ensure planned status is properly set
+      if (originalData && quoteRequest.planned !== originalData.planned) {
+        console.log('[SAVE] Updating planned status:', {
+          old: originalData.planned,
+          new: quoteRequest.planned
+        });
+      }
+
+      // Log all changes before saving
+      const changedFields = Object.keys(updateData).filter(key => 
+        originalData && JSON.stringify(updateData[key as keyof QuoteRequestWithDynamicKeys]) !== JSON.stringify(originalData[key as keyof QuoteRequestWithDynamicKeys])
       );
+      console.log('[SAVE] Changed fields:', changedFields);
+
+      // Perform the update
+      await updateDoc(quoteRef, updateData);
+
+      console.log('[SAVE] Save successful!');
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 2000);
+
+      // Create notifications for changes
+      const changes = [];
       
-      const placesData = await placesResponse.json();
-      console.log('Places API response:', placesData);
+      // Check for status changes
+      if (originalData && originalData.status !== quoteRequest.status) {
+        changes.push(`Status changed to ${quoteRequest.status}`);
+      }
+
+      // Check for country changes
+      if (originalData && originalData.involvedCountry !== quoteRequest.involvedCountry) {
+        changes.push(`Involved country changed from ${originalData.involvedCountry} to ${quoteRequest.involvedCountry}`);
+      }
       
-      if (placesData.predictions && placesData.predictions.length > 0) {
-        // Get place details for the first prediction
-        const placeId = placesData.predictions[0].place_id;
-        const detailsResponse = await fetch(
-          `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=geometry,formatted_address&key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}`
-        );
-        
-        const detailsData = await detailsResponse.json();
-        console.log('Place Details response:', detailsData);
-        
-        if (detailsData.result?.geometry?.location) {
-          const { lat, lng } = detailsData.result.geometry.location;
-          setForm((prev: QuoteRequest | null) => {
-            if (!prev) return prev;
-            const updated = {
-              ...prev,
-              jobsite: {
-                ...prev.jobsite,
-                address: detailsData.result.formatted_address,
-                coordinates: { lat, lng }
-              },
-              updatedAt: new Date().toISOString(),
-              updatedBy: user?.email || ""
-            };
-            
-            // Clear existing timeout
-            if (saveTimeoutRef.current) {
-              clearTimeout(saveTimeoutRef.current);
-            }
-            
-            // Set new timeout for auto-save
-            saveTimeoutRef.current = setTimeout(() => {
-              saveChanges(updated);
-            }, 2000);
-            
-            return updated;
-          });
-          setGeocodingError("");
-          setHasUnsavedChanges(true);
+      // Check for flag changes (labels)
+      const labelFields: (keyof Pick<QuoteRequest, 'waitingForAnswer' | 'urgent' | 'problems' | 'planned'>)[] = 
+        ['waitingForAnswer', 'urgent', 'problems', 'planned'];
+      
+      for (const field of labelFields) {
+        if (originalData[field] !== quoteRequest[field]) {
+          changes.push(`${quoteRequest[field] ? 'Added' : 'Removed'} "${labelTexts[field]}" label`);
         }
       }
-      // Fallback to Geocoding API
-      const geocodingResponse = await fetch(
-        `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(formattedAddress)}&key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}`
-      );
       
-      const geocodingData = await geocodingResponse.json();
-      console.log('Geocoding API response:', geocodingData);
+      // Check for product changes
+      const originalProducts = originalData.products || [];
+      const currentProducts = quoteRequest.products || [];
       
-      if (geocodingData.status === "OK" && geocodingData.results?.[0]?.geometry?.location) {
-        const { lat, lng } = geocodingData.results[0].geometry.location;
-        setForm((prev: QuoteRequest | null) => {
-          if (!prev) return prev;
-          const updated = {
-            ...prev,
-        jobsite: {
-              ...prev.jobsite,
-              address: geocodingData.results[0].formatted_address,
-              coordinates: { lat, lng }
-            },
-            updatedAt: new Date().toISOString(),
-            updatedBy: user?.email || ""
-          };
-          
-          // Clear existing timeout
-          if (saveTimeoutRef.current) {
-            clearTimeout(saveTimeoutRef.current);
-          }
-          
-          // Set new timeout for auto-save
-          saveTimeoutRef.current = setTimeout(() => {
-            saveChanges(updated);
-          }, 2000);
-          
-          return updated;
-        });
-        setGeocodingError("");
-        setHasUnsavedChanges(true);
-      } else {
-        setGeocodingError("Could not find coordinates for this address. Please check the address and try again.");
+      if (originalProducts.length !== currentProducts.length) {
+        if (currentProducts.length > originalProducts.length) {
+          changes.push(`Added ${currentProducts.length - originalProducts.length} new product(s)`);
+        } else {
+          changes.push(`Removed ${originalProducts.length - currentProducts.length} product(s)`);
+        }
       }
-    } catch (error) {
-      console.error('Error geocoding address:', error);
-      setGeocodingError("An error occurred while getting coordinates. Please try again.");
-    } finally {
-      setIsGeocoding(false);
-    }
-  };
+      
+      // Check for product changes (catClass and quantity)
+      const productChanges = [];
+      for (let i = 0; i < Math.max(originalProducts.length, currentProducts.length); i++) {
+        const original = originalProducts[i] || {};
+        const current = currentProducts[i] || {};
+        
+        if (original.catClass !== current.catClass) {
+          productChanges.push(`Cat-Class changed from '${original.catClass || 'empty'}' to '${current.catClass || 'empty'}'`);
+        }
+        if (original.quantity !== current.quantity) {
+          productChanges.push(`Quantity changed from ${original.quantity || 0} to ${current.quantity || 0} for ${current.catClass || 'product'}`);
+        }
+      }
+      
+      if (productChanges.length > 0) {
+        changes.push(`Product changes: ${productChanges.join(', ')}`);
+      }
+      
+      // Check for date changes
+      if (originalData.startDate !== quoteRequest.startDate) {
+        changes.push(`Start date changed to ${quoteRequest.startDate || 'not set'}`);
+      }
+      if (originalData.endDate !== quoteRequest.endDate) {
+        changes.push(`End date changed to ${quoteRequest.endDate || 'not set'}`);
+      }
+      
+      // Check for notes changes
+      const originalNotes = originalData.notes || [];
+      const currentNotes = quoteRequest.notes || [];
+      
+      if (originalNotes.length !== currentNotes.length) {
+        if (currentNotes.length > originalNotes.length) {
+          const newNotes = currentNotes.slice(originalNotes.length);
+          changes.push(`Added ${newNotes.length} new note(s)`);
+        } else {
+          changes.push(`Removed ${originalNotes.length - currentNotes.length} note(s)`);
+        }
+      }
+      
+      // Check for attachment changes
+      const originalAttachments = originalData.attachments || [];
+      const currentAttachments = quoteRequest.attachments || [];
+      
+      if (originalAttachments.length !== currentAttachments.length) {
+        if (currentAttachments.length > originalAttachments.length) {
+          changes.push(`Added ${currentAttachments.length - originalAttachments.length} new attachment(s)`);
+        } else {
+          changes.push(`Removed ${originalAttachments.length - currentAttachments.length} attachment(s)`);
+        }
+      }
+      
+      // Create notification if there are changes
+      if (changes.length > 0 && userProfile?.businessUnit) {
+        console.log('[NOTIFICATION DEBUG] Changes detected:', changes);
+        console.log('[NOTIFICATION DEBUG] User profile:', {
+          businessUnit: userProfile.businessUnit,
+          email: user?.email,
+          countries: userProfile.countries
+        });
+        console.log('[NOTIFICATION DEBUG] Quote request:', {
+          id: quoteRequest.id,
+          title: quoteRequest.title,
+          creatorCountry: quoteRequest.creatorCountry,
+          involvedCountry: quoteRequest.involvedCountry
+        });
+        
+        // Fix target country logic: determine which country should receive the notification
+        // If I'm the creator, notify the involved country. If I'm involved, notify the creator.
+        const targetCountries = [];
+        
+        console.log('[NOTIFICATION DEBUG] Quote request countries:', {
+          creatorCountry: quoteRequest.creatorCountry,
+          involvedCountry: quoteRequest.involvedCountry,
+          myCountry: userProfile.businessUnit
+        });
+        
+        if (userProfile.businessUnit === quoteRequest.creatorCountry) {
+          // I'm the creator, notify the involved country
+          if (quoteRequest.involvedCountry && quoteRequest.involvedCountry !== userProfile.businessUnit) {
+            targetCountries.push(quoteRequest.involvedCountry);
+            console.log('[NOTIFICATION DEBUG] I am the creator, notifying involved country:', quoteRequest.involvedCountry);
+          }
+        } else if (userProfile.businessUnit === quoteRequest.involvedCountry) {
+          // I'm the involved country, notify the creator
+          if (quoteRequest.creatorCountry && quoteRequest.creatorCountry !== userProfile.businessUnit) {
+            targetCountries.push(quoteRequest.creatorCountry);
+            console.log('[NOTIFICATION DEBUG] I am involved, notifying creator:', quoteRequest.creatorCountry);
+          }
+        } else {
+          console.log('[NOTIFICATION DEBUG] I am neither creator nor involved country - no notifications sent');
+        }
+        
+        console.log('[NOTIFICATION DEBUG] Final target countries:', targetCountries);
+        
+        // Send notifications to all target countries
+        for (const targetCountry of targetCountries) {
+          if (targetCountry) {
+            console.log('[NOTIFICATION DEBUG] Creating notification for:', {
+              targetCountry,
+              senderCountry: userProfile.businessUnit,
+              content: changes.join(', ')
+            });
+            
+            try {
+              await createNotification({
+                quoteRequestId: id,
+                quoteRequestTitle: quoteRequest.title,
+                sender: user?.email || '',
+                senderCountry: userProfile.businessUnit,
+                targetCountry: targetCountry,
+                content: changes.join(', '),
+                notificationType: 'property_change'
+              });
+              console.log('[NOTIFICATION DEBUG] Notification created successfully for:', targetCountry);
+            } catch (notificationError) {
+              console.error('[NOTIFICATION DEBUG] Failed to create notification for:', targetCountry, notificationError);
+            }
+          }
+        }
+        
+        if (targetCountries.length === 0) {
+          console.log('[NOTIFICATION DEBUG] No target countries found - no notifications sent');
+        }
+      } else {
+        console.log('[NOTIFICATION DEBUG] No changes detected or missing user profile:', {
+          changesLength: changes.length,
+          hasUserProfile: !!userProfile?.businessUnit
+        });
+      }
 
-  // Add a debounced version of handleAddressChange
-  const debouncedHandleAddressChange = useCallback(
-    debounce((address: string) => handleAddressChange(address), 1000),
-    []
+    } catch (err) {
+      console.error('[SAVE] Error saving quote request:', err);
+      setError(err instanceof Error ? err.message : 'Failed to save changes');
+      
+      // Revert local state on error
+      if (originalData) {
+        setQuoteRequest(prev => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            ...originalData
+          } as QuoteRequestWithDynamicKeys;
+        });
+      }
+    } finally {
+      if (isAutoSave) {
+        setIsAutoSaving(false);
+      } else {
+      setIsSaving(false);
+    }
+    }
+  }, [quoteRequest, isSaving, db, id, user?.email]);
+
+  // Create a ref to store the previous state for comparison
+  const previousQuoteRequest = useRef<string | null>(null);
+  
+  // Create debounced save function with proper delay
+  const debouncedSave = useMemo(
+    () => debounce(
+      () => saveChanges(true), 
+      1000  // 1 second delay for normal fields
+    ),
+    [saveChanges]
   );
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    // Block submission for read-only users
-    if (userProfile?.role === "readOnly") {
-      setError("You don't have permission to edit quote requests");
+  // Auto-save effect
+  useEffect(() => {
+    if (!quoteRequest || !isMounted || loading || isReadOnly) return;
+
+    // Initialize previous state
+    if (previousQuoteRequest.current === null) {
+      const initialState = JSON.stringify({
+        title: quoteRequest.title || '',
+        products: quoteRequest.products || [],
+        creatorCountry: quoteRequest.creatorCountry || '',
+        involvedCountry: quoteRequest.involvedCountry || '',
+        startDate: quoteRequest.startDate || '',
+        endDate: quoteRequest.endDate || '',
+        status: quoteRequest.status || '',
+        customer: quoteRequest.customer || '',
+        waitingForAnswer: quoteRequest.waitingForAnswer || false,
+        urgent: quoteRequest.urgent || false,
+        problems: quoteRequest.problems || false,
+        planned: quoteRequest.planned || false,
+        jobsite: quoteRequest.jobsite || {},
+        jobsiteContact: quoteRequest.jobsiteContact || {},
+        customerNumber: quoteRequest.customerNumber || '',
+        customerDecidesEndDate: quoteRequest.customerDecidesEndDate || false,
+        latitude: quoteRequest.latitude || '',
+        longitude: quoteRequest.longitude || '',
+        notes: quoteRequest.notes || [],
+        attachments: quoteRequest.attachments || []
+      });
+      previousQuoteRequest.current = initialState;
       return;
     }
 
-    if (!db || !form) {
-      setError("Database not initialized or form not loaded");
-      return;
+    // Create current state string
+    const currentState = JSON.stringify({
+      title: quoteRequest.title || '',
+      products: quoteRequest.products || [],
+      creatorCountry: quoteRequest.creatorCountry || '',
+      involvedCountry: quoteRequest.involvedCountry || '',
+      startDate: quoteRequest.startDate || '',
+      endDate: quoteRequest.endDate || '',
+      status: quoteRequest.status || '',
+      customer: quoteRequest.customer || '',
+      waitingForAnswer: quoteRequest.waitingForAnswer || false,
+      urgent: quoteRequest.urgent || false,
+      problems: quoteRequest.problems || false,
+      planned: quoteRequest.planned || false,
+      jobsite: quoteRequest.jobsite || {},
+      jobsiteContact: quoteRequest.jobsiteContact || {},
+      customerNumber: quoteRequest.customerNumber || '',
+      customerDecidesEndDate: quoteRequest.customerDecidesEndDate || false,
+      latitude: quoteRequest.latitude || '',
+      longitude: quoteRequest.longitude || '',
+      notes: quoteRequest.notes || [],
+      attachments: quoteRequest.attachments || []
+    });
+
+    // Only save if data changed
+    if (previousQuoteRequest.current !== currentState) {
+      console.log('Auto-save triggered - data changed');
+      previousQuoteRequest.current = currentState;
+      debouncedSave();
     }
-    setSaving(true);
-    setError("");
-    
-    if (!form.customerDecidesEnd && form.startDate && form.endDate && form.endDate < form.startDate) {
-      setError("End Date cannot be before Start Date.");
-      setSaving(false);
-      return;
-    }
-    
-    try {
-      const docRef = doc(db as Firestore, "quoteRequests", params.id as string);
-      // Compare original and form to find changes
-      const changes = [];
-      const sanitize = (value: any) => value === undefined ? null : value;
-      for (const key in form) {
-        if (key === "updatedAt" || key === "id") continue;
-        if (JSON.stringify(form[key]) !== JSON.stringify(original?.[key])) {
-          changes.push({ field: key, from: sanitize(original?.[key]), to: sanitize(form[key]) });
+  }, [quoteRequest, isMounted, loading, isReadOnly, debouncedSave]);
+
+  // Cleanup debounced function
+  useEffect(() => {
+    return () => {
+      debouncedSave.cancel();
+    };
+  }, [debouncedSave]);
+
+  const handleInputChange = (field: keyof QuoteRequestWithDynamicKeys, value: any) => {
+    if (!quoteRequest) return;
+
+    // Handle nested fields (e.g., products.0.catClass)
+    if (field.includes('.')) {
+      const [parent, index, child] = field.split('.');
+      setQuoteRequest(prev => {
+        if (!prev) return prev;
+        
+        // Safely get the parent array
+        const parentArray = prev[parent as keyof QuoteRequest];
+        if (!Array.isArray(parentArray)) {
+          console.error('Parent is not an array:', parent, parentArray);
+          return prev;
         }
-      }
-      
-      if (changes.length > 0) {
-        const modificationsCollection = collection(db as Firestore, "modifications");
-        await addDoc(modificationsCollection, {
-          quoteRequestId: params.id,
-          dateTime: serverTimestamp(),
-          user: user?.email || "Unknown",
-          changes,
-        });
-      }
-      
-      const updatedForm = {
-        ...form,
-        customerNumber,
-        updatedAt: new Date().toISOString(),
-        updatedBy: user?.email || ""
-      };
-      
-      await updateDoc(docRef, updatedForm);
-      await saveChanges(updatedForm);
-      setOriginal(updatedForm);
-      setHasUnsavedChanges(false);
-      
-      router.push("/quote-requests");
-    } catch (err: any) {
-      console.error("Error updating quote request:", err);
-      setError(err.message || "Failed to update");
-    } finally {
-      setSaving(false);
+        
+        // Create a new array with the updated value
+        const newArray = [...parentArray];
+        const idx = parseInt(index);
+        
+        // Ensure the index exists
+        if (idx < 0 || idx >= newArray.length) {
+          console.error('Invalid index:', idx, 'for array length:', newArray.length);
+          return prev;
+        }
+        
+        // Update the specific field
+        if (typeof newArray[idx] === 'object' && newArray[idx] !== null) {
+          newArray[idx] = {
+            ...newArray[idx],
+            [child]: value
+          };
+        } else {
+          console.error('Array item is not an object:', newArray[idx]);
+          return prev;
+        }
+        
+        return {
+          ...prev,
+          [parent]: newArray
+        } as QuoteRequestWithDynamicKeys;
+      });
+    } else {
+      setQuoteRequest(prev => {
+        if (!prev) return prev;
+        const updatedRequest = {
+        ...prev,
+        [field]: value
+        } as QuoteRequestWithDynamicKeys;
+        
+        // If we're updating the involved country, trigger a save
+        if (field === 'involvedCountry') {
+          saveChanges(true);
+        }
+        
+        return updatedRequest;
+      });
     }
   };
 
-  const handleSendMessage = async (text: string) => {
-    if (!user?.email || !userProfile?.businessUnit || !form) {
-      throw new Error('Cannot send message: User not authenticated or form not loaded');
-    }
-
-    // Determine the target country based on the sender's country
-    const targetCountry = form.creatorCountry === userProfile.businessUnit 
-      ? form.targetCountry || form.involvedCountry
-      : form.creatorCountry;
-
-    try {
-      // Send the message with the target country and empty files array
-      await sendMessage(text, user.email, userProfile.businessUnit, targetCountry, []);
-    } catch (error) {
-      console.error('Error sending message:', error);
-      throw error;
-    }
+  const handleAddProduct = () => {
+    setQuoteRequest(prev => prev ? {
+      ...prev,
+      products: [
+        ...prev.products,
+        { catClass: '', description: '', quantity: 1 }
+      ]
+    } : null);
   };
 
-  const addNote = () => {
+  const handleRemoveProduct = (index: number) => {
+    setQuoteRequest(prev => prev ? {
+      ...prev,
+      products: prev.products.filter((_, i) => i !== index)
+    } : null);
+  };
+
+  const handleAddNote = () => {
     if (!newNote.trim() || !user?.email) return;
     
-    setForm((prev: QuoteRequest | null) => {
+    setQuoteRequest(prev => {
       if (!prev) return prev;
-      const updated = {
-      ...prev,
-      notes: [
-        ...(prev.notes || []),
-        {
-          text: newNote.trim(),
-          user: user.email,
-          dateTime: new Date().toISOString()
-        }
-        ],
-        updatedAt: new Date().toISOString(),
-        updatedBy: user?.email || ""
+      const newNotes = [...(prev.notes || []), {
+        text: newNote.trim(),
+        user: user.email!,
+        dateTime: new Date()
+      }];
+      return {
+        ...prev,
+        notes: newNotes
       };
-      
-      // Clear existing timeout
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-      }
-      
-      // Set new timeout for auto-save
-      saveTimeoutRef.current = setTimeout(() => {
-        saveChanges(updated);
-      }, 2000);
-      
-      return updated;
     });
-    setNewNote("");
-    setHasUnsavedChanges(true);
+    setNewNote('');
   };
 
-  if (loading || messagesLoading) return <div className="p-8">Loading...</div>;
-  if (error) return <div className="p-8 text-red-600">{error}</div>;
-  if (!form) return null;
+  const handleSendMessage = async (text: string, files: any[] = []) => {
+    if (!user?.email || !userProfile?.businessUnit || !quoteRequest) {
+      throw new Error('Missing required data');
+    }
 
-   return (
-    <>
-      <Script
-        src={`https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places`}
-        strategy="beforeInteractive"
-      />
-      <div className="min-h-screen bg-gray-50">
-        {/* Fixed header */}
-        <div className="fixed top-0 left-0 right-0 z-10 bg-white shadow">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-            <div className="flex justify-between items-center">
-              <div className="flex items-center gap-4">
-                <button 
-                  onClick={() => handleNavigation("/quote-requests")}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  Quote Request
-                </button>
-                <span className="text-gray-400">/</span>
-                {form?.creatorCountry}
-                {form?.involvedCountry && (
-                  <>
-                    <span className="text-gray-400">→</span>
-                    {form.involvedCountry}
-                  </>
-                )}
-          </div>
-              <div className="flex items-center gap-4">
-                {/* Save status message */}
-                {saveMessage && (
-                  <div className={`text-sm font-medium ${
-                    saveMessage === "Saving..." ? "text-blue-600" :
-                    saveMessage === "Changes saved" ? "text-green-600" :
-                    "text-red-600"
-                  }`}>
-                    {saveMessage}
+    // Fix target country logic: determine which country should receive the message
+    // If I'm the creator, notify the involved country. If I'm involved, notify the creator.
+    const targetCountries = [];
+    
+    if (userProfile.businessUnit === quoteRequest.creatorCountry) {
+      // I'm the creator, notify the involved country
+      if (quoteRequest.involvedCountry && quoteRequest.involvedCountry !== userProfile.businessUnit) {
+        targetCountries.push(quoteRequest.involvedCountry);
+      }
+    } else if (userProfile.businessUnit === quoteRequest.involvedCountry) {
+      // I'm the involved country, notify the creator
+      if (quoteRequest.creatorCountry && quoteRequest.creatorCountry !== userProfile.businessUnit) {
+        targetCountries.push(quoteRequest.creatorCountry);
+      }
+    }
+
+    // Send message to each target country
+    for (const targetCountry of targetCountries) {
+      await sendMessage(text, user.email, userProfile.businessUnit, targetCountry, files);
+    }
+  };
+
+  // Function to handle label changes
+  const handleLabelChange = async (key: keyof Pick<QuoteRequest, 'waitingForAnswer' | 'urgent' | 'problems' | 'planned'>) => {
+    if (!quoteRequest || !db || isReadOnly || !userProfile?.businessUnit) return;
+
+    let originalData: QuoteRequestWithDynamicKeys | null = null;
+
+    try {
+      const newValue = !quoteRequest[key];
+      console.log(`[DEBUG] Changing ${key} to ${newValue}`);
+
+      // Get the label ID for this key
+      const labelId = labels.find(label => label.name.toLowerCase() === labelTexts[key].toLowerCase())?.id;
+      
+      console.log('[DEBUG] Label lookup:', {
+        key,
+        labelTexts: labelTexts[key],
+        labels,
+        foundLabelId: labelId
+      });
+
+      if (!labelId) {
+        console.error(`[DEBUG] No label ID found for ${key}`);
+        setError(`Failed to update ${labelTexts[key]} label - Label not found`);
+        return;
+      }
+
+      // Update local state immediately for responsive UI
+      const updatedQuoteRequest: QuoteRequestWithDynamicKeys = {
+        ...quoteRequest,
+        [key]: newValue,
+        labels: newValue 
+          ? [...new Set([...(quoteRequest.labels || []), labelId])]  // Use Set to ensure uniqueness
+          : (quoteRequest.labels || []).filter(id => id !== labelId),
+        updatedAt: new Date(),
+        updatedBy: user?.email || ''
+      };
+
+      console.log('[DEBUG] Updated quote request:', {
+        key,
+        newValue,
+        oldLabels: quoteRequest.labels,
+        newLabels: updatedQuoteRequest.labels,
+        oldFlags: {
+          waitingForAnswer: quoteRequest.waitingForAnswer,
+          urgent: quoteRequest.urgent,
+          problems: quoteRequest.problems,
+          planned: quoteRequest.planned
+        },
+        newFlags: {
+          waitingForAnswer: updatedQuoteRequest.waitingForAnswer,
+          urgent: updatedQuoteRequest.urgent,
+          problems: updatedQuoteRequest.problems,
+          planned: updatedQuoteRequest.planned
+        }
+      });
+
+      setQuoteRequest(updatedQuoteRequest);
+
+      // Update Firestore
+      const quoteRef = doc(db as Firestore, 'quoteRequests', id);
+      
+      // Get original data for error handling
+      const quoteDoc = await getDoc(quoteRef);
+      if (quoteDoc.exists()) {
+        originalData = quoteDoc.data() as QuoteRequestWithDynamicKeys;
+      }
+
+      // Important: Update both the boolean flag and the labels array
+      const updateData: Record<string, any> = {
+        [key]: newValue,
+        labels: updatedQuoteRequest.labels,
+        updatedAt: new Date(),
+        updatedBy: user?.email || ''
+      };
+      
+      console.log('[DEBUG] Updating Firestore with:', updateData);
+      await updateDoc(quoteRef, updateData);
+
+      // Create notification for the label change
+      const labelText = labelTexts[key];
+      const targetCountry = userProfile.businessUnit === quoteRequest.creatorCountry
+        ? quoteRequest.involvedCountry
+        : quoteRequest.creatorCountry;
+
+      if (targetCountry && targetCountry !== userProfile.businessUnit) {
+        await createNotification({
+          quoteRequestId: id,
+          quoteRequestTitle: quoteRequest.title,
+          sender: user?.email || '',
+          senderCountry: userProfile.businessUnit,
+          targetCountry,
+          content: `${newValue ? 'Added' : 'Removed'} "${labelText}" label`,
+          notificationType: 'property_change'
+        });
+      }
+
+      console.log(`[DEBUG] Label ${key} updated successfully to ${newValue}`);
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 2000);
+    } catch (err) {
+      console.error('[DEBUG] Error updating label:', err);
+      // Revert local state on error
+      if (originalData) {
+        setQuoteRequest(prevState => {
+          if (!prevState) return prevState;
+          const revertedState: QuoteRequestWithDynamicKeys = {
+            ...prevState,
+            [key]: originalData[key],
+            labels: originalData.labels || []
+          };
+          return revertedState;
+        });
+      }
+      setError(`Failed to update ${labelTexts[key]} label`);
+    }
+  };
+
+  // Get the user's business unit for notifications
+  const userCountry = userProfile?.businessUnit || (userProfile?.countries && userProfile.countries[0]) || '';
+
+  if (loading) {
+    return <LoadingSpinner />;
+  }
+
+  if (error) {
+    return (
+      <div className="p-6">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <h3 className="text-red-800 font-medium">Error</h3>
+          <p className="text-red-600 mt-1">{error}</p>
         </div>
-                )}
-                <button
-                  onClick={() => handleNavigation("/quote-requests")}
-                  className="px-4 py-2 text-gray-700 bg-gray-100 rounded hover:bg-gray-200"
-                  disabled={saving}
+      </div>
+    );
+  }
+
+  if (!quoteRequest || !isMounted) return null;
+
+  return (
+    <div className="flex h-screen bg-gray-50">
+      {/* Left Sidebar - Fixed width */}
+      <div className="w-80 min-w-[320px] bg-white border-r border-gray-200 p-6 overflow-y-auto">
+        {/* Status Dropdown */}
+        <div className="mb-6">
+          <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
+          <select
+            value={quoteRequest.status}
+            onChange={(e) => handleInputChange("status", e.target.value)}
+            className="w-full p-2 border border-gray-200 rounded-lg"
+            disabled={isReadOnly}
           >
-            Cancel
-                </button>
-          <button
-                  type="button"
-                  onClick={() => form && saveChanges(form)}
-                  className="px-4 py-2 text-white bg-red-600 rounded hover:bg-red-700 disabled:opacity-50"
-                  disabled={saving || isReadOnly || !hasUnsavedChanges}
-                >
-                  {saving ? "Saving..." : "Save Changes"}
-          </button>
-              </div>
-            </div>
+            {statuses.map(status => (
+              <option key={status} value={status}>{status}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Labels */}
+        <div className="mb-6">
+          <h3 className="text-sm font-medium text-gray-700 mb-2">Labels</h3>
+          <div className="space-y-2">
+            {Object.entries(labelTexts).map(([key, label]) => (
+            <button
+                key={key}
+                onClick={() => handleLabelChange(key as keyof Pick<QuoteRequest, 'waitingForAnswer' | 'urgent' | 'problems' | 'planned'>)}
+                className={`w-full p-2 rounded-lg text-left transition-colors ${
+                  quoteRequest[key as keyof QuoteRequest]
+                    ? key === 'waitingForAnswer'
+                      ? 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200'
+                      : key === 'urgent'
+                      ? 'bg-red-100 text-red-800 hover:bg-red-200'
+                      : key === 'problems'
+                      ? 'bg-orange-100 text-orange-800 hover:bg-orange-200'
+                      : key === 'planned'
+                      ? 'bg-red-100 text-red-800 hover:bg-red-200'
+                      : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
+                    : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
+                }`}
+              disabled={isReadOnly}
+            >
+                {label}
+            </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Recent Activity */}
+        <div className="mb-6">
+          <h3 className="text-sm font-medium text-gray-700 mb-2">Recent Activity</h3>
+          <QuoteRequestNotifications 
+            quoteRequestId={id} 
+            userCountry={userCountry}
+          />
         </div>
       </div>
 
-        {/* Main content with padding for fixed header */}
-        <div className="pt-20">
-          <div className="flex h-full">
-            <div className="flex-1 p-6 overflow-auto">
-              <form onSubmit={handleSubmit} className="space-y-6">
-                {/* Form header */}
-                <div className="flex items-center justify-between mb-6">
-                  <div className="flex items-center gap-4">
-                    <h1 className="text-2xl font-semibold text-gray-900 flex items-center gap-2">
-                      <SafeLink href="/quote-requests" className="text-gray-400 hover:text-gray-600">
-                        Quote Request
-                      </SafeLink>
-                      <span className="text-gray-400">/</span>
-                      {form?.creatorCountry}
-                      {form?.involvedCountry && (
-                        <>
-                          <span className="text-gray-400">→</span>
-                          {form.involvedCountry}
-                        </>
-                      )}
-                    </h1>
-                    <SafeLink
-                      href={`/quote-requests/${params.id}/edit`}
-                      className="px-4 py-2 bg-[#e40115] text-white rounded-md hover:bg-[#c7010e] transition-colors shadow-sm"
-                    >
-                      Edit Quote Request
-                    </SafeLink>
-                  </div>
+      {/* Main Content - Flexible width */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Form Content - Scrollable */}
+        <div className="flex-1 overflow-y-auto p-6">
+          <div className="max-w-5xl mx-auto">
+            {/* Header */}
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center space-x-4">
+                <h1 className="text-2xl font-semibold text-gray-900">
+                  Quote Request / {quoteRequest.creatorCountry} → {quoteRequest.involvedCountry}
+                </h1>
+                <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                  quoteRequest.status === "In Progress" ? "bg-green-100 text-green-800" :
+                  quoteRequest.status === "Snoozed" ? "bg-gray-100 text-gray-800" :
+                  quoteRequest.status === "Won" ? "bg-blue-100 text-blue-800" :
+                  quoteRequest.status === "Lost" ? "bg-red-100 text-red-800" :
+                  "bg-yellow-100 text-yellow-800"
+                }`}>
+                  {quoteRequest.status}
+                </span>
                 </div>
-
-                {/* Form content */}
-                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                  <div className="grid grid-cols-[1fr_2fr_1fr] gap-8">
-                    {/* Left Column */}
-                    <div className="space-y-6">
-          <div>
-            <label className="block mb-1 font-medium">Title</label>
-            <input
-              type="text"
-                          value={form.title || ""}
-                          onChange={(e) => handleChange("title", e.target.value)}
-              disabled={isReadOnly}
-                          className="w-full p-2 border rounded"
-            />
-          </div>
-          <div>
-            <label className="block mb-1 font-medium">Creator Country</label>
-                        <input
-                          type="text"
-                          value={form.creatorCountry || ""}
-                          disabled
-                          className="w-full p-2 border rounded bg-gray-50"
-            />
-          </div>
-          <div>
-                        <label className="block mb-1 font-medium">Target Country</label>
-            <CountrySelect
-                          value={form.involvedCountry || form.targetCountry || ""}
-                          onChange={(value) => {
-                            handleChange("involvedCountry", value);
-                            handleChange("targetCountry", value);
-                          }}
-              disabled={isReadOnly}
-            />
-          </div>
-          <div>
-            <label className="block mb-1 font-medium">Customer</label>
-            <select
-                          value={form.customer || ""}
-                          onChange={(e) => handleChange("customer", e.target.value)}
-                          disabled={isReadOnly}
-                          className="w-full p-2 border rounded"
-                        >
-                          <option value="">Select customer...</option>
-                          {customers.map(customer => (
-                <option key={customer.id} value={customer.id}>
-                  {customer.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block mb-1 font-medium">Status</label>
-            <select
-                          value={form.status || ""}
-                          onChange={(e) => handleChange("status", e.target.value)}
-              disabled={isReadOnly}
-                          className="w-full p-2 border rounded"
-            >
-                          {statuses.map(status => (
-                <option key={status} value={status}>
-                  {status}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-                        <label className="block mb-1 font-medium">Labels</label>
-                        <div className="flex flex-wrap gap-2">
-                          {labels.map(label => (
-                            <label
-                              key={label.id}
-                              className={`px-3 py-1 rounded-full border cursor-pointer select-none ${
-                                form.labels?.includes(label.id)
-                                  ? 'bg-[#e40115] text-white border-[#e40115]'
-                                  : 'bg-gray-100 text-gray-800 border-gray-300'
-                              }`}
-                              style={{
-                                opacity:
-                                  form.labels?.length >= 4 && !form.labels?.includes(label.id)
-                                    ? 0.5
-                                    : 1,
-                              }}
-                            >
-              <input
-                                type="checkbox"
-                                className="hidden"
-                                checked={form.labels?.includes(label.id)}
-                                onChange={() => handleLabelChange(form.labels?.includes(label.id) ? form.labels.filter((l: string) => l !== label.id) : [...(form.labels || []), label.id])}
-                                disabled={
-                                  isReadOnly ||
-                                  (!form.labels?.includes(label.id) &&
-                                    (form.labels?.length || 0) >= 4)
-                                }
-                              />
-                              {label.name}
-                            </label>
-                          ))}
-                </div>
-                      </div>
-                    </div>
-
-                    {/* Middle Column */}
-                    <div className="space-y-6">
-                      <div className="mb-6">
-                        <label className="block mb-2 font-medium">Products</label>
-                        <div className="space-y-2">
-                          {form?.products?.map((product, idx) => (
-                            <div key={idx} className="flex gap-2 items-center">
-                              <input
-                                type="text"
-                                value={product.catClass || ""}
-                                onChange={(e) => handleProductChange(idx, "catClass", e.target.value)}
-                                placeholder="Cat. Class"
-                                className="w-[150px] p-2 border rounded"
-                                disabled={isReadOnly}
-                              />
-                              <input
-                                type="text"
-                                value={product.description || ""}
-                                onChange={(e) => handleProductChange(idx, "description", e.target.value)}
-                                placeholder="Description"
-                                className="flex-1 p-2 border rounded"
-                                disabled={isReadOnly}
-                              />
-                              <input
-                                type="number"
-                                value={product.quantity || ""}
-                                onChange={(e) => handleProductChange(idx, "quantity", parseInt(e.target.value) || 0)}
-                                placeholder="Quantity"
-                                className="w-24 p-2 border rounded"
-                                disabled={isReadOnly}
-                              />
-                              {!isReadOnly && (
-                                <button
-                                  type="button"
-                                  onClick={() => handleRemoveProduct(idx)}
-                                  className="p-2 text-red-600 hover:text-red-800"
-                                >
-                                  ×
-                                </button>
-              )}
-            </div>
-                          ))}
-                        </div>
-                        {!isReadOnly && (
-                          <button
-                            type="button"
-                            onClick={handleAddProduct}
-                            className="mt-2 px-4 py-2 text-sm text-blue-600 hover:text-blue-800"
-                          >
-                            + Add Product
-                          </button>
-            )}
-          </div>
-
-          <div>
-                        <label className="block mb-1 font-medium">Notes</label>
-                        <div className="space-y-2">
-                          {form.notes?.map((note: any, index: number) => (
-                            <div key={`note-${index}-${note.dateTime}`} className="text-sm bg-gray-50 p-2 rounded">
-                              <div className="text-gray-500">
-                                {note.user} on {new Date(note.dateTime).toLocaleString()}
-                              </div>
-                              {note.text}
-                            </div>
-                          ))}
-                          {!isReadOnly && (
-                            <div className="flex gap-2">
-                              <input
-                                type="text"
-                                value={newNote}
-                                onChange={(e) => setNewNote(e.target.value)}
-                                placeholder="Add a note..."
-                                className="flex-1 p-2 border rounded"
-                              />
-                <button
-                                type="button"
-                                onClick={addNote}
-                                disabled={!newNote.trim()}
-                                className="px-4 py-2 bg-blue-500 text-white rounded disabled:opacity-50"
-                              >
-                                Add
+              <div className="flex items-center space-x-4">
+                <span className={`text-sm ${isAutoSaving ? 'text-blue-600' : isSaving ? 'text-yellow-600' : saveSuccess ? 'text-green-600' : 'text-gray-500'}`}>
+                  {isAutoSaving ? 'Auto-saving...' : isSaving ? 'Saving...' : saveSuccess ? 'Successfully saved!' : 'Auto-save ON'}
+                </span>
+                <button 
+                  onClick={() => saveChanges(false)}
+                  disabled={isSaving || isAutoSaving || isReadOnly}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                >
+                  Save Changes
                 </button>
+              </div>
             </div>
-                          )}
-          </div>
-        </div>
 
-                      <div>
-                        <label className="block mb-1 font-medium">Attachments</label>
-                        <FileUpload
-                          quoteRequestId={params.id as string}
-                          files={attachments}
-                          onFilesChange={handleFilesChange}
-                          currentUser={user?.email || "Unknown"}
-                          readOnly={isReadOnly}
-                        />
-                      </div>
-                    </div>
-
-                    {/* Right Column */}
-                    <div className="space-y-6">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block mb-1 font-medium">Start Date</label>
-              <input
-                type="date"
-                            value={form.startDate || ''}
-                onChange={(e) => handleChange('startDate', e.target.value)}
-                            className="w-full p-2 border rounded"
-                disabled={isReadOnly}
-              />
-            </div>
-            <div>
-              <label className="block mb-1 font-medium">End Date</label>
-                          <div>
-              <input
-                type="date"
-                value={form.endDate || ''}
-                onChange={(e) => handleChange('endDate', e.target.value)}
-                              className="w-full p-2 border rounded"
-                disabled={isReadOnly || form.customerDecidesEnd}
-              />
-                            <div className="mt-1 flex items-center gap-2">
-            <input
-              type="checkbox"
-                                id="customerDecidesEnd"
-                                checked={form.customerDecidesEnd || false}
-                                onChange={(e) => {
-                                  handleChange('customerDecidesEnd', e.target.checked);
-                                  if (e.target.checked) {
-                                    handleChange('endDate', null);
-                                  }
-                                }}
-              disabled={isReadOnly}
-                                className="h-4 w-4"
-                              />
-                              <label htmlFor="customerDecidesEnd" className="text-sm text-gray-600">
-                                Customer decides end date
-                              </label>
-                            </div>
-                          </div>
-                        </div>
-          </div>
-
-          <div>
-                        <label className="block mb-1 font-medium">Jobsite Address</label>
+            {/* Form Grid - 2 columns */}
+            <div className="grid grid-cols-2 gap-8">
+              {/* Left Column */}
+              <div className="space-y-6">
+                {/* Title */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
                   <input
                     type="text"
-                          value={form?.jobsite.address || ''}
-                          onChange={(e) => handleChange('jobsite.address', e.target.value)}
-                          className="w-full p-2 border rounded"
-                          placeholder="Enter full address"
-                          ref={addressInputRef}
+                    value={quoteRequest.title}
+                    onChange={(e) => handleInputChange("title", e.target.value)}
+                    className="w-full p-3 border border-gray-300 rounded-lg"
+                    disabled={isReadOnly}
+                  />
+                </div>
+
+                {/* Creator and Target Country */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Creator Country</label>
+                    <CountrySelect
+                      value={quoteRequest.creatorCountry}
+                      onChange={(value) => handleInputChange("creatorCountry", value)}
+                      disabled={isReadOnly}
+                      required={true}
+                      allowEmpty={false}
+                      className="w-full p-3 border border-gray-300 rounded-md"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Involved Country</label>
+                    <CountrySelect
+                      value={quoteRequest.involvedCountry}
+                      onChange={(value) => handleInputChange("involvedCountry", value)}
+                      disabled={isReadOnly}
+                      required={true}
+                      allowEmpty={false}
+                      className="w-full p-3 border border-gray-300 rounded-md"
+                    />
+                  </div>
+                </div>
+
+                {/* Customer */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Customer</label>
+                  <select
+                    value={quoteRequest.customer}
+                    onChange={(e) => handleInputChange("customer", e.target.value)}
+                    className="w-full p-3 border border-gray-300 rounded-md"
+                    disabled={isReadOnly}
+                  >
+                    <option value="">Select Customer</option>
+                    {customers.map(customer => (
+                      <option key={customer.id} value={customer.name}>
+                        {customer.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Status */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                  <select
+                    value={quoteRequest.status}
+                    onChange={(e) => handleInputChange("status", e.target.value)}
+                    className="w-full p-3 border border-gray-300 rounded-md"
+                    disabled={isReadOnly}
+                  >
+                    {statuses.map(status => (
+                      <option key={status} value={status}>{status}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Products */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Products</label>
+                  <div className="space-y-2">
+                    {quoteRequest.products.map((product, index) => (
+                      <div key={index} className="grid grid-cols-12 gap-2">
+                        <input
+                          type="text"
+                          value={product.catClass}
+                          onChange={(e) => handleInputChange(`products.${index}.catClass`, e.target.value)}
+                          placeholder="Product Code"
+                          className="col-span-3 p-2 border border-gray-300 rounded"
+                          disabled={isReadOnly}
                         />
-                        
-                        <div className="mt-4 grid grid-cols-2 gap-4">
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700">Latitude</label>
-                  <input
-                              type="number"
-                              step="any"
-                              value={form?.jobsite.coordinates?.lat || ''}
-                              onChange={(e) => handleChange('jobsite.coordinates.lat', e.target.value)}
-                              className="w-full p-2 border rounded"
-                              placeholder="e.g., 51.9244"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700">Longitude</label>
-                    <input
-                      type="number"
-                              step="any"
-                              value={form?.jobsite.coordinates?.lng || ''}
-                              onChange={(e) => handleChange('jobsite.coordinates.lng', e.target.value)}
-                              className="w-full p-2 border rounded"
-                              placeholder="e.g., 4.4777"
-                            />
-                          </div>
-                        </div>
+                        <input
+                          type="text"
+                          value={product.description}
+                          onChange={(e) => handleInputChange(`products.${index}.description`, e.target.value)}
+                          placeholder="Description"
+                          className="col-span-7 p-2 border border-gray-300 rounded"
+                          disabled={isReadOnly}
+                        />
+                        <input
+                          type="number"
+                          value={product.quantity}
+                          onChange={(e) => handleInputChange(`products.${index}.quantity`, parseInt(e.target.value))}
+                          className="col-span-2 p-2 border border-gray-300 rounded"
+                          disabled={isReadOnly}
+                        />
                       </div>
+                    ))}
+                    {!isReadOnly && (
+                      <button
+                        onClick={handleAddProduct}
+                        className="text-blue-500 hover:text-blue-700 text-sm font-medium"
+                      >
+                        + Add Product
+                      </button>
+                    )}
+                  </div>
+                </div>
 
-                      <div>
-                        <label className="block mb-1 font-medium">Jobsite Contact</label>
-                        <select
-                          value={form.jobsiteContactId || ""}
-                          onChange={(e) => handleChange("jobsiteContactId", e.target.value)}
-                          disabled={isReadOnly || !form.customer}
-                          className="w-full p-2 border rounded"
-                        >
-                          <option value="">Select contact...</option>
-                          {contacts.map(contact => (
-                            <option key={contact.id} value={contact.id}>
-                              {contact.name} ({contact.phone})
-                            </option>
-                          ))}
-                        </select>
-                        {!isReadOnly && form.customer && (
+                {/* Notes */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+                  <div className="flex space-x-2">
+                    <input
+                      type="text"
+                      value={newNote}
+                      onChange={(e) => setNewNote(e.target.value)}
+                      placeholder="Add a note..."
+                      className="flex-1 p-2 border border-gray-300 rounded"
+                      disabled={isReadOnly}
+                    />
                     <button
-                            type="button"
-                            onClick={() => setShowNewContact(true)}
-                            className="mt-2 text-blue-500 hover:text-blue-700"
-                          >
-                            + Add New Contact
+                      onClick={handleAddNote}
+                      className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+                      disabled={isReadOnly || !newNote.trim()}
+                    >
+                      Add
                     </button>
-                        )}
-          </div>
+                  </div>
+                  {quoteRequest.notes && quoteRequest.notes.length > 0 && (
+                    <div className="mt-2 space-y-2">
+                      {quoteRequest.notes.map((note, index) => (
+                        <div key={index} className="text-sm text-gray-600 bg-gray-50 p-2 rounded">
+                          {note.text}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
 
-                      {/* Customer Number */}
-                      {form?.customer && form?.involvedCountry && (
-          <div>
-                          <label className="block mb-1 font-medium">
-                            Customer Number for {form.involvedCountry}
-                          </label>
-                <input
-                  type="text"
-                            value={customerNumber}
-                            readOnly
-                            className="w-full p-2 border rounded bg-gray-50"
-                          />
-              </div>
-                      )}
+                {/* Attachments */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Attachments</label>
+                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+                    <div className="text-gray-500">
+                      <div className="text-2xl mb-2">📎</div>
+                      <div>Drag & drop files here or <span className="text-blue-500 underline cursor-pointer">browse</span></div>
+                      <div className="text-xs mt-1">Support: Images, PDF, Word, Excel documents (Max 10MB each)</div>
                     </div>
                   </div>
+                </div>
               </div>
-              </form>
-        </div>
 
-            {/* Messaging panel */}
-            <div className="flex justify-center items-center min-h-[600px] h-[70vh] bg-gray-100">
-              <div className="w-full max-w-md h-full bg-white border rounded-lg shadow-lg flex flex-col">
-                <MessagingPanel
-                  messages={messages}
-                  currentUser={user?.email || ''}
-                  currentCountry={userProfile?.businessUnit || ''}
-                  onSendMessage={handleSendMessage}
-                  quoteTitle={form.title}
-                  readOnly={isReadOnly}
-                />
+              {/* Right Column */}
+              <div className="space-y-6">
+                {/* Dates */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+                    <input
+                      type="date"
+                      value={quoteRequest.startDate}
+                      onChange={(e) => handleInputChange("startDate", e.target.value)}
+                      className="w-full p-3 border border-gray-300 rounded-md"
+                      disabled={isReadOnly}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
+                    <input
+                      type="date"
+                      value={quoteRequest.endDate}
+                      onChange={(e) => handleInputChange("endDate", e.target.value)}
+                      className="w-full p-3 border border-gray-300 rounded-md"
+                      disabled={isReadOnly || quoteRequest.customerDecidesEndDate}
+                    />
+                  </div>
+                </div>
+
+                {/* Customer decides end date checkbox */}
+                <div>
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={quoteRequest.customerDecidesEndDate || false}
+                      onChange={(e) => handleInputChange("customerDecidesEndDate", e.target.checked)}
+                      className="mr-2"
+                      disabled={isReadOnly}
+                    />
+                    <span className="text-sm text-gray-700">Customer decides end date</span>
+                  </label>
+                </div>
+
+                {/* Jobsite Address */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Jobsite Address</label>
+                  <input
+                    type="text"
+                    value={quoteRequest.jobsite?.address || ''}
+                    onChange={(e) => handleInputChange("jobsite.address", e.target.value)}
+                    className="w-full p-3 border border-gray-300 rounded-md"
+                    disabled={isReadOnly}
+                  />
+                </div>
+
+                {/* Coordinates */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Latitude</label>
+                    <input
+                      type="text"
+                      value={quoteRequest.latitude || ''}
+                      onChange={(e) => handleInputChange("latitude", e.target.value)}
+                      placeholder="e.g., 51.9244"
+                      className="w-full p-3 border border-gray-300 rounded-md"
+                      disabled={isReadOnly}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Longitude</label>
+                    <input
+                      type="text"
+                      value={quoteRequest.longitude || ''}
+                      onChange={(e) => handleInputChange("longitude", e.target.value)}
+                      placeholder="e.g., 4.4777"
+                      className="w-full p-3 border border-gray-300 rounded-md"
+                      disabled={isReadOnly}
+                    />
+                  </div>
+                </div>
+
+                {/* Jobsite Contact */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Jobsite Contact</label>
+                  <div className="grid grid-cols-2 gap-4">
+                    <input
+                      type="text"
+                      value={quoteRequest.jobsiteContact?.name || ''}
+                      onChange={(e) => handleInputChange("jobsiteContact.name", e.target.value)}
+                      placeholder="Contact Name"
+                      className="p-3 border border-gray-300 rounded-md"
+                      disabled={isReadOnly}
+                    />
+                    <input
+                      type="text"
+                      value={quoteRequest.jobsiteContact?.phone || ''}
+                      onChange={(e) => handleInputChange("jobsiteContact.phone", e.target.value)}
+                      placeholder="Phone Number"
+                      className="p-3 border border-gray-300 rounded-md"
+                      disabled={isReadOnly}
+                    />
+                  </div>
+                </div>
+
+                {/* Customer Number */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Customer Number for {quoteRequest.involvedCountry}</label>
+                  <input
+                    type="text"
+                    value={quoteRequest.customerNumber || ''}
+                    onChange={(e) => handleInputChange("customerNumber", e.target.value)}
+                    className="w-full p-3 border border-gray-300 rounded-md"
+                    disabled={isReadOnly}
+                  />
+                </div>
               </div>
             </div>
+          </div>
         </div>
-    </div>
+
+        {/* Right Panel - Fixed width */}
+        <div className="w-96 min-w-[384px] border-l border-gray-200 bg-white">
+            <MessagingPanel
+            messages={messages || []}
+              currentUser={user?.email || ''}
+            currentCountry={userCountry}
+              onSendMessage={handleSendMessage}
+              quoteTitle={quoteRequest.title}
+            loading={messagesLoading}
+            error={messagesError}
+              readOnly={isReadOnly}
+            />
+        </div>
       </div>
-    </>
+    </div>
   );
 }

@@ -1,4 +1,4 @@
-import { addDoc, collection, Firestore, serverTimestamp, doc, updateDoc, query, where, getDocs } from 'firebase/firestore';
+import { addDoc, collection, Firestore, serverTimestamp, doc, updateDoc, query, where, getDocs, deleteDoc } from 'firebase/firestore';
 import { db } from '../../firebaseClient';
 
 interface CreateNotificationParams {
@@ -22,9 +22,19 @@ export async function createNotification({
 }: CreateNotificationParams) {
   if (!db) throw new Error('Firebase not initialized');
 
+  console.log('[NOTIFICATION CREATION] Attempting to create notification:', {
+    quoteRequestId,
+    quoteRequestTitle,
+    sender,
+    senderCountry,
+    targetCountry,
+    content,
+    notificationType
+  });
+
   try {
     const notificationsRef = collection(db as Firestore, 'notifications');
-    await addDoc(notificationsRef, {
+    const docRef = await addDoc(notificationsRef, {
       quoteRequestId,
       quoteRequestTitle,
       sender,
@@ -35,8 +45,10 @@ export async function createNotification({
       createdAt: serverTimestamp(),
       isRead: false,
     });
+    
+    console.log('[NOTIFICATION CREATION] Successfully created notification with ID:', docRef.id);
   } catch (error) {
-    console.error('Error creating notification:', error);
+    console.error('[NOTIFICATION CREATION] Error creating notification:', error);
     // Don't throw the error - we don't want notification failures to break the main flow
   }
 }
@@ -62,5 +74,33 @@ export async function markNotificationsAsRead(quoteRequestId: string, targetCoun
   } catch (error) {
     console.error('Error marking notifications as read:', error);
     // Don't throw the error - we don't want notification failures to break the main flow
+  }
+}
+
+export async function clearNotifications(targetCountry: string) {
+  if (!db) throw new Error('Firebase not initialized');
+  if (!targetCountry) throw new Error('Target country is required');
+
+  try {
+    console.log('Clearing notifications for country:', targetCountry);
+    const notificationsRef = collection(db as Firestore, 'notifications');
+    const q = query(
+      notificationsRef,
+      where('targetCountry', '==', targetCountry)
+    );
+
+    const snapshot = await getDocs(q);
+    console.log(`Found ${snapshot.size} notifications to clear`);
+    
+    const deletePromises = snapshot.docs.map(doc => {
+      console.log('Deleting notification:', doc.id);
+      return deleteDoc(doc.ref);
+    });
+
+    await Promise.all(deletePromises);
+    console.log('Successfully cleared all notifications');
+  } catch (error) {
+    console.error('Error clearing notifications:', error);
+    throw error; // Propagate error to handle it in the UI
   }
 } 
