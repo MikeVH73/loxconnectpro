@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { collection, addDoc, serverTimestamp, getDocs, query, where, doc, getDoc, updateDoc, Firestore, DocumentData, CollectionReference } from "firebase/firestore";
-import { db } from "../../../firebaseClient";
+import { db, initializeFirebase } from "../../../firebaseClient";
 import { useAuth } from "../../AuthProvider";
 import { Fragment } from "react";
 import dayjs from "dayjs";
@@ -87,11 +87,6 @@ const statuses = ["In Progress", "Won", "Lost", "Cancelled"];
 // Add state for archived status
 type StatusType = "In Progress" | "Snoozed" | "Won" | "Lost" | "Cancelled";
 
-// Ensure db is initialized
-if (!db) {
-  throw new Error("Firestore is not initialized");
-}
-
 export default function NewQuoteRequestPage() {
   const router = useRouter();
   const { userProfile, user } = useAuth();
@@ -132,6 +127,42 @@ export default function NewQuoteRequestPage() {
   const [submitting, setSubmitting] = useState(false);
   const [attachments, setAttachments] = useState<FileData[]>([]);
   const [customerNumber, setCustomerNumber] = useState("");
+
+  // Initialize Firebase on component mount
+  useEffect(() => {
+    const init = async () => {
+      try {
+        await initializeFirebase();
+        if (isMounted.current) {
+          setLoading(false);
+        }
+      } catch (err) {
+        if (isMounted.current) {
+          setError("Failed to initialize Firestore");
+          console.error("Firestore initialization error:", err);
+        }
+      }
+    };
+
+    init();
+
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
+
+  // Show loading or error state
+  if (loading) {
+    return <div className="w-full p-8">Loading...</div>;
+  }
+
+  if (error) {
+    return (
+      <div className="w-full p-8 text-red-600">
+        Error: {error}
+      </div>
+    );
+  }
 
   // Handle address change
   const handleAddressChange = useCallback((address: string) => {
