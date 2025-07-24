@@ -9,25 +9,25 @@
       }
     }
   ],
-  "git": {
-    "deploymentEnabled": {
-      "deployment-july-2025": true
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "/$1",
+      "continue": true
     }
+  ],
+  "git": {
+    "deploymentEnabled": true,
+    "silent": false
   },
   "github": {
     "enabled": true,
     "silent": false,
     "autoAlias": true,
-    "productionBranch": "deployment-july-2025",
     "deployOnPush": true
   },
-  "alias": ["loxconnect-pro.vercel.app"],
   "public": false,
   "regions": ["fra1"],
-  "functions": {
-    "api/**/*.js": {
-      "memory": 1024,
-      "maxDuration": 10
-    }
-  }
+  "cleanUrls": true,
+  "trailingSlash": false
 } 

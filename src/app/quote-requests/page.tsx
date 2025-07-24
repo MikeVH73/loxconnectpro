@@ -1,8 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { collection, getDocs, query, orderBy, deleteDoc, doc, DocumentData, QueryDocumentSnapshot, updateDoc, Firestore as FirestoreType } from "firebase/firestore";
+import { collection, getDocs, query, orderBy, deleteDoc, doc, DocumentData, QueryDocumentSnapshot, updateDoc, Firestore } from "firebase/firestore";
 import { db } from "../../firebaseClient";
 import { useAuth } from "../AuthProvider";
 import dayjs from "dayjs";
@@ -59,13 +58,10 @@ interface QuoteRequest {
 }
 
 export default function QuoteRequestsPage() {
-  const router = useRouter();
   const [quoteRequests, setQuoteRequests] = useState<QuoteRequest[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [labels, setLabels] = useState<Label[]>([]);
-  const [productsMap, setProductsMap] = useState<any>({});
-  const [notesMap, setNotesMap] = useState<any>({});
   const { userProfile } = useAuth();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState("");
@@ -79,7 +75,7 @@ export default function QuoteRequestsPage() {
         return;
       }
 
-      const firestore = db as FirestoreType;
+      const firestore = db as Firestore;
 
       setLoading(true);
       try {
@@ -122,7 +118,7 @@ export default function QuoteRequestsPage() {
     const fetchLabels = async () => {
       if (!db) return;
 
-      const firestore = db as FirestoreType;
+      const firestore = db as Firestore;
 
       try {
         const snap = await getDocs(collection(firestore, "labels"));
@@ -239,7 +235,11 @@ export default function QuoteRequestsPage() {
     }
 
     try {
-      await router.push('/quote-requests/new');
+      // The original code had router.push('/quote-requests/new');
+      // Since router is removed, we'll just navigate directly.
+      // This might need adjustment depending on the exact routing setup.
+      // For now, assuming a direct navigation to /quote-requests/new
+      window.location.href = '/quote-requests/new';
     } catch (error) {
       console.error("Navigation error:", error);
     }
@@ -249,15 +249,12 @@ export default function QuoteRequestsPage() {
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-[#e40115]">Quote Requests</h1>
-        <button
-          onClick={handleNewQuoteRequest}
-          disabled={!isInitialized || loading}
-          className={`bg-[#e40115] text-white px-4 py-2 rounded transition ${
-            (!isInitialized || loading) ? 'opacity-50 cursor-not-allowed' : 'hover:bg-red-700'
-          }`}
+        <Link
+          href="/quote-requests/new"
+          className="bg-[#e40115] text-white px-4 py-2 rounded hover:bg-red-700 transition"
         >
-          {loading ? 'Loading...' : '+ New Quote Request'}
-        </button>
+          + New Quote Request
+        </Link>
       </div>
 
       {loading ? (
@@ -289,7 +286,7 @@ export default function QuoteRequestsPage() {
 
             // Save the updated flags and labels back to Firestore
             if (db) {
-              const quoteRef = doc(db as FirestoreType, 'quoteRequests', qr.id);
+              const quoteRef = doc(db as Firestore, 'quoteRequests', qr.id);
               updateDoc(quoteRef, {
                 urgent: updatedQr.urgent,
                 problems: updatedQr.problems,

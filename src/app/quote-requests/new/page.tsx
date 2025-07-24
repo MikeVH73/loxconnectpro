@@ -115,10 +115,8 @@ type StatusType = "In Progress" | "Snoozed" | "Won" | "Lost" | "Cancelled";
 function NewQuoteRequestPage() {
   const router = useRouter();
   const { userProfile, user } = useAuth();
-  const isMounted = useRef(true);
-  const [isClient, setIsClient] = useState(false);
-  const [isFirestoreInitialized, setIsFirestoreInitialized] = useState(false);
-  const [isInitializing, setIsInitializing] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   // Initialize state
   const [title, setTitle] = useState("");
@@ -130,8 +128,6 @@ function NewQuoteRequestPage() {
   const [newCustomer, setNewCustomer] = useState({ name: "", address: "", contact: "", phone: "", email: "" });
   const [status, setStatus] = useState<StatusType>("In Progress");
   const [isArchived, setIsArchived] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
   const [products, setProducts] = useState([
     { catClass: "", description: "", quantity: 1 },
   ]);
@@ -158,69 +154,29 @@ function NewQuoteRequestPage() {
   const [attachments, setAttachments] = useState<FileData[]>([]);
   const [customerNumber, setCustomerNumber] = useState("");
 
-  // Set isClient to true on mount and check Firestore initialization
   useEffect(() => {
-    setIsClient(true);
-    
-    const initializeFirestore = async () => {
-      if (!db) {
-        setError("Firestore is not initialized");
-        setIsInitializing(false);
-        return;
-      }
-
-      try {
-        // Try a simple Firestore operation to verify initialization
-        const testRef = collection(db as Firestore, "quoteRequests");
-        await getDocs(query(testRef, limit(1)));
-        setIsFirestoreInitialized(true);
-      } catch (err) {
-        console.error("Error verifying Firestore:", err);
-        setError("Failed to initialize Firestore. Please try refreshing the page.");
-      } finally {
-        setIsInitializing(false);
-      }
-    };
-
-    initializeFirestore();
-
-    return () => {
-      isMounted.current = false;
-    };
+    // Simple initialization check
+    if (!db) {
+      setError("Application not initialized");
+      return;
+    }
+    setLoading(false);
   }, []);
 
-  // Show loading state during initialization
-  if (isInitializing || !isClient) {
+  // Show loading state
+  if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <LoadingSpinner />
-          <p className="mt-4 text-gray-600">Initializing...</p>
-        </div>
+        <LoadingSpinner />
       </div>
     );
   }
 
-  // Show error state with a retry button
+  // Show error state
   if (error) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4">
         <div className="text-red-500 mb-4">{error}</div>
-        <button
-          onClick={() => window.location.reload()}
-          className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-        >
-          Retry
-        </button>
-      </div>
-    );
-  }
-
-  // Show error if Firestore is not initialized with a retry button
-  if (!isFirestoreInitialized) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-screen p-4">
-        <div className="text-red-500 mb-4">Error: Firestore is not initialized</div>
         <button
           onClick={() => window.location.reload()}
           className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
@@ -256,7 +212,7 @@ function NewQuoteRequestPage() {
   // Fetch contacts when customer changes
   useEffect(() => {
     const fetchContacts = async () => {
-      if (!customerId || !db || !isMounted.current) return;
+      if (!customerId || !db) return;
 
       try {
         let allContacts: Contact[] = [];
