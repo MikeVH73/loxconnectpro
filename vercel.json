@@ -3,7 +3,10 @@
   "builds": [
     {
       "src": "package.json",
-      "use": "@vercel/next"
+      "use": "@vercel/next",
+      "config": {
+        "zeroConfig": true
+      }
     }
   ],
   "git": {
@@ -13,9 +16,10 @@
   },
   "github": {
     "enabled": true,
-    "silent": true,
+    "silent": false,
     "autoAlias": true,
-    "productionBranch": "deployment-july-2025"
+    "productionBranch": "deployment-july-2025",
+    "deployOnPush": true
   },
   "alias": ["loxconnect-pro.vercel.app"],
   "public": false,
