@@ -1090,7 +1090,10 @@ export default function EditQuoteRequest() {
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Latitude</label>
                     <input
-                      type="text"
+                      type="number"
+                      step="0.000001"
+                      min="-90"
+                      max="90"
                       value={quoteRequest.latitude || ''}
                       onChange={(e) => handleInputChange("latitude", e.target.value)}
                       placeholder="e.g., 51.9244"
@@ -1101,7 +1104,10 @@ export default function EditQuoteRequest() {
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Longitude</label>
                     <input
-                      type="text"
+                      type="number"
+                      step="0.000001"
+                      min="-180"
+                      max="180"
                       value={quoteRequest.longitude || ''}
                       onChange={(e) => handleInputChange("longitude", e.target.value)}
                       placeholder="e.g., 4.4777"

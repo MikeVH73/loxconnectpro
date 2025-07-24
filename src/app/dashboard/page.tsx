@@ -296,7 +296,7 @@ export default function DashboardPage() {
                 {urgentProblems.length === 0 && (
                   <div className="text-gray-500 text-center py-4">No urgent or problem items</div>
                 )}
-              </div>
+            </div>
           </div>
 
           {/* Waiting Column */}
@@ -317,7 +317,7 @@ export default function DashboardPage() {
                 {waiting.length === 0 && (
                   <div className="text-gray-500 text-center py-4">No waiting items</div>
                 )}
-              </div>
+            </div>
           </div>
 
           {/* Standard Column */}
@@ -338,7 +338,7 @@ export default function DashboardPage() {
                 {standard.length === 0 && (
                   <div className="text-gray-500 text-center py-4">No standard items</div>
                 )}
-              </div>
+            </div>
           </div>
 
           {/* Snoozed Column */}

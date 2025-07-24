@@ -17,6 +17,7 @@
     "date-fns": "^4.1.0",
     "dayjs": "^1.11.13",
     "firebase": "^11.9.0",
+    "firebase-functions": "^6.4.0",
     "lodash": "^4.17.21",
     "next": "^15.3.4",
     "react": "^19.1.0",

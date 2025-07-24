@@ -2,16 +2,22 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { collection, addDoc, serverTimestamp, getDocs, query, where, doc, getDoc, updateDoc, Firestore, DocumentData, CollectionReference } from "firebase/firestore";
-import { db, initializeFirebase } from "../../../firebaseClient";
+import { db } from "../../../firebaseClient";
 import { useAuth } from "../../AuthProvider";
 import { Fragment } from "react";
 import dayjs from "dayjs";
-import FileUpload from "../../components/FileUpload";
-import FileUploadSimple from "../../components/FileUploadSimple";
+import dynamic from 'next/dynamic';
+
+// Dynamically import components that might cause hydration issues
+const FileUpload = dynamic(() => import("../../components/FileUpload"), { ssr: false });
+const FileUploadSimple = dynamic(() => import("../../components/FileUploadSimple"), { ssr: false });
+const StorageTest = dynamic(() => import("../../components/StorageTest"), { ssr: false });
+const CountrySelect = dynamic(() => import("../../components/CountrySelect"), { ssr: false });
+const MessagingPanel = dynamic(() => import('@/app/components/MessagingPanel'), { ssr: false });
+const LoadingSpinner = dynamic(() => import('../../components/LoadingSpinner'), { ssr: false });
+
+// Import utilities
 import { moveFilesToQuoteRequest } from "../../utils/fileUtils";
-import StorageTest from "../../components/StorageTest";
-import CountrySelect from "../../components/CountrySelect";
-import MessagingPanel from '@/app/components/MessagingPanel';
 import { useMessages } from '@/app/hooks/useMessages';
 import { debounce } from "lodash";
 import { useCustomers } from "../../hooks/useCustomers";
@@ -87,12 +93,22 @@ const statuses = ["In Progress", "Won", "Lost", "Cancelled"];
 // Add state for archived status
 type StatusType = "In Progress" | "Snoozed" | "Won" | "Lost" | "Cancelled";
 
-export default function NewQuoteRequestPage() {
+// Ensure db is initialized
+if (!db) {
+  throw new Error("Firestore is not initialized");
+}
+
+// Component
+function NewQuoteRequestPage() {
   const router = useRouter();
   const { userProfile, user } = useAuth();
   const isMounted = useRef(true);
+  const [isClient, setIsClient] = useState(false);
+  const [isFirestoreInitialized, setIsFirestoreInitialized] = useState(false);
+
+  // Initialize state
   const [title, setTitle] = useState("");
-  const creatorCountry = userProfile?.country || userProfile?.businessUnit || "";
+  const creatorCountry = userProfile?.businessUnit || "";
   const [involvedCountry, setInvolvedCountry] = useState("");
   const { customers, loading: customersLoading, error: customersError, refetchCustomers } = useCustomers();
   const [customerId, setCustomerId] = useState("");
@@ -128,40 +144,34 @@ export default function NewQuoteRequestPage() {
   const [attachments, setAttachments] = useState<FileData[]>([]);
   const [customerNumber, setCustomerNumber] = useState("");
 
-  // Initialize Firebase on component mount
+  // Set isClient to true on mount and check Firestore initialization
   useEffect(() => {
-    const init = async () => {
-      try {
-        await initializeFirebase();
-        if (isMounted.current) {
-          setLoading(false);
-        }
-      } catch (err) {
-        if (isMounted.current) {
-          setError("Failed to initialize Firestore");
-          console.error("Firestore initialization error:", err);
-        }
-      }
-    };
-
-    init();
-
+    setIsClient(true);
+    if (db) {
+      setIsFirestoreInitialized(true);
+      setLoading(false);
+    } else {
+      setError("Firestore is not initialized");
+      setLoading(false);
+    }
     return () => {
       isMounted.current = false;
     };
   }, []);
 
-  // Show loading or error state
-  if (loading) {
-    return <div className="w-full p-8">Loading...</div>;
+  // Show loading state
+  if (!isClient || loading) {
+    return <LoadingSpinner />;
   }
 
+  // Show error state
   if (error) {
-    return (
-      <div className="w-full p-8 text-red-600">
-        Error: {error}
-      </div>
-    );
+    return <div className="p-4 text-red-500">{error}</div>;
+  }
+
+  // Show error if Firestore is not initialized
+  if (!isFirestoreInitialized) {
+    return <div className="p-4 text-red-500">Error: Firestore is not initialized</div>;
   }
 
   // Handle address change
@@ -945,4 +955,9 @@ export default function NewQuoteRequestPage() {
       )}
     </div>
   );
-} 
+}
+
+// Export with no SSR
+export default dynamic(() => Promise.resolve(NewQuoteRequestPage), {
+  ssr: false
+}); 

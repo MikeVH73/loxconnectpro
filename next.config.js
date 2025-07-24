@@ -1,8 +1,22 @@
 ﻿/** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  compiler: {
-    styledComponents: true,
+  images: {
+    domains: ['firebasestorage.googleapis.com'],
+  },
+  typescript: {
+    ignoreBuildErrors: true
+  },
+  eslint: {
+    ignoreDuringBuilds: true
+  },
+  env: {
+    NEXT_PUBLIC_FIREBASE_API_KEY: "AIzaSyD3LGcmPieAnJuGrNUyIRTQw3bQ1Gzsjj0",
+    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: "loxconnect-pro.firebaseapp.com",
+    NEXT_PUBLIC_FIREBASE_PROJECT_ID: "loxconnect-pro",
+    NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: "loxconnect-pro.firebasestorage.app",
+    NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: "767888928675",
+    NEXT_PUBLIC_FIREBASE_APP_ID: "1:767888928675:web:e4c6bb3914fc97ecf4b416",
   },
   webpack: (config, { isServer }) => {
     // Ignore specific modules that cause issues with SSR
@@ -12,84 +26,11 @@ const nextConfig = {
       net: false,
       tls: false,
     };
-
     return config;
   },
-  typescript: {
-    ignoreBuildErrors: true
+  experimental: {
+    isrMemoryCacheSize: 0, // Disable ISR caching
   },
-  eslint: {
-    ignoreDuringBuilds: true
-  },
-  images: {
-    remotePatterns: [
-      {
-        protocol: 'https',
-        hostname: 'firebasestorage.googleapis.com',
-      },
-    ],
-  },
-  poweredByHeader: false,
-  async headers() {
-    return [
-      {
-        source: '/:path*',
-        headers: [
-          {
-            key: 'Content-Security-Policy',
-            value: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.googletagmanager.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https://*.googleapis.com https://*.gstatic.com https://firebasestorage.googleapis.com https://i.ibb.co; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.cloudfunctions.net https://firestore.googleapis.com wss://*.firebaseio.com https://*.google-analytics.com https://*.analytics.google.com https://*.googletagmanager.com; frame-src 'self' https://*.firebaseapp.com;"
-          },
-          {
-            key: 'X-Frame-Options',
-            value: 'DENY',
-          },
-          {
-            key: 'X-Content-Type-Options',
-            value: 'nosniff',
-          },
-          {
-            key: 'Referrer-Policy',
-            value: 'origin-when-cross-origin',
-          },
-          {
-            key: 'Strict-Transport-Security',
-            value: 'max-age=31536000; includeSubDomains'
-          },
-          {
-            key: 'X-XSS-Protection',
-            value: '1; mode=block'
-          }
-        ],
-      },
-      {
-        source: '/_next/static/:path*',
-        headers: [
-          {
-            key: 'Cache-Control',
-            value: 'public, max-age=31536000, immutable',
-          },
-        ],
-      },
-      {
-        source: '/static/:path*',
-        headers: [
-          {
-            key: 'Cache-Control',
-            value: 'public, max-age=31536000, immutable',
-          },
-        ],
-      },
-      {
-        source: '/api/:path*',
-        headers: [
-          {
-            key: 'Cache-Control',
-            value: 'no-store, no-cache, must-revalidate',
-          },
-        ],
-      },
-    ];
-  },
-};
+}
 
 module.exports = nextConfig;

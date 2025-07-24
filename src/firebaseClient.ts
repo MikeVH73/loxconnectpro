@@ -1,9 +1,8 @@
-import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
-import { getFirestore, Firestore } from 'firebase/firestore';
+import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
+import { getFirestore, enableIndexedDbPersistence, Firestore } from 'firebase/firestore';
 import { getAuth, Auth } from 'firebase/auth';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
 
-// Your web app's Firebase configuration
 const firebaseConfig = {
   apiKey: "AIzaSyD3LGcmPieAnJuGrNUyIRTQw3bQ1Gzsjj0",
   authDomain: "loxconnect-pro.firebaseapp.com",
@@ -14,36 +13,44 @@ const firebaseConfig = {
   measurementId: "G-5P1C1YTGQT"
 };
 
-// Initialize Firebase only on client side
-let app: FirebaseApp;
-let auth: Auth;
-let db: Firestore;
-let storage: FirebaseStorage;
+// Initialize Firebase only on the client side
+let app: FirebaseApp | undefined;
+let db: Firestore | undefined;
+let auth: Auth | undefined;
+let storage: FirebaseStorage | undefined;
 
-const initializeFirebase = async () => {
-  if (typeof window === 'undefined') {
-    return { app: undefined, auth: undefined, db: undefined, storage: undefined };
-  }
+// Check if we're in a browser environment
+const isBrowser = typeof window !== 'undefined';
 
-try {
+if (isBrowser) {
+  try {
     // Initialize Firebase app if not already initialized
-    app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
-  
-  // Initialize services
+    app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+    
+    // Initialize services
+    db = getFirestore(app);
     auth = getAuth(app);
-  db = getFirestore(app);
-  storage = getStorage(app);
+    storage = getStorage(app);
 
-    return { app, auth, db, storage };
-} catch (error) {
-  console.error('Error initializing Firebase:', error);
-    throw error;
+    // Enable persistence only on the client side
+    if (db) {
+      enableIndexedDbPersistence(db).catch((err) => {
+        if (err.code === 'failed-precondition') {
+          console.warn('Multiple tabs open, persistence can only be enabled in one tab at a time.');
+        } else if (err.code === 'unimplemented') {
+          console.warn('The current browser does not support persistence.');
+        }
+      });
+    }
+  } catch (error) {
+    console.error('Error initializing Firebase:', error);
   }
-};
-
-// Initialize Firebase on import in client
-if (typeof window !== 'undefined') {
-  initializeFirebase().catch(console.error);
+} else {
+  // For SSR, provide mock implementations
+  app = undefined;
+  db = undefined;
+  auth = undefined;
+  storage = undefined;
 }
 
-export { app, auth, db, storage, initializeFirebase }; 
+export { app, db, auth, storage }; 
