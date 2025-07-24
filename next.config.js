@@ -11,12 +11,12 @@ const nextConfig = {
     ignoreDuringBuilds: true
   },
   env: {
-    NEXT_PUBLIC_FIREBASE_API_KEY: "AIzaSyD3LGcmPieAnJuGrNUyIRTQw3bQ1Gzsjj0",
-    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: "loxconnect-pro.firebaseapp.com",
-    NEXT_PUBLIC_FIREBASE_PROJECT_ID: "loxconnect-pro",
-    NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: "loxconnect-pro.firebasestorage.app",
-    NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: "767888928675",
-    NEXT_PUBLIC_FIREBASE_APP_ID: "1:767888928675:web:e4c6bb3914fc97ecf4b416",
+    NEXT_PUBLIC_FIREBASE_API_KEY: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+    NEXT_PUBLIC_FIREBASE_PROJECT_ID: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+    NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+    NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+    NEXT_PUBLIC_FIREBASE_APP_ID: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
   },
   webpack: (config, { isServer }) => {
     // Ignore specific modules that cause issues with SSR
@@ -33,20 +33,6 @@ const nextConfig = {
   },
   // Configure page-specific settings
   pageExtensions: ['tsx', 'ts', 'jsx', 'js'],
-  // Explicitly mark pages that should not be prerendered
-  async headers() {
-    return [
-      {
-        source: '/quote-requests/new',
-        headers: [
-          {
-            key: 'x-custom-header',
-            value: 'client-only',
-          },
-        ],
-      },
-    ];
-  },
   // Configure dynamic imports and chunking
   compiler: {
     // Remove console.* in production
@@ -64,6 +50,13 @@ const nextConfig = {
       transform: '@mui/icons-material/{{member}}',
     },
   },
+  // Production optimization
+  productionBrowserSourceMaps: true,
+  poweredByHeader: false,
+  generateEtags: true,
+  compress: true,
+  optimizeFonts: true,
+  crossOrigin: 'anonymous'
 }
 
 module.exports = nextConfig;
