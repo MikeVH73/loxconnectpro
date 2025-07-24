@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState } from 'react';
-import { User, onAuthStateChanged } from 'firebase/auth';
+import { User, onAuthStateChanged, signOut } from 'firebase/auth';
 import { doc, getDoc, Firestore } from 'firebase/firestore';
 import { auth, db } from '../firebaseClient';
 
@@ -18,6 +18,7 @@ interface AuthContextType {
   userProfile: UserProfile | null;
   loading: boolean;
   error: string | null;
+  signOutUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({ 
@@ -25,6 +26,7 @@ const AuthContext = createContext<AuthContextType>({
   userProfile: null,
   loading: true,
   error: null,
+  signOutUser: async () => {},
 });
 
 function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -40,7 +42,7 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (!isClient) return;
+    if (!isClient || !auth) return;
 
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setUser(user);
@@ -68,7 +70,7 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
               // No profile found at all
               console.error('No user profile found');
               setError('No user profile found');
-              auth.signOut();
+              if (auth) auth.signOut();
             }
           }
         } catch (err) {
@@ -85,6 +87,26 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => unsubscribe();
   }, [isClient]);
 
+  // Sign out function
+  const signOutUser = async () => {
+    if (!auth) {
+      console.error('Auth is not initialized');
+      setError('Auth is not initialized');
+      return;
+    }
+
+    try {
+      await signOut(auth);
+      setUser(null);
+      setUserProfile(null);
+      // Redirect to login page
+      window.location.href = '/login';
+    } catch (err) {
+      console.error('Error signing out:', err);
+      setError('Error signing out');
+    }
+  };
+
   // Show loading state during SSR
   if (!isClient) {
     return (
@@ -95,7 +117,7 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, userProfile, loading, error }}>
+    <AuthContext.Provider value={{ user, userProfile, loading, error, signOutUser }}>
       {children}
     </AuthContext.Provider>
   );

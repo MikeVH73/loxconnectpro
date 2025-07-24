@@ -1,0 +1,11 @@
+Start your prompt with:
+   "Referring to LOXCONNECT_PRO_ARCHITECTURE.md regarding [section], I want to..."
+
+When adding new feautures:
+   "Referring to LOXCONNECT_PRO_ARCHITECTURE.md, I want to add a new feature related to [section]..."
+
+When fixing issues:
+   "Referring to LOXCONNECT_PRO_ARCHITECTURE.md, there's an issue in the [section] where..."
+
+When updating documentation:
+   "Please update LOXCONNECT_PRO_ARCHITECTURE.md to include the new [feature/change] in the [section]..."

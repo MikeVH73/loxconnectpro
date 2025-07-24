@@ -93,11 +93,6 @@ const statuses = ["In Progress", "Won", "Lost", "Cancelled"];
 // Add state for archived status
 type StatusType = "In Progress" | "Snoozed" | "Won" | "Lost" | "Cancelled";
 
-// Ensure db is initialized
-if (!db) {
-  throw new Error("Firestore is not initialized");
-}
-
 // Component
 function NewQuoteRequestPage() {
   const router = useRouter();
