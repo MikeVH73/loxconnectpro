@@ -16,5 +16,14 @@
     "silent": true,
     "autoAlias": true,
     "productionBranch": "deployment-july-2025"
+  },
+  "alias": ["loxconnect-pro.vercel.app"],
+  "public": false,
+  "regions": ["fra1"],
+  "functions": {
+    "api/**/*.js": {
+      "memory": 1024,
+      "maxDuration": 10
+    }
   }
 } 
