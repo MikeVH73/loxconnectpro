@@ -24,10 +24,12 @@
     "enabled": true,
     "silent": false,
     "autoAlias": true,
-    "deployOnPush": true
+    "deployOnPush": true,
+    "autoJobCancelation": true
   },
   "public": false,
   "regions": ["fra1"],
   "cleanUrls": true,
-  "trailingSlash": false
+  "trailingSlash": false,
+  "ignoreCommand": null
 } 
