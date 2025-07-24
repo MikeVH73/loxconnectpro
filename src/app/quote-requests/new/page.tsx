@@ -8,13 +8,31 @@ import { Fragment } from "react";
 import dayjs from "dayjs";
 import dynamic from 'next/dynamic';
 
-// Dynamically import components that might cause hydration issues
-const FileUpload = dynamic(() => import("../../components/FileUpload"), { ssr: false });
-const FileUploadSimple = dynamic(() => import("../../components/FileUploadSimple"), { ssr: false });
-const StorageTest = dynamic(() => import("../../components/StorageTest"), { ssr: false });
-const CountrySelect = dynamic(() => import("../../components/CountrySelect"), { ssr: false });
-const MessagingPanel = dynamic(() => import('@/app/components/MessagingPanel'), { ssr: false });
-const LoadingSpinner = dynamic(() => import('../../components/LoadingSpinner'), { ssr: false });
+// Dynamically import components with loading fallback
+const FileUpload = dynamic(() => import("../../components/FileUpload"), { 
+  ssr: false,
+  loading: () => <div>Loading...</div>
+});
+const FileUploadSimple = dynamic(() => import("../../components/FileUploadSimple"), { 
+  ssr: false,
+  loading: () => <div>Loading...</div>
+});
+const StorageTest = dynamic(() => import("../../components/StorageTest"), { 
+  ssr: false,
+  loading: () => <div>Loading...</div>
+});
+const CountrySelect = dynamic(() => import("../../components/CountrySelect"), { 
+  ssr: false,
+  loading: () => <div>Loading...</div>
+});
+const MessagingPanel = dynamic(() => import('@/app/components/MessagingPanel'), { 
+  ssr: false,
+  loading: () => <div>Loading...</div>
+});
+const LoadingSpinner = dynamic(() => import('../../components/LoadingSpinner'), { 
+  ssr: false,
+  loading: () => <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
+});
 
 // Import utilities
 import { moveFilesToQuoteRequest } from "../../utils/fileUtils";
@@ -100,6 +118,7 @@ function NewQuoteRequestPage() {
   const isMounted = useRef(true);
   const [isClient, setIsClient] = useState(false);
   const [isFirestoreInitialized, setIsFirestoreInitialized] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(true);
 
   // Initialize state
   const [title, setTitle] = useState("");
@@ -141,38 +160,43 @@ function NewQuoteRequestPage() {
 
   // Set isClient to true on mount and check Firestore initialization
   useEffect(() => {
-    if (!isMounted.current) return;
-
-    const checkFirestore = async () => {
-      setIsClient(true);
-      if (db) {
-        try {
-          // Try a simple Firestore operation to verify initialization
-          const testRef = collection(db as Firestore, "quoteRequests");
-          await getDocs(query(testRef, limit(1)));
-          setIsFirestoreInitialized(true);
-        } catch (err) {
-          console.error("Error verifying Firestore:", err);
-          setError("Failed to initialize Firestore. Please try refreshing the page.");
-        }
-      } else {
+    setIsClient(true);
+    
+    const initializeFirestore = async () => {
+      if (!db) {
         setError("Firestore is not initialized");
+        setIsInitializing(false);
+        return;
       }
-      setLoading(false);
+
+      try {
+        // Try a simple Firestore operation to verify initialization
+        const testRef = collection(db as Firestore, "quoteRequests");
+        await getDocs(query(testRef, limit(1)));
+        setIsFirestoreInitialized(true);
+      } catch (err) {
+        console.error("Error verifying Firestore:", err);
+        setError("Failed to initialize Firestore. Please try refreshing the page.");
+      } finally {
+        setIsInitializing(false);
+      }
     };
 
-    checkFirestore();
+    initializeFirestore();
 
     return () => {
       isMounted.current = false;
     };
   }, []);
 
-  // Show loading state with a proper loading component
-  if (!isClient || loading) {
+  // Show loading state during initialization
+  if (isInitializing || !isClient) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <LoadingSpinner />
+        <div className="text-center">
+          <LoadingSpinner />
+          <p className="mt-4 text-gray-600">Initializing...</p>
+        </div>
       </div>
     );
   }
@@ -990,7 +1014,7 @@ function NewQuoteRequestPage() {
   );
 } 
 
-// Export with no SSR
+// Export with no SSR and error boundary
 export default dynamic(() => Promise.resolve(NewQuoteRequestPage), {
   ssr: false
 }); 

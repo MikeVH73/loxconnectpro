@@ -1,5 +1,5 @@
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
-import { getFirestore, enableIndexedDbPersistence, Firestore } from 'firebase/firestore';
+import { getFirestore, enableIndexedDbPersistence, Firestore, initializeFirestore, CACHE_SIZE_UNLIMITED } from 'firebase/firestore';
 import { getAuth, Auth } from 'firebase/auth';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
 
@@ -31,21 +31,15 @@ function initializeFirebase() {
     // Initialize Firebase app if not already initialized
     app = getApps().length ? getApp() : initializeApp(firebaseConfig);
     
-    // Initialize services
-    db = getFirestore(app);
+    // Initialize Firestore with persistence settings
+    db = initializeFirestore(app, {
+      cacheSizeBytes: CACHE_SIZE_UNLIMITED,
+      experimentalForceLongPolling: true,
+    });
+
+    // Initialize other services
     auth = getAuth(app);
     storage = getStorage(app);
-
-    // Enable persistence only on the client side
-    if (db) {
-      enableIndexedDbPersistence(db).catch((err) => {
-        if (err.code === 'failed-precondition') {
-          console.warn('Multiple tabs open, persistence can only be enabled in one tab at a time.');
-        } else if (err.code === 'unimplemented') {
-          console.warn('The current browser does not support persistence.');
-        }
-      });
-    }
 
     return { app, db, auth, storage };
   } catch (error) {

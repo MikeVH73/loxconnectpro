@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "package.json",
+      "use": "@vercel/next"
+    }
+  ],
+  "git": {
+    "deploymentEnabled": {
+      "deployment-july-2025": true
+    }
+  },
+  "github": {
+    "enabled": true,
+    "silent": true,
+    "autoAlias": true
+  }
+} 
