@@ -1,12 +1,12 @@
 "use client";
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { collection, getDocs, query, orderBy, deleteDoc, doc, DocumentData, QueryDocumentSnapshot, updateDoc } from "firebase/firestore";
+import { collection, getDocs, query, orderBy, deleteDoc, doc, DocumentData, QueryDocumentSnapshot, updateDoc, Firestore as FirestoreType } from "firebase/firestore";
 import { db } from "../../firebaseClient";
 import { useAuth } from "../AuthProvider";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
-import { Firestore } from "firebase/firestore";
 
 // Initialize dayjs plugins
 dayjs.extend(relativeTime);
@@ -59,6 +59,7 @@ interface QuoteRequest {
 }
 
 export default function QuoteRequestsPage() {
+  const router = useRouter();
   const [quoteRequests, setQuoteRequests] = useState<QuoteRequest[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
@@ -69,51 +70,72 @@ export default function QuoteRequestsPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState("");
   const [deleteSuccess, setDeleteSuccess] = useState("");
+  const [isInitialized, setIsInitialized] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
-      setLoading(true);
-      const [qrSnap, custSnap] = await Promise.all([
-        getDocs(query(collection(db, "quoteRequests"), orderBy("createdAt", "desc"))),
-        getDocs(collection(db, "customers")),
-      ]);
-      const customersArr = custSnap.docs.map((doc: QueryDocumentSnapshot<DocumentData>) => ({ 
-        id: doc.id, 
-        ...doc.data() 
-      } as Customer));
-      setCustomers(customersArr);
-      let allRequests = qrSnap.docs
-        .map((doc: QueryDocumentSnapshot<DocumentData>) => ({ id: doc.id, ...doc.data() } as QuoteRequest))
-        .filter((qr: QuoteRequest) => qr.status !== "Won" && qr.status !== "Lost" && qr.status !== "Cancelled");
-      // Filter by user's countries array (same logic as dashboard)
-      const userCountries = userProfile?.countries || [];
-      console.log("[QuoteRequests] User countries:", userCountries);
-      console.log("[QuoteRequests] All quote requests:", allRequests.map(qr => ({id: qr.id, creatorCountry: qr.creatorCountry, involvedCountry: qr.involvedCountry})));
-      
-      // More lenient filtering - also check if user has superAdmin role or if countries array is empty
-      if (userProfile?.role !== "superAdmin" && userCountries.length > 0) {
-        allRequests = allRequests.filter(qr => {
-          // Simple exact match - show if user's country matches either creator or involved country
-          return userCountries.includes(qr.creatorCountry) || userCountries.includes(qr.involvedCountry);
-        });
+      if (!db) {
+        console.error("Firestore is not initialized");
+        return;
       }
-      
-      console.log("[QuoteRequests] Visible quote requests:", allRequests.length);
-      setQuoteRequests(allRequests);
-      setLoading(false);
+
+      const firestore = db as FirestoreType;
+
+      setLoading(true);
+      try {
+        const [qrSnap, custSnap] = await Promise.all([
+          getDocs(query(collection(firestore, "quoteRequests"), orderBy("createdAt", "desc"))),
+          getDocs(collection(firestore, "customers")),
+        ]);
+
+        const customersArr = custSnap.docs.map((doc: QueryDocumentSnapshot<DocumentData>) => ({ 
+          id: doc.id, 
+          ...doc.data() 
+        } as Customer));
+        setCustomers(customersArr);
+
+        let allRequests = qrSnap.docs
+          .map((doc: QueryDocumentSnapshot<DocumentData>) => ({ id: doc.id, ...doc.data() } as QuoteRequest))
+          .filter((qr: QuoteRequest) => qr.status !== "Won" && qr.status !== "Lost" && qr.status !== "Cancelled");
+
+        // Filter by user's business unit
+        const userBusinessUnit = userProfile?.businessUnit;
+        if (userProfile?.role !== "superAdmin" && userBusinessUnit) {
+          allRequests = allRequests.filter(qr => {
+            return qr.creatorCountry === userBusinessUnit || qr.involvedCountry === userBusinessUnit;
+          });
+        }
+
+        setQuoteRequests(allRequests);
+        setIsInitialized(true);
+      } catch (error) {
+        console.error("Error fetching data:", error);
+      } finally {
+        setLoading(false);
+      }
     };
+
     fetchData();
   }, [userProfile]);
 
   useEffect(() => {
     const fetchLabels = async () => {
-      const snap = await getDocs(collection(db, "labels"));
-      const labelsArr = snap.docs.map(doc => ({ 
-        id: doc.id, 
-        ...doc.data() 
-      } as Label));
-      setLabels(labelsArr);
+      if (!db) return;
+
+      const firestore = db as FirestoreType;
+
+      try {
+        const snap = await getDocs(collection(firestore, "labels"));
+        const labelsArr = snap.docs.map(doc => ({ 
+          id: doc.id, 
+          ...doc.data() 
+        } as Label));
+        setLabels(labelsArr);
+      } catch (error) {
+        console.error("Error fetching labels:", error);
+      }
     };
+
     fetchLabels();
   }, []);
 
@@ -210,16 +232,32 @@ export default function QuoteRequestsPage() {
     }
   };
 
+  const handleNewQuoteRequest = async () => {
+    if (!isInitialized) {
+      console.error("Application not fully initialized");
+      return;
+    }
+
+    try {
+      await router.push('/quote-requests/new');
+    } catch (error) {
+      console.error("Navigation error:", error);
+    }
+  };
+
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-[#e40115]">Quote Requests</h1>
-        <Link
-          href="/quote-requests/new"
-          className="bg-[#e40115] text-white px-4 py-2 rounded hover:bg-red-700 transition"
+        <button
+          onClick={handleNewQuoteRequest}
+          disabled={!isInitialized || loading}
+          className={`bg-[#e40115] text-white px-4 py-2 rounded transition ${
+            (!isInitialized || loading) ? 'opacity-50 cursor-not-allowed' : 'hover:bg-red-700'
+          }`}
         >
-          + New Quote Request
-        </Link>
+          {loading ? 'Loading...' : '+ New Quote Request'}
+        </button>
       </div>
 
       {loading ? (
@@ -251,7 +289,7 @@ export default function QuoteRequestsPage() {
 
             // Save the updated flags and labels back to Firestore
             if (db) {
-              const quoteRef = doc(db as Firestore, 'quoteRequests', qr.id);
+              const quoteRef = doc(db as FirestoreType, 'quoteRequests', qr.id);
               updateDoc(quoteRef, {
                 urgent: updatedQr.urgent,
                 problems: updatedQr.problems,
