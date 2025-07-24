@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { collection, addDoc, serverTimestamp, getDocs, query, where, doc, getDoc, updateDoc, Firestore, DocumentData, CollectionReference } from "firebase/firestore";
+import { collection, addDoc, serverTimestamp, getDocs, query, where, doc, getDoc, updateDoc, Firestore, DocumentData, CollectionReference, limit } from "firebase/firestore";
 import { db } from "../../../firebaseClient";
 import { useAuth } from "../../AuthProvider";
 import { Fragment } from "react";
@@ -146,32 +146,70 @@ function NewQuoteRequestPage() {
 
   // Set isClient to true on mount and check Firestore initialization
   useEffect(() => {
-    setIsClient(true);
-    if (db) {
-      setIsFirestoreInitialized(true);
+    if (!isMounted.current) return;
+
+    const checkFirestore = async () => {
+      setIsClient(true);
+      if (db) {
+        try {
+          // Try a simple Firestore operation to verify initialization
+          const testRef = collection(db as Firestore, "quoteRequests");
+          await getDocs(query(testRef, limit(1)));
+          setIsFirestoreInitialized(true);
+        } catch (err) {
+          console.error("Error verifying Firestore:", err);
+          setError("Failed to initialize Firestore. Please try refreshing the page.");
+        }
+      } else {
+        setError("Firestore is not initialized");
+      }
       setLoading(false);
-    } else {
-      setError("Firestore is not initialized");
-      setLoading(false);
-    }
+    };
+
+    checkFirestore();
+
     return () => {
       isMounted.current = false;
     };
   }, []);
 
-  // Show loading state
+  // Show loading state with a proper loading component
   if (!isClient || loading) {
-    return <LoadingSpinner />;
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <LoadingSpinner />
+      </div>
+    );
   }
 
-  // Show error state
+  // Show error state with a retry button
   if (error) {
-    return <div className="p-4 text-red-500">{error}</div>;
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen p-4">
+        <div className="text-red-500 mb-4">{error}</div>
+        <button
+          onClick={() => window.location.reload()}
+          className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+        >
+          Retry
+        </button>
+      </div>
+    );
   }
 
-  // Show error if Firestore is not initialized
+  // Show error if Firestore is not initialized with a retry button
   if (!isFirestoreInitialized) {
-    return <div className="p-4 text-red-500">Error: Firestore is not initialized</div>;
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen p-4">
+        <div className="text-red-500 mb-4">Error: Firestore is not initialized</div>
+        <button
+          onClick={() => window.location.reload()}
+          className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+        >
+          Retry
+        </button>
+      </div>
+    );
   }
 
   // Handle address change
@@ -955,7 +993,7 @@ function NewQuoteRequestPage() {
       )}
     </div>
   );
-}
+} 
 
 // Export with no SSR
 export default dynamic(() => Promise.resolve(NewQuoteRequestPage), {

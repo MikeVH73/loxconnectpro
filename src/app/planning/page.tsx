@@ -120,7 +120,7 @@ export default function PlanningPage() {
         const involvedQueries = userCountries.map(country => 
           query(quotesRef, where("involvedCountry", "==", country))
         );
-
+        
         const allQueries = [...creatorQueries, ...involvedQueries];
         const querySnapshots = await Promise.all(allQueries.map(q => getDocs(q)));
 
@@ -234,11 +234,11 @@ export default function PlanningPage() {
   const weekQuotes = quoteRequests.filter(quote => {
     try {
       if (!quote.startDate) return false;
-      const startDate = parseISO(quote.startDate);
-      const endDate = quote.endDate ? parseISO(quote.endDate) : addDays(startDate, 1);
-      return weekDays.some(day => 
-        isWithinInterval(day, { start: startDate, end: endDate })
-      );
+    const startDate = parseISO(quote.startDate);
+    const endDate = quote.endDate ? parseISO(quote.endDate) : addDays(startDate, 1);
+    return weekDays.some(day => 
+      isWithinInterval(day, { start: startDate, end: endDate })
+    );
     } catch (err) {
       console.error('Error parsing dates for quote:', quote.id, err);
       return false;
@@ -250,24 +250,24 @@ export default function PlanningPage() {
   weekQuotes.forEach(quote => {
     try {
       if (!quote.startDate) return;
-      const startDate = parseISO(quote.startDate);
-      const endDate = quote.endDate ? parseISO(quote.endDate) : addDays(startDate, 1);
-      
-      let row = 0;
-      while (positionedQuotes.some(pQuote => {
+    const startDate = parseISO(quote.startDate);
+    const endDate = quote.endDate ? parseISO(quote.endDate) : addDays(startDate, 1);
+    
+    let row = 0;
+    while (positionedQuotes.some(pQuote => {
         if (!pQuote.startDate) return false;
-        const pStartDate = parseISO(pQuote.startDate);
-        const pEndDate = pQuote.endDate ? parseISO(pQuote.endDate) : addDays(pStartDate, 1);
-        return pQuote.row === row && (
-          isWithinInterval(startDate, { start: pStartDate, end: pEndDate }) ||
-          isWithinInterval(endDate, { start: pStartDate, end: pEndDate }) ||
-          isWithinInterval(pStartDate, { start: startDate, end: endDate })
-        );
-      })) {
-        row++;
-      }
-      
-      positionedQuotes.push({ ...quote, row });
+      const pStartDate = parseISO(pQuote.startDate);
+      const pEndDate = pQuote.endDate ? parseISO(pQuote.endDate) : addDays(pStartDate, 1);
+      return pQuote.row === row && (
+        isWithinInterval(startDate, { start: pStartDate, end: pEndDate }) ||
+        isWithinInterval(endDate, { start: pStartDate, end: pEndDate }) ||
+        isWithinInterval(pStartDate, { start: startDate, end: endDate })
+      );
+    })) {
+      row++;
+    }
+    
+    positionedQuotes.push({ ...quote, row });
     } catch (err) {
       console.error('Error positioning quote:', quote.id, err);
     }
@@ -348,7 +348,7 @@ export default function PlanningPage() {
             const startOffset = differenceInDays(startDate, weekStart);
             const width = `${(duration / 7) * 100}%`;
             const left = `${(startOffset / 7) * 100}%`;
-            
+
             return (
               <Link
                 key={quote.id}
@@ -368,7 +368,7 @@ export default function PlanningPage() {
                 }}
               >
                 <div className="text-sm font-medium truncate">
-                  {quote.title}
+                {quote.title}
                 </div>
                 <div className={`text-xs truncate ${quote.planned ? 'text-red-700' : 'text-gray-600'}`}>
                   {quote.customer}

@@ -16,17 +16,17 @@ function LabelsPage() {
 
   if (!isClient) {
     return <LoadingSpinner />;
-  }
+    }
 
   return (
     <div className="container mx-auto px-4 py-8">
       <h1 className="text-2xl font-bold mb-6">Labels Management</h1>
       <div className="bg-white rounded-lg shadow p-6">
         <p>Labels management functionality will be implemented here.</p>
-      </div>
+        </div>
     </div>
   );
-}
+} 
 
 // Export with no SSR
 export default dynamic(() => Promise.resolve(LabelsPage), {

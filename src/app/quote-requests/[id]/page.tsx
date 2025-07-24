@@ -492,8 +492,8 @@ export default function QuoteRequestPage() {
           currentCountry={userProfile?.businessUnit || ''}
           quoteTitle={quoteRequest?.title || ''}
           quoteRequestFiles={quoteRequest?.attachments || []}
-        />
-      </div>
+            />
+          </div>
     </div>
   );
 } 

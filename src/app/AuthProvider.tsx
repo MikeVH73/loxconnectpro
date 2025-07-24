@@ -20,8 +20,8 @@ interface AuthContextType {
   error: string | null;
 }
 
-const AuthContext = createContext<AuthContextType>({
-  user: null,
+const AuthContext = createContext<AuthContextType>({ 
+  user: null, 
   userProfile: null,
   loading: true,
   error: null,
@@ -32,9 +32,15 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isClient, setIsClient] = useState(false);
+
+  // Set isClient to true on mount
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (!isClient) return;
 
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setUser(user);
@@ -75,9 +81,18 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
       
       setLoading(false);
     });
-
+    
     return () => unsubscribe();
-  }, []);
+  }, [isClient]);
+
+  // Show loading state during SSR
+  if (!isClient) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-32 w-32 border-t-2 border-b-2 border-blue-500"></div>
+      </div>
+    );
+  }
 
   return (
     <AuthContext.Provider value={{ user, userProfile, loading, error }}>

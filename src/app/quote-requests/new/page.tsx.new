@@ -1,0 +1,215 @@
+"use client";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { useRouter } from "next/navigation";
+import { collection, addDoc, serverTimestamp, getDocs, query, where, doc, getDoc, updateDoc, Firestore, DocumentData, CollectionReference, limit } from "firebase/firestore";
+import { db } from "../../../firebaseClient";
+import { useAuth } from "../../AuthProvider";
+import { Fragment } from "react";
+import dayjs from "dayjs";
+import dynamic from 'next/dynamic';
+
+// Dynamically import components that might cause hydration issues
+const FileUpload = dynamic(() => import("../../components/FileUpload"), { ssr: false });
+const FileUploadSimple = dynamic(() => import("../../components/FileUploadSimple"), { ssr: false });
+const StorageTest = dynamic(() => import("../../components/StorageTest"), { ssr: false });
+const CountrySelect = dynamic(() => import("../../components/CountrySelect"), { ssr: false });
+const MessagingPanel = dynamic(() => import('@/app/components/MessagingPanel'), { ssr: false });
+const LoadingSpinner = dynamic(() => import('../../components/LoadingSpinner'), { ssr: false });
+
+// Import utilities
+import { moveFilesToQuoteRequest } from "../../utils/fileUtils";
+import { useMessages } from '@/app/hooks/useMessages';
+import { debounce } from "lodash";
+import { useCustomers } from "../../hooks/useCustomers";
+
+// Type definitions
+interface Jobsite {
+  address: string;
+  coordinates: { lat: number; lng: number } | null;
+}
+
+interface Product {
+  catClass: string;
+  description: string;
+  quantity: number;
+}
+
+interface Note {
+  text: string;
+  author: string;
+  dateTime: string;
+}
+
+interface FileData {
+  id: string;
+  name: string;
+  url: string;
+  type: string;
+  size: number;
+  uploadedAt: Date;
+  uploadedBy: string;
+}
+
+interface QuoteRequest {
+  title: string;
+  creatorCountry: string;
+  involvedCountry: string;
+  customer: string;
+  status: string;
+  products: Product[];
+  jobsite: Jobsite;
+  startDate: string;
+  endDate: string | null;
+  customerDecidesEnd: boolean;
+  jobsiteContactId: string;
+  jobsiteContact: any;
+  labels: string[];
+  notes: Note[];
+  attachments: any[];
+  createdAt: any;
+  updatedAt: any;
+}
+
+interface Contact {
+  id: string;
+  name: string;
+  phone: string;
+  email?: string;
+  type: 'first' | 'jobsite';
+}
+
+interface Customer {
+  id: string;
+  name: string;
+  address: string;
+  contact?: string;
+  phone?: string;
+  email?: string;
+  customerNumbers?: { [country: string]: string };
+}
+
+const statuses = ["In Progress", "Won", "Lost", "Cancelled"];
+
+// Add state for archived status
+type StatusType = "In Progress" | "Snoozed" | "Won" | "Lost" | "Cancelled";
+
+function NewQuoteRequestPage() {
+  const router = useRouter();
+  const { userProfile, user } = useAuth();
+  const isMounted = useRef(true);
+  const [isClient, setIsClient] = useState(false);
+  const [isFirestoreInitialized, setIsFirestoreInitialized] = useState(false);
+
+  // Initialize state
+  const [title, setTitle] = useState("");
+  const creatorCountry = userProfile?.businessUnit || "";
+  const [involvedCountry, setInvolvedCountry] = useState("");
+  const { customers, loading: customersLoading, error: customersError, refetchCustomers } = useCustomers();
+  const [customerId, setCustomerId] = useState("");
+  const [showNewCustomer, setShowNewCustomer] = useState(false);
+  const [newCustomer, setNewCustomer] = useState({ name: "", address: "", contact: "", phone: "", email: "" });
+  const [status, setStatus] = useState<StatusType>("In Progress");
+  const [isArchived, setIsArchived] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [products, setProducts] = useState([
+    { catClass: "", description: "", quantity: 1 },
+  ]);
+  const [jobsiteAddress, setJobsiteAddress] = useState("");
+  const [jobsiteCoords, setJobsiteCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [customerDecidesEnd, setCustomerDecidesEnd] = useState(false);
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [jobsiteContactId, setJobsiteContactId] = useState("");
+  const [showNewContact, setShowNewContact] = useState(false);
+  const [newContact, setNewContact] = useState({ name: "", phone: "" });
+  const [labels, setLabels] = useState<any[]>([]);
+  const [selectedLabels, setSelectedLabels] = useState<string[]>([]);
+  const [notes, setNotes] = useState<Note[]>([]);
+  const [noteText, setNoteText] = useState("");
+  const [showCustomerModal, setShowCustomerModal] = useState(false);
+  const [customerDetails, setCustomerDetails] = useState<any>(null);
+  const [customerContacts, setCustomerContacts] = useState<any[]>([]);
+  const [chatMessages, setChatMessages] = useState<any[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [success, setSuccess] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [attachments, setAttachments] = useState<FileData[]>([]);
+  const [customerNumber, setCustomerNumber] = useState("");
+
+  // Set isClient to true on mount and check Firestore initialization
+  useEffect(() => {
+    if (!isMounted.current) return;
+
+    const checkFirestore = async () => {
+      setIsClient(true);
+      if (db) {
+        try {
+          // Try a simple Firestore operation to verify initialization
+          const testRef = collection(db as Firestore, "quoteRequests");
+          await getDocs(query(testRef, limit(1)));
+          setIsFirestoreInitialized(true);
+        } catch (err) {
+          console.error("Error verifying Firestore:", err);
+          setError("Failed to initialize Firestore. Please try refreshing the page.");
+        }
+      } else {
+        setError("Firestore is not initialized");
+      }
+      setLoading(false);
+    };
+
+    checkFirestore();
+
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
+
+  // Show loading state with a proper loading component
+  if (!isClient || loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <LoadingSpinner />
+      </div>
+    );
+  }
+
+  // Show error state with a retry button
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen p-4">
+        <div className="text-red-500 mb-4">{error}</div>
+        <button
+          onClick={() => window.location.reload()}
+          className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
+
+  // Show error if Firestore is not initialized with a retry button
+  if (!isFirestoreInitialized) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen p-4">
+        <div className="text-red-500 mb-4">Error: Firestore is not initialized</div>
+        <button
+          onClick={() => window.location.reload()}
+          className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
+
+  // ... rest of the existing component code ...
+}
+
+// Export with no SSR
+export default dynamic(() => Promise.resolve(NewQuoteRequestPage), {
+  ssr: false
+}); 

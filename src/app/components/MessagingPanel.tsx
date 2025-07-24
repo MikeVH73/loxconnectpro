@@ -140,17 +140,17 @@ export default function MessagingPanel({
             {quoteTitle}
           </h2>
         </div>
-        {onBack && (
-          <button
-            onClick={onBack}
+          {onBack && (
+            <button
+              onClick={onBack}
             className="ml-4 text-gray-400 hover:text-gray-500"
-          >
+            >
             <span className="sr-only">Close panel</span>
             <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
-          </button>
-        )}
+            </button>
+          )}
       </div>
 
       {/* Messages Area */}
@@ -170,42 +170,42 @@ export default function MessagingPanel({
         ) : (
           <div className="space-y-4">
             {messages.map((message) => (
-              <div
-                key={message.id}
-                className={`flex ${
+          <div
+            key={message.id}
+            className={`flex ${
                   message.sender === currentUser ? 'justify-end' : 'justify-start'
-                }`}
-              >
-                <div
+            }`}
+          >
+            <div
                   className={`rounded-lg px-4 py-2 max-w-[80%] ${
-                    message.sender === currentUser
+                message.sender === currentUser
                       ? 'bg-blue-500 text-white'
                       : 'bg-gray-100 text-gray-900'
-                  }`}
-                >
+              }`}
+            >
                   <div className="text-sm mb-1">
                     {message.sender === currentUser ? 'You' : message.senderCountry}
-                  </div>
-                  <div className="break-words">{message.text}</div>
+              </div>
+              <div className="break-words">{message.text}</div>
                   {message.files && message.files.length > 0 && (
-                    <div className="mt-2 space-y-1">
-                      {message.files.map((file, index) => (
+                <div className="mt-2 space-y-1">
+                  {message.files.map((file, index) => (
                         <div key={index} className="flex items-center text-sm">
-                          <a
-                            href={file.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
+                      <a
+                        href={file.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
                             className="underline hover:no-underline"
-                          >
-                            {file.name}
-                          </a>
+                      >
+                        {file.name}
+                      </a>
                           <span className="ml-2 text-xs opacity-75">
                             ({Math.round(file.size / 1024)}KB)
                           </span>
-                        </div>
-                      ))}
                     </div>
-                  )}
+                  ))}
+                </div>
+              )}
                   <div className="text-xs mt-1 opacity-75">
                     {dayjs(message.createdAt).fromNow()}
                   </div>
@@ -230,13 +230,13 @@ export default function MessagingPanel({
               disabled={readOnly}
             />
           </div>
-          <button
+            <button
             onClick={handleSubmit}
             disabled={!messageText.trim() || readOnly}
             className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Send
-          </button>
+            </button>
         </div>
       </div>
     </div>

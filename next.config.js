@@ -31,6 +31,39 @@ const nextConfig = {
   experimental: {
     isrMemoryCacheSize: 0, // Disable ISR caching
   },
+  // Configure page-specific settings
+  pageExtensions: ['tsx', 'ts', 'jsx', 'js'],
+  // Explicitly mark pages that should not be prerendered
+  async headers() {
+    return [
+      {
+        source: '/quote-requests/new',
+        headers: [
+          {
+            key: 'x-custom-header',
+            value: 'client-only',
+          },
+        ],
+      },
+    ];
+  },
+  // Configure dynamic imports and chunking
+  compiler: {
+    // Remove console.* in production
+    removeConsole: process.env.NODE_ENV === 'production' ? {
+      exclude: ['error', 'warn'],
+    } : false,
+  },
+  // Optimize loading of client-side routes
+  swcMinify: true,
+  modularizeImports: {
+    '@mui/material': {
+      transform: '@mui/material/{{member}}',
+    },
+    '@mui/icons-material': {
+      transform: '@mui/icons-material/{{member}}',
+    },
+  },
 }
 
 module.exports = nextConfig;
