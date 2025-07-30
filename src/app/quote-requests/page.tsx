@@ -6,9 +6,16 @@ import { db } from "../../firebaseClient";
 import { useAuth } from "../AuthProvider";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
+import dynamic from 'next/dynamic';
 
 // Initialize dayjs plugins
 dayjs.extend(relativeTime);
+
+// Dynamically import LoadingSpinner
+const LoadingSpinner = dynamic(() => import('../components/LoadingSpinner'), {
+  ssr: false,
+  loading: () => <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
+});
 
 interface Customer {
   id: string;
@@ -57,7 +64,7 @@ interface QuoteRequest {
   };
 }
 
-export default function QuoteRequestsPage() {
+const QuoteRequestsPage = () => {
   const [quoteRequests, setQuoteRequests] = useState<QuoteRequest[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
@@ -245,6 +252,14 @@ export default function QuoteRequestsPage() {
     }
   };
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <LoadingSpinner />
+      </div>
+    );
+  }
+
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
@@ -257,132 +272,127 @@ export default function QuoteRequestsPage() {
         </Link>
       </div>
 
-      {loading ? (
-        <div>Loading...</div>
-      ) : (
-        <div className="space-y-4">
-          {quoteRequests.map((qr) => {
-            // Check both boolean flags and label IDs
-            const hasUrgentLabel = qr.urgent || (qr.labels || []).includes(urgentLabelId);
-            const hasProblemsLabel = qr.problems || (qr.labels || []).includes(problemsLabelId);
-            const hasWaitingLabel = qr.waitingForAnswer || (qr.labels || []).includes(waitingLabelId);
-            const hasPlannedLabel = qr.planned || (qr.labels || []).includes(plannedLabelId);
-            const hasSnoozeLabel = qr.status === "Snoozed" || (qr.labels || []).includes(snoozeLabelId);
+      {/* Status Indicators and Special Labels */}
+      {quoteRequests.map((qr) => {
+        // Check both boolean flags and label IDs
+        const hasUrgentLabel = qr.urgent || (qr.labels || []).includes(urgentLabelId);
+        const hasProblemsLabel = qr.problems || (qr.labels || []).includes(problemsLabelId);
+        const hasWaitingLabel = qr.waitingForAnswer || (qr.labels || []).includes(waitingLabelId);
+        const hasPlannedLabel = qr.planned || (qr.labels || []).includes(plannedLabelId);
+        const hasSnoozeLabel = qr.status === "Snoozed" || (qr.labels || []).includes(snoozeLabelId);
 
-            // Update the quote request's flags to match the label state
-            const updatedQr = {
-              ...qr,
-              urgent: hasUrgentLabel,
-              problems: hasProblemsLabel,
-              waitingForAnswer: hasWaitingLabel,
-              labels: [...new Set([
-                ...(qr.labels || []),
-                ...(hasUrgentLabel && urgentLabelId ? [urgentLabelId] : []),
-                ...(hasProblemsLabel && problemsLabelId ? [problemsLabelId] : []),
-                ...(hasWaitingLabel && waitingLabelId ? [waitingLabelId] : []),
-                ...(hasSnoozeLabel && snoozeLabelId ? [snoozeLabelId] : [])
-              ])]
-            } as QuoteRequest;
+        // Update the quote request's flags to match the label state
+        const updatedQr = {
+          ...qr,
+          urgent: hasUrgentLabel,
+          problems: hasProblemsLabel,
+          waitingForAnswer: hasWaitingLabel,
+          labels: [...new Set([
+            ...(qr.labels || []),
+            ...(hasUrgentLabel && urgentLabelId ? [urgentLabelId] : []),
+            ...(hasProblemsLabel && problemsLabelId ? [problemsLabelId] : []),
+            ...(hasWaitingLabel && waitingLabelId ? [waitingLabelId] : []),
+            ...(hasSnoozeLabel && snoozeLabelId ? [snoozeLabelId] : [])
+          ])]
+        } as QuoteRequest;
 
-            // Save the updated flags and labels back to Firestore
-            if (db) {
-              const quoteRef = doc(db as Firestore, 'quoteRequests', qr.id);
-              updateDoc(quoteRef, {
-                urgent: updatedQr.urgent,
-                problems: updatedQr.problems,
-                waitingForAnswer: updatedQr.waitingForAnswer,
-                labels: updatedQr.labels
-              }).catch(err => {
-                console.error('[DEBUG] Error updating quote request flags:', err);
-              });
-            }
+        // Save the updated flags and labels back to Firestore
+        if (db) {
+          const quoteRef = doc(db as Firestore, 'quoteRequests', qr.id);
+          updateDoc(quoteRef, {
+            urgent: updatedQr.urgent,
+            problems: updatedQr.problems,
+            waitingForAnswer: updatedQr.waitingForAnswer,
+            labels: updatedQr.labels
+          }).catch(err => {
+            console.error('[DEBUG] Error updating quote request flags:', err);
+          });
+        }
 
-            // Filter out special labels for regular labels display
-            const regularLabels = (qr.labels || []).filter(labelId => !specialLabelIds.includes(labelId));
+        // Filter out special labels for regular labels display
+        const regularLabels = (qr.labels || []).filter(labelId => !specialLabelIds.includes(labelId));
 
-            return (
-              <div key={qr.id} className="bg-white rounded-lg shadow-sm p-4">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <Link
-                      href={userProfile?.role === 'readOnly' ? `/quote-requests/${qr.id}` : `/quote-requests/${qr.id}/edit`}
-                      className="text-lg font-medium text-gray-900 hover:text-[#e40115]"
-                    >
-                      {qr.title}
-                    </Link>
-                    <div className="text-sm text-gray-600 mt-1">
-                      {qr.creatorCountry} → {qr.involvedCountry}
-                    </div>
-                  </div>
-                  {userProfile?.role === 'admin' || userProfile?.role === 'superAdmin' ? (
-                    <button
-                      onClick={() => setShowDeleteConfirm(qr.id)}
-                      className="text-red-600 hover:text-red-800"
-                    >
-                      Delete
-                    </button>
-                  ) : null}
+        return (
+          <div key={qr.id} className="bg-white rounded-lg shadow-sm p-4">
+            <div className="flex justify-between items-start">
+              <div>
+                <Link
+                  href={userProfile?.role === 'readOnly' ? `/quote-requests/${qr.id}` : `/quote-requests/${qr.id}/edit`}
+                  className="text-lg font-medium text-gray-900 hover:text-[#e40115]"
+                >
+                  {qr.title}
+                </Link>
+                <div className="text-sm text-gray-600 mt-1">
+                  {qr.creatorCountry} → {qr.involvedCountry}
                 </div>
+              </div>
+              {userProfile?.role === 'admin' || userProfile?.role === 'superAdmin' ? (
+                <button
+                  onClick={() => setShowDeleteConfirm(qr.id)}
+                  className="text-red-600 hover:text-red-800"
+                >
+                  Delete
+                </button>
+              ) : null}
+            </div>
 
-                {/* Status Indicators and Special Labels */}
-                <div className="flex flex-wrap items-center gap-2 mt-2">
-                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                    qr.status === "In Progress" ? "bg-green-100 text-green-800" :
-                    qr.status === "Snoozed" ? "bg-gray-100 text-gray-800" :
-                    qr.status === "Won" ? "bg-blue-100 text-blue-800" :
-                    qr.status === "Lost" ? "bg-red-100 text-red-800" :
-                    "bg-yellow-100 text-yellow-800"
-                  }`}>
-                    {qr.status}
+            {/* Status Indicators and Special Labels */}
+            <div className="flex flex-wrap items-center gap-2 mt-2">
+              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                qr.status === "In Progress" ? "bg-green-100 text-green-800" :
+                qr.status === "Snoozed" ? "bg-gray-100 text-gray-800" :
+                qr.status === "Won" ? "bg-blue-100 text-blue-800" :
+                qr.status === "Lost" ? "bg-red-100 text-red-800" :
+                "bg-yellow-100 text-yellow-800"
+              }`}>
+                {qr.status}
+              </span>
+
+              {hasUrgentLabel && (
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                  Urgent
+                </span>
+              )}
+              {hasProblemsLabel && (
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+                  Problems
+                </span>
+              )}
+              {hasWaitingLabel && (
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                  Waiting
+                </span>
+              )}
+              {hasPlannedLabel && (
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                  Planned
+                </span>
+              )}
+                  </div>
+
+            {/* Regular Labels */}
+            {regularLabels.length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-2">
+                {regularLabels.map((labelId) => (
+                  <span
+                    key={labelId}
+                    className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800"
+                  >
+                    {labels.find(l => l.id === labelId)?.name || labelId}
                   </span>
-
-                  {hasUrgentLabel && (
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                      Urgent
-                    </span>
-                  )}
-                  {hasProblemsLabel && (
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
-                      Problems
-                    </span>
-                  )}
-                  {hasWaitingLabel && (
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                      Waiting
-                    </span>
-                  )}
-                  {hasPlannedLabel && (
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                      Planned
-                    </span>
-                  )}
+                ))}
                       </div>
+                    )}
 
-                {/* Regular Labels */}
-                {regularLabels.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mt-2">
-                    {regularLabels.map((labelId) => (
-                      <span
-                        key={labelId}
-                        className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800"
-                      >
-                        {labels.find(l => l.id === labelId)?.name || labelId}
-                      </span>
-                    ))}
-                          </div>
-                        )}
-
-                {/* Last Update */}
-                {qr.updatedAt && formatDate(qr.updatedAt) && (
-                  <div className="text-xs text-gray-500 mt-2">
-                    Last updated: {formatDate(qr.updatedAt)}
-                        </div>
-                      )}
+            {/* Last Update */}
+            {qr.updatedAt && formatDate(qr.updatedAt) && (
+              <div className="text-xs text-gray-500 mt-2">
+                Last updated: {formatDate(qr.updatedAt)}
                     </div>
-            );
-          })}
-        </div>
-      )}
+                  )}
+                </div>
+        );
+      })}
 
       {/* Delete Confirmation Modal */}
       {showDeleteConfirm && (
@@ -419,4 +429,9 @@ export default function QuoteRequestsPage() {
       )}
     </div>
   );
-} 
+};
+
+// Export with explicit client-side rendering
+export default dynamic(() => Promise.resolve(QuoteRequestsPage), {
+  ssr: false
+}); 
