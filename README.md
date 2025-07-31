@@ -1,4 +1,4 @@
-# 🌍 LoxConnect Pro
+# 🌍 LoxConnect PRo
 
 **Professional Quote Request Management System with Real-time Messaging**
 
