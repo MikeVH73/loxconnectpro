@@ -25,11 +25,14 @@
     "silent": false,
     "autoAlias": true,
     "deployOnPush": true,
-    "autoJobCancelation": true
+    "autoJobCancelation": true,
+    "productionBranch": "deployment-july-2025"
   },
   "public": false,
   "regions": ["fra1"],
   "cleanUrls": true,
   "trailingSlash": false,
-  "ignoreCommand": null
-} 
+  "ignoreCommand": null,
+  "buildCommand": "npm run build",
+  "outputDirectory": ".next"
+}
