@@ -26,7 +26,7 @@
     "autoAlias": true,
     "deployOnPush": true,
     "autoJobCancelation": true,
-    "productionBranch": "deployment-july-2025"
+    "productionBranch": "main"
   },
   "public": false,
   "regions": ["fra1"],
