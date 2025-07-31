@@ -2,6 +2,7 @@
 
 **Professional Quote Request Management System with Real-time Messaging**
 
+
 LoxConnect Pro is a comprehensive business management platform designed for international operations, enabling seamless quote request management, real-time messaging between countries, and efficient project tracking.
 
 ## ✨ Features
