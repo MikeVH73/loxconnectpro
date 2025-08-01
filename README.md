@@ -1,5 +1,5 @@
 # 🌍 LoxConnect Pro
-<!-- force rebuild -->
+trigger deploy
 
 **Professional Quote Request Management System with Real-time Messaging**
 
