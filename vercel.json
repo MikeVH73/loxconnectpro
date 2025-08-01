@@ -3,36 +3,11 @@
   "builds": [
     {
       "src": "package.json",
-      "use": "@vercel/next",
-      "config": {
-        "zeroConfig": true
-      }
+      "use": "@vercel/next"
     }
   ],
-  "routes": [
-    {
-      "src": "/(.*)",
-      "dest": "/$1",
-      "continue": true
-    }
-  ],
-  "git": {
-    "deploymentEnabled": true,
-    "silent": false
-  },
-  "github": {
-    "enabled": true,
-    "silent": false,
-    "autoAlias": true,
-    "deployOnPush": true,
-    "autoJobCancelation": true,
-    "productionBranch": "main"
-  },
-  "public": false,
-  "regions": ["fra1"],
   "cleanUrls": true,
   "trailingSlash": false,
-  "ignoreCommand": null,
-  "buildCommand": "npm run build",
-  "outputDirectory": ".next"
+  "public": false,
+  "regions": ["fra1"]
 }
