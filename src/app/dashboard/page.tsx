@@ -85,14 +85,13 @@ export default function DashboardPage() {
     setIsClient(true);
   }, []);
 
-  // Helper function to get customer name
+  // Helper functions
   const getCustomerName = (id: string | undefined) => {
     if (!id) return '';
     const customer = customers.find(c => c.id === id);
     return customer ? customer.name : id;
   };
 
-  // Helper function to get label name
   const getLabelName = (id: string | undefined) => {
     if (!id) return '';
     const label = labels.find(l => l.id === id);
@@ -100,17 +99,42 @@ export default function DashboardPage() {
   };
 
   useEffect(() => {
-    if (!user || !db || !userProfile) {
-      setLoading(false);
+    const checkAuth = async () => {
+      if (!user) {
+        router.push('/login');
         return;
       }
 
-    const fetchData = async () => {
+      if (!userProfile) {
+        setError('User profile not found. Please log in again.');
+        return;
+      }
+
+      if (!db) {
+        setError('Database connection failed. Please refresh the page.');
+        return;
+      }
+
       try {
-        console.log('[DEBUG] Fetching data for user:', user.email);
+        // Check if Firebase is properly initialized
+        const testQuery = query(collection(db as Firestore, 'labels'));
+        await getDocs(testQuery);
+        
+        // If we get here, Firebase is working
+        fetchDashboardData();
+      } catch (err) {
+        console.error('Firebase initialization error:', err);
+        setError('Failed to connect to the database. Please check your internet connection and refresh the page.');
+        setLoading(false);
+      }
+    };
+
+    const fetchDashboardData = async () => {
+      try {
+        console.log('[DEBUG] Fetching data for user:', user?.email);
 
         // Fetch labels first
-        const labelSnap = await getDocs(collection(db, "labels"));
+        const labelSnap = await getDocs(collection(db as Firestore, "labels"));
         const labelsData = labelSnap.docs.map(doc => ({
           id: doc.id,
           name: doc.data().name
@@ -124,11 +148,12 @@ export default function DashboardPage() {
         const snoozeLabelId = labelsData.find(l => l.name.toLowerCase() === 'snooze')?.id;
         const plannedLabelId = labelsData.find(l => l.name.toLowerCase() === 'planned')?.id;
 
-        const qrRef = collection(db, "quoteRequests");
+        // Fetch quote requests
+        const qrRef = collection(db as Firestore, "quoteRequests");
         const [qrSnapCreator, qrSnapInvolved, customerSnap] = await Promise.all([
-          getDocs(query(qrRef, where('creatorCountry', '==', userProfile.businessUnit))),
-          getDocs(query(qrRef, where('involvedCountry', '==', userProfile.businessUnit))),
-          getDocs(collection(db, "customers")),
+          getDocs(query(qrRef, where('creatorCountry', '==', userProfile?.businessUnit))),
+          getDocs(query(qrRef, where('involvedCountry', '==', userProfile?.businessUnit))),
+          getDocs(collection(db as Firestore, "customers")),
         ]);
 
         const seenIds = new Set<string>();
@@ -142,7 +167,6 @@ export default function DashboardPage() {
               id: doc.id,
               ...data,
               labels: data.labels || [],
-              // Ensure boolean flags are set based on both flags and labels
               urgent: Boolean(data.urgent) || (data.labels || []).includes(urgentLabelId || ''),
               problems: Boolean(data.problems) || (data.labels || []).includes(problemsLabelId || ''),
               waitingForAnswer: Boolean(data.waitingForAnswer) || (data.labels || []).includes(waitingLabelId || ''),
@@ -160,7 +184,6 @@ export default function DashboardPage() {
               id: doc.id,
               ...data,
               labels: data.labels || [],
-              // Ensure boolean flags are set based on both flags and labels
               urgent: Boolean(data.urgent) || (data.labels || []).includes(urgentLabelId || ''),
               problems: Boolean(data.problems) || (data.labels || []).includes(problemsLabelId || ''),
               waitingForAnswer: Boolean(data.waitingForAnswer) || (data.labels || []).includes(waitingLabelId || ''),
@@ -182,7 +205,7 @@ export default function DashboardPage() {
           };
           try {
             await updateDoc(quoteRef, updateData);
-    } catch (err) {
+          } catch (err) {
             console.error('[DEBUG] Error updating quote request:', err);
           }
           return qr;
@@ -191,8 +214,8 @@ export default function DashboardPage() {
         await Promise.all(updatePromises);
 
         const customersData = customerSnap.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
+          id: doc.id,
+          ...doc.data()
         })) as Customer[];
 
         // Filter active quotes
@@ -200,19 +223,18 @@ export default function DashboardPage() {
           qr.status === "In Progress" || qr.status === "Snoozed"
         );
 
-        console.log('[DEBUG] Active quotes:', activeQuotes);
         setQuoteRequests(activeQuotes);
         setCustomers(customersData);
-        setLoading(false);
       } catch (err) {
         console.error('[DEBUG] Error fetching data:', err);
-        setError('Failed to load dashboard data');
+        setError('Failed to load dashboard data. Please try refreshing the page.');
+      } finally {
         setLoading(false);
       }
     };
 
-    fetchData();
-  }, [db, userProfile, user]);
+    checkAuth();
+  }, [db, userProfile, user, router]);
 
   // Assign each quote request to only one column based on priority
   const snoozed: QuoteRequest[] = [];
@@ -226,7 +248,6 @@ export default function DashboardPage() {
     const problemsLabelId = labels.find(l => l.name.toLowerCase() === 'problems')?.id || '';
     const waitingLabelId = labels.find(l => l.name.toLowerCase() === 'waiting for answer')?.id || '';
     const snoozeLabelId = labels.find(l => l.name.toLowerCase() === 'snooze')?.id || '';
-    const plannedLabelId = labels.find(l => l.name.toLowerCase() === 'planned')?.id || '';
 
     // Check both boolean flags and label IDs
     const hasUrgentLabel = qr.urgent || (qr.labels || []).includes(urgentLabelId);
@@ -262,7 +283,17 @@ export default function DashboardPage() {
   }
 
   if (error) {
-    return <div className="text-red-500">{error}</div>;
+    return (
+      <div className="flex flex-col items-center justify-center h-64">
+        <div className="text-red-500 mb-4">{error}</div>
+        <button
+          onClick={() => window.location.reload()}
+          className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+        >
+          Refresh Page
+        </button>
+      </div>
+    );
   }
 
   return (
@@ -270,7 +301,7 @@ export default function DashboardPage() {
       {/* Notifications Bar */}
       <div className="mb-6 bg-white rounded-lg shadow p-4 max-h-32 overflow-y-auto">
         <DashboardNotifications />
-          </div>
+      </div>
 
       <div className="flex">
         {/* Kanban Board */}
@@ -281,101 +312,101 @@ export default function DashboardPage() {
             {/* Urgent/Problems Column */}
             <div className="bg-white rounded-lg shadow p-4">
               <h2 className="text-lg font-medium text-red-600 mb-4">Urgent/Problems</h2>
-            <div className="space-y-4">
+              <div className="space-y-4">
                 {urgentProblems.map(qr => (
-                <QuoteRequestCard
-                  key={qr.id}
+                  <QuoteRequestCard
+                    key={qr.id}
                     qr={qr}
-                  customers={customers}
-                  labels={labels}
+                    customers={customers}
+                    labels={labels}
                     onCardClick={() => setSelectedQuoteRequest(qr.id)}
-                  getCustomerName={getCustomerName}
-                  getLabelName={getLabelName}
-                />
-              ))}
+                    getCustomerName={getCustomerName}
+                    getLabelName={getLabelName}
+                  />
+                ))}
                 {urgentProblems.length === 0 && (
                   <div className="text-gray-500 text-center py-4">No urgent or problem items</div>
                 )}
+              </div>
             </div>
-          </div>
 
-          {/* Waiting Column */}
+            {/* Waiting Column */}
             <div className="bg-white rounded-lg shadow p-4">
               <h2 className="text-lg font-medium text-yellow-600 mb-4">Waiting for Answer</h2>
-            <div className="space-y-4">
+              <div className="space-y-4">
                 {waiting.map(qr => (
-                <QuoteRequestCard
-                  key={qr.id}
+                  <QuoteRequestCard
+                    key={qr.id}
                     qr={qr}
-                  customers={customers}
-                  labels={labels}
+                    customers={customers}
+                    labels={labels}
                     onCardClick={() => setSelectedQuoteRequest(qr.id)}
-                  getCustomerName={getCustomerName}
-                  getLabelName={getLabelName}
-                />
-              ))}
+                    getCustomerName={getCustomerName}
+                    getLabelName={getLabelName}
+                  />
+                ))}
                 {waiting.length === 0 && (
                   <div className="text-gray-500 text-center py-4">No waiting items</div>
                 )}
+              </div>
             </div>
-          </div>
 
-          {/* Standard Column */}
+            {/* Standard Column */}
             <div className="bg-white rounded-lg shadow p-4">
               <h2 className="text-lg font-medium text-gray-600 mb-4">Standard</h2>
-            <div className="space-y-4">
+              <div className="space-y-4">
                 {standard.map(qr => (
-                <QuoteRequestCard
-                  key={qr.id}
+                  <QuoteRequestCard
+                    key={qr.id}
                     qr={qr}
-                  customers={customers}
-                  labels={labels}
+                    customers={customers}
+                    labels={labels}
                     onCardClick={() => setSelectedQuoteRequest(qr.id)}
-                  getCustomerName={getCustomerName}
-                  getLabelName={getLabelName}
-                />
-              ))}
+                    getCustomerName={getCustomerName}
+                    getLabelName={getLabelName}
+                  />
+                ))}
                 {standard.length === 0 && (
                   <div className="text-gray-500 text-center py-4">No standard items</div>
                 )}
+              </div>
             </div>
-          </div>
 
-          {/* Snoozed Column */}
+            {/* Snoozed Column */}
             <div className="bg-white rounded-lg shadow p-4">
               <h2 className="text-lg font-medium text-gray-600 mb-4">Snoozed</h2>
-            <div className="space-y-4">
+              <div className="space-y-4">
                 {snoozed.map(qr => (
-                <QuoteRequestCard
-                  key={qr.id}
+                  <QuoteRequestCard
+                    key={qr.id}
                     qr={qr}
-                  customers={customers}
-                  labels={labels}
+                    customers={customers}
+                    labels={labels}
                     onCardClick={() => setSelectedQuoteRequest(qr.id)}
-                  getCustomerName={getCustomerName}
-                  getLabelName={getLabelName}
-                />
-              ))}
+                    getCustomerName={getCustomerName}
+                    getLabelName={getLabelName}
+                  />
+                ))}
                 {snoozed.length === 0 && (
                   <div className="text-gray-500 text-center py-4">No snoozed items</div>
                 )}
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
         {/* Fixed Messaging Panel Space */}
         <div className="fixed right-0 top-[53px] w-96 bg-white shadow-xl" style={{ height: 'calc(100vh - 53px)' }}>
           {selectedQuoteRequest ? (
-          <DashboardMessaging
+            <DashboardMessaging
               quoteRequestId={selectedQuoteRequest}
               onClose={() => setSelectedQuoteRequest(null)}
-          />
+            />
           ) : (
             <div className="flex items-center justify-center h-full text-gray-500">
               Please select a quote request to view messages.
-        </div>
-      )}
+            </div>
+          )}
         </div>
       </div>
     </div>

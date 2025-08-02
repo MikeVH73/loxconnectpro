@@ -5,21 +5,30 @@ import { collection, addDoc, serverTimestamp, getDocs, query, where, doc, getDoc
 import { db } from "../../../firebaseClient";
 import { useAuth } from "../../AuthProvider";
 import dynamic from 'next/dynamic';
-
-// Import non-dynamic components
 import { Fragment } from "react";
 import dayjs from "dayjs";
 
 // Dynamically import components with proper loading states
-const CountrySelect = dynamic(() => import("../../components/CountrySelect"), { 
+const CountrySelect = dynamic(() => import("../../components/CountrySelect"), {
   ssr: false,
   loading: () => <div className="h-10 bg-gray-100 rounded animate-pulse"></div>
 });
 
-const LoadingSpinner = dynamic(() => import("../../components/LoadingSpinner"), { 
+const LoadingSpinner = dynamic(() => import("../../components/LoadingSpinner"), {
   ssr: false,
   loading: () => <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
 });
+
+const FileUpload = dynamic(() => import("../../components/FileUpload"), {
+  ssr: false,
+  loading: () => <div className="h-32 bg-gray-100 rounded animate-pulse"></div>
+});
+
+// Import utilities
+import { moveFilesToQuoteRequest } from "../../utils/fileUtils";
+import { useMessages } from '@/app/hooks/useMessages';
+import { debounce } from "lodash";
+import { useCustomers } from "../../hooks/useCustomers";
 
 // Type definitions
 interface Jobsite {
@@ -49,26 +58,6 @@ interface FileData {
   uploadedBy: string;
 }
 
-interface QuoteRequest {
-  title: string;
-  creatorCountry: string;
-  involvedCountry: string;
-  customer: string;
-  status: string;
-  products: Product[];
-  jobsite: Jobsite;
-  startDate: string;
-  endDate: string | null;
-  customerDecidesEnd: boolean;
-  jobsiteContactId: string;
-  jobsiteContact: any;
-  labels: string[];
-  notes: Note[];
-  attachments: any[];
-  createdAt: any;
-  updatedAt: any;
-}
-
 interface Contact {
   id: string;
   name: string;
@@ -80,24 +69,22 @@ interface Contact {
 interface Customer {
   id: string;
   name: string;
-  address: string;
+  customerNumbers?: Record<string, string>;
   contact?: string;
   phone?: string;
   email?: string;
-  customerNumbers?: { [country: string]: string };
 }
 
-const statuses = ["In Progress", "Won", "Lost", "Cancelled"];
-
-// Add state for archived status
 type StatusType = "In Progress" | "Snoozed" | "Won" | "Lost" | "Cancelled";
+const statuses: StatusType[] = ["In Progress", "Won", "Lost", "Cancelled"];
 
-// Component
 const NewQuoteRequestPage = () => {
   const router = useRouter();
   const { userProfile, user } = useAuth();
+  const { customers } = useCustomers();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   // Initialize state
   const [title, setTitle] = useState("");
@@ -106,7 +93,7 @@ const NewQuoteRequestPage = () => {
   const [customerId, setCustomerId] = useState("");
   const [status, setStatus] = useState<StatusType>("In Progress");
   const [isArchived, setIsArchived] = useState(false);
-  const [products, setProducts] = useState([
+  const [products, setProducts] = useState<Product[]>([
     { catClass: "", description: "", quantity: 1 },
   ]);
   const [jobsiteAddress, setJobsiteAddress] = useState("");
@@ -118,17 +105,15 @@ const NewQuoteRequestPage = () => {
   const [jobsiteContactId, setJobsiteContactId] = useState("");
   const [showNewContact, setShowNewContact] = useState(false);
   const [newContact, setNewContact] = useState({ name: "", phone: "" });
-  const [labels, setLabels] = useState<any[]>([]);
+  const [labels, setLabels] = useState<string[]>([]);
   const [selectedLabels, setSelectedLabels] = useState<string[]>([]);
   const [notes, setNotes] = useState<Note[]>([]);
   const [noteText, setNoteText] = useState("");
-  const [showCustomerModal, setShowCustomerModal] = useState(false);
-  const [customerDetails, setCustomerDetails] = useState<any>(null);
-  const [customerContacts, setCustomerContacts] = useState<any[]>([]);
+  const [customerDetails, setCustomerDetails] = useState<Customer | null>(null);
+  const [customerContacts, setCustomerContacts] = useState<Contact[]>([]);
   const [chatMessages, setChatMessages] = useState<any[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [success, setSuccess] = useState("");
-  const [submitting, setSubmitting] = useState(false);
   const [attachments, setAttachments] = useState<FileData[]>([]);
   const [customerNumber, setCustomerNumber] = useState("");
 
@@ -141,144 +126,31 @@ const NewQuoteRequestPage = () => {
     setLoading(false);
   }, [user]);
 
-  // Show loading state
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <LoadingSpinner />
-      </div>
-    );
-  }
-
-  // Show error state
-  if (error) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-screen p-4">
-        <div className="text-red-500 mb-4">{error}</div>
-        <button
-          onClick={() => router.push('/quote-requests')}
-          className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-        >
-          Return to Quote Requests
-        </button>
-      </div>
-    );
-  }
-
-  // Handle address change
-  const handleAddressChange = (address: string) => {
-    if (!address) {
-      setJobsiteCoords(null);
-      return;
-    }
-
-        setJobsiteAddress(address);
-    // Coordinates must be entered manually
-        setJobsiteCoords(null);
-  };
-
-  // Debounce the address change handler
-  const debouncedAddressChange = (address: string) => {
-    // This function is no longer used as handleAddressChange is removed.
-    // Keeping it here for now, but it will be removed in a subsequent edit.
-  };
-
-  // Handle jobsite address change
-  const handleJobsiteAddressChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const address = e.target.value;
-    setJobsiteAddress(address);
-    debouncedAddressChange(address);
-  };
-
-  // Fetch contacts when customer changes
+  // Update customer number when involved country changes
   useEffect(() => {
-    const fetchContacts = async () => {
-      if (!customerId || !db) return;
-
-      try {
-        let allContacts: Contact[] = [];
-        
-        // First check if there's a contact in the customer document
-        const customerDoc = await getDoc(doc(db as Firestore, "customers", customerId));
-        if (customerDoc.exists()) {
-          const customerData = customerDoc.data();
-          if (customerData.contact && customerData.phone) {
-            // Add the first contact to the list
-            allContacts.push({
-              id: 'main',
-              name: customerData.contact,
-              phone: customerData.phone,
-              email: customerData.email || '',
-              type: 'first'
-            });
-          }
-        }
-
-        // Then fetch contacts from the subcollection
-        const contactsRef = collection(db as Firestore, `customers/${customerId}/contacts`);
-        const contactsSnapshot = await getDocs(contactsRef);
-        const subcollectionContacts = contactsSnapshot.docs.map(doc => ({
-          id: doc.id,
-          name: doc.data().name,
-          phone: doc.data().phone,
-          email: doc.data().email || '',
-          type: 'jobsite' as const
-        }));
-        
-        // Add jobsite contacts
-        allContacts = [...allContacts, ...subcollectionContacts];
-        
-        // The isMounted check was removed as per the new_code, but the original code had it.
-        // Assuming the intent was to remove it if not used.
-        // if (isMounted.current) {
-          console.log('Available contacts:', allContacts); // Debug log
-          setContacts(allContacts);
-          
-          // If there's only one contact, auto-select it
-          if (allContacts.length === 1) {
-            setJobsiteContactId(allContacts[0].id);
-          } else if (allContacts.length > 0) {
-            // Default to first jobsite contact if available
-            const firstJobsiteContact = allContacts.find(c => c.type === 'jobsite');
-            if (firstJobsiteContact) {
-              setJobsiteContactId(firstJobsiteContact.id);
-            }
+    if (customerId && involvedCountry && customerDetails?.customerNumbers) {
+      setCustomerNumber(customerDetails.customerNumbers[involvedCountry] || "");
           } else {
-            setJobsiteContactId(""); // Reset selection if no contacts
-          }
-        // }
-      } catch (err) {
-        console.error("Error fetching contacts:", err);
-        // The isMounted check was removed as per the new_code, but the original code had it.
-        // Assuming the intent was to remove it if not used.
-        // if (isMounted.current) {
-          setError("Failed to fetch contacts");
-        // }
-      }
-    };
-
-    fetchContacts();
-  }, [customerId, db]);
+      setCustomerNumber("");
+    }
+  }, [customerId, involvedCountry, customerDetails]);
 
   // Handle customer selection
   const handleCustomerChange = async (selectedCustomerId: string) => {
     setCustomerId(selectedCustomerId);
-    setJobsiteContactId(""); // Reset contact when customer changes
-    setContacts([]); // Reset contacts when customer changes
+    setJobsiteContactId("");
+    setContacts([]);
 
     if (!selectedCustomerId || !db) return;
 
     try {
-      // Fetch customer details
       const customerDoc = await getDoc(doc(db as Firestore, "customers", selectedCustomerId));
       if (customerDoc.exists()) {
-        const customerData = customerDoc.data();
+        const customerData = customerDoc.data() as Customer;
         setCustomerDetails(customerData);
         
-        // Fetch all contacts for this customer
         let allContacts: Contact[] = [];
         
-        // Add first contact if it exists
         if (customerData.contact && customerData.phone) {
           allContacts.push({
             id: 'main',
@@ -289,7 +161,6 @@ const NewQuoteRequestPage = () => {
           });
         }
         
-        // Fetch jobsite contacts
         const contactsRef = collection(db as Firestore, `customers/${selectedCustomerId}/contacts`);
         const contactsSnapshot = await getDocs(contactsRef);
         const jobsiteContacts = contactsSnapshot.docs.map(doc => ({
@@ -301,11 +172,8 @@ const NewQuoteRequestPage = () => {
         }));
         
         allContacts = [...allContacts, ...jobsiteContacts];
-        console.log('All contacts:', allContacts); // Debug log
-        
         setContacts(allContacts);
         
-        // Auto-select appropriate contact
         if (jobsiteContacts.length > 0) {
           setJobsiteContactId(jobsiteContacts[0].id);
         } else if (allContacts.length === 1) {
@@ -318,21 +186,47 @@ const NewQuoteRequestPage = () => {
     }
   };
 
-  // Update customer number when involved country or customer changes
-  useEffect(() => {
-    if (customerId && involvedCountry) {
-      const selectedCustomer = customers.find(c => c.id === customerId) as Customer;
-      if (selectedCustomer?.customerNumbers?.[involvedCountry]) {
-        setCustomerNumber(selectedCustomer.customerNumbers[involvedCountry]);
-      } else {
-        setCustomerNumber("");
-      }
-    } else {
-      setCustomerNumber("");
+  // Handle new contact creation
+  const handleAddNewContact = async () => {
+    if (!customerId || !db || !newContact.name || !newContact.phone) {
+      setError("Please fill in all required contact fields");
+      return;
     }
-  }, [customerId, involvedCountry, customers]);
 
-  // Form submission handler
+    try {
+      const contactsRef = collection(db as Firestore, `customers/${customerId}/contacts`);
+      const contactData = {
+        name: newContact.name,
+        phone: newContact.phone,
+        type: 'jobsite',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      };
+
+      const docRef = await addDoc(contactsRef, contactData);
+      const newContactWithId: Contact = {
+        id: docRef.id,
+        name: newContact.name,
+        phone: newContact.phone,
+        type: 'jobsite'
+      };
+      
+      setContacts(prev => [...prev, newContactWithId]);
+      setJobsiteContactId(docRef.id);
+      setNewContact({ name: "", phone: "" });
+      setShowNewContact(false);
+    } catch (err) {
+      console.error("Error creating new contact:", err);
+      setError("Failed to create new contact");
+    }
+  };
+
+  // Handle file selection
+  const handleFileSelect = (newFiles: FileData[]) => {
+    setAttachments(prev => [...prev, ...newFiles]);
+  };
+
+  // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (submitting || !db) return;
@@ -357,19 +251,14 @@ const NewQuoteRequestPage = () => {
 
     try {
       // Get the selected contact information
-      let jobsiteContactData = null;
-      if (jobsiteContactId) {
         const selectedContact = contacts.find(c => c.id === jobsiteContactId);
-        if (selectedContact) {
-          jobsiteContactData = {
+      const jobsiteContactData = selectedContact ? {
             id: selectedContact.id,
             name: selectedContact.name,
             phone: selectedContact.phone,
             email: selectedContact.email || "",
             type: selectedContact.type
-          };
-        }
-      }
+      } : null;
 
       const quoteRequestData = {
         title,
@@ -398,163 +287,40 @@ const NewQuoteRequestPage = () => {
         lastUpdatedBy: user?.email || ""
       };
 
-      console.log('Submitting quote request:', quoteRequestData);
       const docRef = await addDoc(collection(db as Firestore, "quoteRequests"), quoteRequestData);
-
-      // The isMounted check was removed as per the new_code, but the original code had it.
-      // Assuming the intent was to remove it if not used.
-      // if (isMounted.current) {
         setSuccess("Quote request created successfully!");
         router.push(`/quote-requests/${docRef.id}/edit`);
-      // }
     } catch (err) {
       console.error("Error creating quote request:", err);
-      // The isMounted check was removed as per the new_code, but the original code had it.
-      // Assuming the intent was to remove it if not used.
-      // if (isMounted.current) {
         setError(err instanceof Error ? err.message : "Failed to create quote request");
-      // }
     } finally {
-      // The isMounted check was removed as per the new_code, but the original code had it.
-      // Assuming the intent was to remove it if not used.
-      // if (isMounted.current) {
         setSubmitting(false);
-      // }
     }
   };
 
-  // Add effect to update archived state based on status
-  useEffect(() => {
-    setIsArchived(status !== "In Progress");
-  }, [status]);
-
-  const handleProductChange = (idx: number, field: string, value: string | number) => {
-    setProducts((prev) =>
-      prev.map((p, i) => (i === idx ? { ...p, [field]: value } : p))
+  // Show loading state
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <LoadingSpinner />
+      </div>
     );
-  };
+  }
 
-  const addProduct = () => setProducts((prev) => [...prev, { catClass: "", description: "", quantity: 1 }]);
-
-  const removeProduct = (idx: number) => setProducts((prev) => prev.filter((_, i) => i !== idx));
-
-  const handleLabelToggle = (id: string) => {
-    setSelectedLabels((prev) =>
-      prev.includes(id)
-        ? prev.filter((l) => l !== id)
-        : prev.length < 4
-        ? [...prev, id]
-        : prev
+  // Show error state
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen p-4">
+        <div className="text-red-500 mb-4">{error}</div>
+        <button
+          onClick={() => router.push('/quote-requests')}
+          className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+        >
+          Return to Quote Requests
+        </button>
+      </div>
     );
-  };
-
-  const handleAddNewCustomer = async () => {
-    if (!db || !newCustomer.name) return;
-    try {
-      const customersCollection = collection(db as Firestore, "customers");
-      const customerRef = await addDoc(customersCollection, {
-        ...newCustomer,
-        countries: [creatorCountry], // Associate customer with creator country
-        customerNumbers: { [creatorCountry]: "" }, // Initialize customer numbers for creator country
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-      
-      // Refresh the customer list to include the newly created customer
-      await refetchCustomers();
-      
-      setCustomerId(customerRef.id);
-      setShowNewCustomer(false);
-      setNewCustomer({ name: "", address: "", contact: "", phone: "", email: "" });
-    } catch (error) {
-      console.error("Error adding customer:", error);
-      setError("Failed to add customer");
-    }
-  };
-
-  const handleAddNote = () => {
-    const userEmail = user?.email;
-    if (!noteText.trim() || !userEmail) return;
-    
-    setNotes(prev => [
-      ...prev,
-      {
-        text: noteText.trim(),
-        author: userEmail,
-        dateTime: new Date().toISOString()
-      }
-    ]);
-    setNoteText("");
-  };
-
-  const handleRemoveNote = (idx: number) => setNotes(prev => prev.filter((_, i) => i !== idx));
-
-  const handleAddNewContact = async () => {
-    if (!customerId || !db || !newContact.name || !newContact.phone) {
-      setError("Please fill in all required contact fields");
-      return;
-    }
-
-    try {
-      const contactsRef = collection(db as Firestore, `customers/${customerId}/contacts`);
-      const contactData = {
-        name: newContact.name,
-        phone: newContact.phone,
-        type: 'jobsite',
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
-      };
-
-      const docRef = await addDoc(contactsRef, contactData);
-
-      // Add the new contact to the contacts list
-      const newContactWithId: Contact = {
-        id: docRef.id,
-        name: newContact.name,
-        phone: newContact.phone,
-        type: 'jobsite'
-      };
-      
-      setContacts(prev => [...prev, newContactWithId]);
-      setJobsiteContactId(docRef.id);
-      setNewContact({ name: "", phone: "" });
-      setShowNewContact(false);
-    } catch (err) {
-      console.error("Error creating new contact:", err);
-      setError("Failed to create new contact");
-    }
-  };
-
-  const handleCustomerClick = async (customerId: string) => {
-    if (!db) return;
-    try {
-      const customerDoc = doc(db as Firestore, "customers", customerId);
-      const customerSnap = await getDoc(customerDoc);
-      if (customerSnap.exists()) {
-        setCustomerDetails(customerSnap.data());
-        const contactsCollection = collection(db as Firestore, "contacts");
-        const q = query(contactsCollection, where("customer", "==", customerId));
-        const contactsSnap = await getDocs(q);
-        setCustomerContacts(contactsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-        setShowCustomerModal(true);
-      }
-    } catch (error) {
-      console.error("Error fetching customer details:", error);
-    }
-  };
-
-  const handleSendChat = () => {
-    if (!chatInput.trim()) return;
-    setChatMessages(prev => [
-      ...prev,
-      {
-        text: chatInput,
-        sender: user?.email || "Me",
-        time: new Date().toISOString(),
-      },
-    ]);
-    setChatInput("");
-  };
+  }
 
   return (
     <div className="w-full p-8 bg-white mt-8">
@@ -573,7 +339,6 @@ const NewQuoteRequestPage = () => {
               </option>
             ))}
           </select>
-          <p className="mt-1 text-sm text-gray-500">Only the creator country can change the status.</p>
         </div>
 
         {/* Title */}
@@ -627,19 +392,12 @@ const NewQuoteRequestPage = () => {
               required
             >
               <option value="">Select a customer</option>
-              {customers.map((customer) => (
+              {customers?.map((customer: Customer) => (
                 <option key={customer.id} value={customer.id}>
                   {customer.name}
                 </option>
               ))}
             </select>
-            <button
-              type="button"
-              onClick={() => setShowNewCustomer(true)}
-              className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-            >
-              New
-            </button>
           </div>
         </div>
 
@@ -668,27 +426,42 @@ const NewQuoteRequestPage = () => {
               <input
                 type="text"
                 value={product.catClass}
-                onChange={(e) => handleProductChange(idx, "catClass", e.target.value)}
+                onChange={(e) => {
+                  const newProducts = [...products];
+                  newProducts[idx].catClass = e.target.value;
+                  setProducts(newProducts);
+                }}
                 placeholder="Cat. Class"
                 className="block w-1/4 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
               />
               <input
                 type="text"
                 value={product.description}
-                onChange={(e) => handleProductChange(idx, "description", e.target.value)}
+                onChange={(e) => {
+                  const newProducts = [...products];
+                  newProducts[idx].description = e.target.value;
+                  setProducts(newProducts);
+                }}
                 placeholder="Description"
                 className="block w-1/2 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
               />
               <input
                 type="number"
                 value={product.quantity}
-                onChange={(e) => handleProductChange(idx, "quantity", parseInt(e.target.value))}
+                onChange={(e) => {
+                  const newProducts = [...products];
+                  newProducts[idx].quantity = parseInt(e.target.value);
+                  setProducts(newProducts);
+                }}
                 placeholder="Qty"
                 className="block w-1/6 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
               />
               <button
                 type="button"
-                onClick={() => removeProduct(idx)}
+                onClick={() => {
+                  const newProducts = products.filter((_, i) => i !== idx);
+                  setProducts(newProducts);
+                }}
                 className="px-3 py-2 bg-red-500 text-white rounded-md hover:bg-red-600"
               >
                 ×
@@ -697,11 +470,48 @@ const NewQuoteRequestPage = () => {
           ))}
           <button
             type="button"
-            onClick={addProduct}
+            onClick={() => setProducts([...products, { catClass: "", description: "", quantity: 1 }])}
             className="mt-2 px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600"
           >
             Add Product
           </button>
+        </div>
+
+        {/* Dates */}
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700">
+              Start Date <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">End Date</label>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              disabled={customerDecidesEnd}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 disabled:bg-gray-100"
+            />
+            <div className="mt-2">
+              <label className="inline-flex items-center">
+                <input
+                  type="checkbox"
+                  checked={customerDecidesEnd}
+                  onChange={(e) => setCustomerDecidesEnd(e.target.checked)}
+                  className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                />
+                <span className="ml-2 text-sm text-gray-600">Customer decides end date</span>
+              </label>
+            </div>
+          </div>
         </div>
 
         {/* Jobsite Address */}
@@ -758,19 +568,19 @@ const NewQuoteRequestPage = () => {
               />
             </div>
           </div>
-          <p className="mt-2 text-sm text-gray-500">
-            You can find coordinates by right-clicking a location on Google Maps and selecting "What's here?"
-          </p>
         </div>
 
         {/* Jobsite Contact */}
         <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-700">Jobsite Contact</label>
-          <div className="flex items-center gap-2">
+          <label className="block text-sm font-medium text-gray-700">
+            Jobsite Contact <span className="text-red-500">*</span>
+          </label>
+          <div className="mt-1 space-y-4">
             <select
               value={jobsiteContactId}
               onChange={(e) => setJobsiteContactId(e.target.value)}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              required
             >
               <option value="">Select a contact</option>
               {contacts.map((contact) => (
@@ -779,51 +589,26 @@ const NewQuoteRequestPage = () => {
                 </option>
               ))}
             </select>
+
             <button
               type="button"
               onClick={() => setShowNewContact(true)}
-              className="mt-1 inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
             >
-              New Contact
+              Add New Contact
             </button>
           </div>
         </div>
 
-        {/* Dates */}
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700">
-              Start Date <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">End Date</label>
-            <input
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              disabled={customerDecidesEnd}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 disabled:bg-gray-100"
-            />
-            <div className="mt-2">
-              <label className="inline-flex items-center">
-                <input
-                  type="checkbox"
-                  checked={customerDecidesEnd}
-                  onChange={(e) => setCustomerDecidesEnd(e.target.checked)}
-                  className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                />
-                <span className="ml-2 text-sm text-gray-600">Customer decides end date</span>
-              </label>
-            </div>
-          </div>
+        {/* Attachments */}
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700">Attachments</label>
+          <FileUpload
+            quoteRequestId="new"
+            files={attachments}
+            onFilesChange={handleFileSelect}
+            currentUser={user?.email || ""}
+          />
         </div>
 
         {/* Submit Button */}
@@ -850,68 +635,6 @@ const NewQuoteRequestPage = () => {
           </div>
         )}
       </form>
-
-      {/* New Customer Modal */}
-      {showNewCustomer && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-          <div className="bg-white p-6 rounded-lg w-96">
-            <h3 className="text-lg font-medium mb-4">Add New Customer</h3>
-            <div className="space-y-4">
-              <input
-                type="text"
-                value={newCustomer.name}
-                onChange={(e) => setNewCustomer({ ...newCustomer, name: e.target.value })}
-                placeholder="Customer Name"
-                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-              />
-              <input
-                type="text"
-                value={newCustomer.address}
-                onChange={(e) => setNewCustomer({ ...newCustomer, address: e.target.value })}
-                placeholder="Address"
-                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-              />
-              <input
-                type="text"
-                value={newCustomer.contact}
-                onChange={(e) => setNewCustomer({ ...newCustomer, contact: e.target.value })}
-                placeholder="Contact Person"
-                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-              />
-              <input
-                type="tel"
-                value={newCustomer.phone}
-                onChange={(e) => setNewCustomer({ ...newCustomer, phone: e.target.value })}
-                placeholder="Phone"
-                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-              />
-              <input
-                type="email"
-                value={newCustomer.email}
-                onChange={(e) => setNewCustomer({ ...newCustomer, email: e.target.value })}
-                placeholder="Email"
-                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-              />
-            </div>
-            <div className="mt-6 flex justify-end gap-4">
-              <button
-                type="button"
-                onClick={() => setShowNewCustomer(false)}
-                className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleAddNewCustomer}
-                className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600"
-              >
-                Add Customer
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* New Contact Modal */}
       {showNewContact && (
@@ -941,14 +664,14 @@ const NewQuoteRequestPage = () => {
                 <button
                   type="button"
                   onClick={() => setShowNewContact(false)}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
                   onClick={handleAddNewContact}
-                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700"
                 >
                   Add Contact
                 </button>
@@ -959,9 +682,6 @@ const NewQuoteRequestPage = () => {
       )}
     </div>
   );
-} 
+};
 
-// Export with explicit client-side rendering
-export default dynamic(() => Promise.resolve(NewQuoteRequestPage), {
-  ssr: false
-}); 
+export default dynamic(() => Promise.resolve(NewQuoteRequestPage), { ssr: false });

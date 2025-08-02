@@ -114,6 +114,23 @@ export default function EditQuoteRequest() {
   const [isMounted, setIsMounted] = useState(false);
   const { messages, loading: messagesLoading, error: messagesError, sendMessage } = useMessages(id);
   const { customers } = useCustomers();
+
+  // Helper function to get customer name from ID
+  const getCustomerName = (customerId: string) => {
+    const customer = customers.find(c => c.id === customerId);
+    return customer ? customer.name : customerId;
+  };
+
+  // Helper function to get customer ID from name (for migration)
+  const getCustomerIdFromName = (customerName: string) => {
+    // If it's already an ID (starts with a letter and contains only alphanumeric chars), return as is
+    if (customerName && /^[a-zA-Z0-9]+$/.test(customerName) && customerName.length > 10) {
+      return customerName;
+    }
+    // Otherwise, try to find the customer by name
+    const customer = customers.find(c => c.name === customerName);
+    return customer ? customer.id : customerName;
+  };
   const [labels, setLabels] = useState<any[]>([]);
 
   useEffect(() => {
@@ -155,7 +172,7 @@ export default function EditQuoteRequest() {
             startDate: data.startDate || '',
             endDate: data.endDate || '',
             status: data.status || '',
-            customer: data.customer || '',
+            customer: getCustomerIdFromName(data.customer || ''),
             labels: data.labels || [],
             attachments: data.attachments || [],
             jobsite: data.jobsite || {},
@@ -925,11 +942,16 @@ export default function EditQuoteRequest() {
                   >
                     <option value="">Select Customer</option>
                     {customers.map(customer => (
-                      <option key={customer.id} value={customer.name}>
+                      <option key={customer.id} value={customer.id}>
                         {customer.name}
                       </option>
                     ))}
                   </select>
+                  {quoteRequest.customer && (
+                    <div className="mt-1 text-sm text-gray-600">
+                      Selected: {getCustomerName(quoteRequest.customer)}
+                    </div>
+                  )}
                 </div>
 
                 {/* Status */}

@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
-import { collection, getDocs, query, orderBy, Firestore } from "firebase/firestore";
-import { db } from "../../firebaseClient";
+import { useState, useEffect } from 'react';
+import { collection, getDocs, Firestore } from 'firebase/firestore';
+import { db } from '../../firebaseClient';
 
 interface Customer {
   id: string;
@@ -9,9 +9,10 @@ interface Customer {
   contact?: string;
   phone?: string;
   email?: string;
+  customerNumbers?: { [country: string]: string };
 }
 
-export const useCustomers = () => {
+export function useCustomers() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -24,37 +25,32 @@ export const useCustomers = () => {
     }
 
     try {
-      setLoading(true);
-      setError(null);
-      const q = query(collection(db as Firestore, "customers"), orderBy("name"));
-      const snapshot = await getDocs(q);
-      const customersData = snapshot.docs.map(doc => ({ 
-        id: doc.id, 
-        ...doc.data() 
-      })) as Customer[];
+      const customersCollection = collection(db as Firestore, 'customers');
+      const snapshot = await getDocs(customersCollection);
+      const customersData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as Customer));
       setCustomers(customersData);
+      setError(null);
     } catch (err) {
-      console.error("Error fetching customers:", err);
-      setError("Failed to fetch customers");
+      console.error('Error fetching customers:', err);
+      setError('Failed to fetch customers');
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      fetchCustomers();
-    }
+    fetchCustomers();
   }, []);
 
   return {
     customers,
     loading,
     error,
-    refetchCustomers: fetchCustomers,
-    // Helper to get customer by ID
-    getCustomerById: (id: string) => customers.find(c => c.id === id),
-    // Helper to get customer name by ID
-    getCustomerName: (id: string) => customers.find(c => c.id === id)?.name || id
+    refetchCustomers: fetchCustomers
   };
-}; 
+}
+
+export type { Customer };

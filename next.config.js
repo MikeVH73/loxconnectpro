@@ -17,9 +17,10 @@ const nextConfig = {
     NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
     NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
     NEXT_PUBLIC_FIREBASE_APP_ID: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+    NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
+    NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY,
   },
-  webpack: (config, { isServer }) => {
-    // Ignore specific modules that cause issues with SSR
+  webpack: (config) => {
     config.resolve.fallback = {
       ...config.resolve.fallback,
       fs: false,
@@ -29,34 +30,16 @@ const nextConfig = {
     return config;
   },
   experimental: {
-    isrMemoryCacheSize: 0, // Disable ISR caching
+    serverActions: {
+      bodySizeLimit: '2mb'
+    }
   },
-  // Configure page-specific settings
   pageExtensions: ['tsx', 'ts', 'jsx', 'js'],
-  // Configure dynamic imports and chunking
   compiler: {
-    // Remove console.* in production
     removeConsole: process.env.NODE_ENV === 'production' ? {
       exclude: ['error', 'warn'],
     } : false,
-  },
-  // Optimize loading of client-side routes
-  swcMinify: true,
-  modularizeImports: {
-    '@mui/material': {
-      transform: '@mui/material/{{member}}',
-    },
-    '@mui/icons-material': {
-      transform: '@mui/icons-material/{{member}}',
-    },
-  },
-  // Production optimization
-  productionBrowserSourceMaps: true,
-  poweredByHeader: false,
-  generateEtags: true,
-  compress: true,
-  optimizeFonts: true,
-  crossOrigin: 'anonymous'
+  }
 }
 
 module.exports = nextConfig;
