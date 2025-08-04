@@ -92,9 +92,9 @@ interface UserProfile {
 - **New** (Purple): Default status for new quote requests, shows purple background and border
 - **In Progress** (Green): Active quote requests being worked on
 - **Snoozed** (Gray): Temporarily paused quote requests
-- **Won** (Blue): Successfully completed quote requests
-- **Lost** (Red): Unsuccessful quote requests
-- **Cancelled** (Yellow): Cancelled quote requests
+- **Won** (Blue): Successfully completed quote requests - only shown in Archived menu
+- **Lost** (Red): Unsuccessful quote requests - only shown in Archived menu
+- **Cancelled** (Yellow): Cancelled quote requests - only shown in Archived menu
 
 ### **Quote Request Card Features**
 - **Visual Labels**: Color-coded badges (yellow, red, orange, red for planned)
@@ -102,6 +102,7 @@ interface UserProfile {
 - **Click Navigation**: Direct to edit page
 - **Quick Actions**: Status changes, label toggles
 - **Delete Functionality**: Delete button for creators only (red trash icon) - available on Dashboard, Quote Requests, and Archived pages
+- **Status Filtering**: Quote Requests with 'Won', 'Lost', 'Cancelled' status only appear in Archived menu
 
 ## 📝 **QUOTE REQUEST SYSTEM**
 
@@ -129,7 +130,15 @@ interface QuoteRequest {
     quantity: number;
     description: string;
   }>;
-  attachments: FileData[];
+  attachments: Array<{
+    id: string;
+    name: string;
+    url: string;
+    type: string;
+    size: number;
+    uploadedAt: Date;
+    uploadedBy: string;
+  }>;
   customerNumber: string;  // Auto-generated based on country
   notes: string;
   labels: {
@@ -171,8 +180,9 @@ interface QuoteRequest {
 - **Auto-save**: Debounced changes to Firestore
 - **Real-time Updates**: Live status and label changes
 - **Product Management**: Add/remove products with catClass field
-- **File Attachments**: Upload/download with progress
+- **File Attachments**: Upload/download with progress using FileUpload component
 - **Customer Consistency**: Uses customer IDs throughout
+- **Attachment Interface**: Proper FileData interface with id, uploadedAt, uploadedBy fields
 
 ## 💬 **MESSAGING & NOTIFICATIONS**
 
@@ -301,13 +311,14 @@ const useCustomers = () => {
 ### **Core Capabilities**
 1. **Multi-Country Collaboration**: Cross-border quote request management
 2. **Real-time Communication**: Instant messaging and notifications
-3. **File Management**: Secure file uploads and sharing
-4. **Status Tracking**: Comprehensive quote request lifecycle
+3. **File Management**: Secure file uploads and sharing with proper FileUpload component
+4. **Status Tracking**: Comprehensive quote request lifecycle with proper filtering
 5. **Label System**: Visual organization and prioritization
 6. **Customer Management**: Integrated customer database
 7. **Product Catalog**: Dynamic product selection with categories
 8. **Quote Request Deletion**: Creator-only deletion with notifications
 9. **User Management**: Complete user lifecycle with temporary password creation
+10. **Status Filtering**: Completed quote requests (Won/Lost/Cancelled) only appear in Archived menu
 
 ### **Business Logic**
 - **Customer Number Generation**: Automatic based on country
@@ -344,6 +355,7 @@ const useCustomers = () => {
 - **Products**: Use `catClass` field (NOT `code`)
 - **Countries**: `creatorCountry` and `involvedCountry` (NOT `involvedCountries` or `targetCountry`)
 - **Labels**: Boolean flags in quote request document
+- **Attachments**: Use proper FileData interface with id, uploadedAt, uploadedBy fields
 
 ### **Authentication Rules**
 - Firebase must be initialized before any auth/Firestore operations
@@ -374,6 +386,8 @@ const useCustomers = () => {
 - Messaging: Real-time with file attachments
 - Status Colors: New (purple), In Progress (green), Snoozed (gray), Won (blue), Lost (red), Cancelled (yellow)
 - New Status: Default status for new quote requests with purple card background and border
+- Status Filtering: Completed statuses (Won/Lost/Cancelled) only appear in Archived menu
+- File Upload: Proper FileUpload component with drag-and-drop and browse functionality
 
 ---
 
