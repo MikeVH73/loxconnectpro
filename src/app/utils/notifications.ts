@@ -8,7 +8,7 @@ interface CreateNotificationParams {
   senderCountry: string;
   targetCountry: string;
   content: string;
-  notificationType: 'message' | 'status_change' | 'property_change';
+  notificationType: 'message' | 'status_change' | 'property_change' | 'deletion';
 }
 
 export async function createNotification({

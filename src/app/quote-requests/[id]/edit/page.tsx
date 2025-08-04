@@ -47,10 +47,13 @@ interface QuoteRequest {
   customer: string;
   labels: string[];
   attachments: Array<{
+    id: string;
     name: string;
     url: string;
     type: string;
     size: number;
+    uploadedAt: Date;
+    uploadedBy: string;
   }>;
   jobsite?: {
     address?: string;
@@ -80,7 +83,7 @@ interface QuoteRequest {
   planned: boolean;
 }
 
-const statuses = ["In Progress", "Snoozed", "Won", "Lost", "Cancelled"];
+const statuses = ["New", "In Progress", "Snoozed", "Won", "Lost", "Cancelled"];
 
 const labelTexts: Record<keyof Pick<QuoteRequest, 'waitingForAnswer' | 'urgent' | 'problems' | 'planned'>, string> = {
   waitingForAnswer: "Waiting for Answer",
@@ -212,6 +215,12 @@ export default function EditQuoteRequest() {
       return;
     }
 
+    // Skip auto-save on initial load to prevent false notifications
+    if (isAutoSave && !quoteRequest.updatedAt) {
+      console.log('[SAVE] Skipping auto-save on initial load');
+      return;
+    }
+
     console.log('[SAVE] Save triggered:', isAutoSave ? 'Auto-save' : 'Manual save');
     console.log('[SAVE] Current quote request:', quoteRequest);
 
@@ -279,12 +288,14 @@ export default function EditQuoteRequest() {
         changes.push(`Involved country changed from ${originalData.involvedCountry} to ${quoteRequest.involvedCountry}`);
       }
       
-      // Check for flag changes (labels)
+      // Check for flag changes (labels) - only notify if there are actual changes
       const labelFields: (keyof Pick<QuoteRequest, 'waitingForAnswer' | 'urgent' | 'problems' | 'planned'>)[] = 
         ['waitingForAnswer', 'urgent', 'problems', 'planned'];
       
       for (const field of labelFields) {
-        if (originalData[field] !== quoteRequest[field]) {
+        // Only create notifications for actual changes, not for initial loading
+        if (originalData[field] !== quoteRequest[field] && 
+            !(originalData[field] === false && quoteRequest[field] === false)) {
           changes.push(`${quoteRequest[field] ? 'Added' : 'Removed'} "${labelTexts[field]}" label`);
         }
       }
@@ -866,6 +877,7 @@ export default function EditQuoteRequest() {
                   Quote Request / {quoteRequest.creatorCountry} → {quoteRequest.involvedCountry}
                 </h1>
                 <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                  quoteRequest.status === "New" ? "bg-purple-100 text-purple-800" :
                   quoteRequest.status === "In Progress" ? "bg-green-100 text-green-800" :
                   quoteRequest.status === "Snoozed" ? "bg-gray-100 text-gray-800" :
                   quoteRequest.status === "Won" ? "bg-blue-100 text-blue-800" :
@@ -1045,13 +1057,13 @@ export default function EditQuoteRequest() {
                 {/* Attachments */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Attachments</label>
-                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-                    <div className="text-gray-500">
-                      <div className="text-2xl mb-2">📎</div>
-                      <div>Drag & drop files here or <span className="text-blue-500 underline cursor-pointer">browse</span></div>
-                      <div className="text-xs mt-1">Support: Images, PDF, Word, Excel documents (Max 10MB each)</div>
-                    </div>
-                  </div>
+                  <FileUpload
+                    quoteRequestId={quoteRequest.id}
+                    files={quoteRequest.attachments || []}
+                    onFilesChange={(newFiles) => handleInputChange("attachments", newFiles)}
+                    currentUser={user?.email || ""}
+                    readOnly={isReadOnly}
+                  />
                 </div>
               </div>
 

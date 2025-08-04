@@ -75,8 +75,8 @@ interface Customer {
   email?: string;
 }
 
-type StatusType = "In Progress" | "Snoozed" | "Won" | "Lost" | "Cancelled";
-const statuses: StatusType[] = ["In Progress", "Won", "Lost", "Cancelled"];
+type StatusType = "New" | "In Progress" | "Snoozed" | "Won" | "Lost" | "Cancelled";
+const statuses: StatusType[] = ["New", "In Progress", "Won", "Lost", "Cancelled"];
 
 const NewQuoteRequestPage = () => {
   const router = useRouter();
@@ -91,7 +91,7 @@ const NewQuoteRequestPage = () => {
   const creatorCountry = userProfile?.businessUnit || "";
   const [involvedCountry, setInvolvedCountry] = useState("");
   const [customerId, setCustomerId] = useState("");
-  const [status, setStatus] = useState<StatusType>("In Progress");
+  const [status, setStatus] = useState<StatusType>("New");
   const [isArchived, setIsArchived] = useState(false);
   const [products, setProducts] = useState<Product[]>([
     { catClass: "", description: "", quantity: 1 },
@@ -289,7 +289,11 @@ const NewQuoteRequestPage = () => {
 
       const docRef = await addDoc(collection(db as Firestore, "quoteRequests"), quoteRequestData);
         setSuccess("Quote request created successfully!");
-        router.push(`/quote-requests/${docRef.id}/edit`);
+        
+        // Show success message and redirect to dashboard instead of edit page
+        setTimeout(() => {
+          router.push('/dashboard');
+        }, 1500);
     } catch (err) {
       console.error("Error creating quote request:", err);
         setError(err instanceof Error ? err.message : "Failed to create quote request");

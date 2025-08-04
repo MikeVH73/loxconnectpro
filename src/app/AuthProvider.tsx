@@ -10,6 +10,7 @@ interface UserProfile {
   email: string;
   role: string;
   businessUnit?: string;
+  countries?: string[];
   name?: string;
 }
 
@@ -57,26 +58,58 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (user && db) {
           try {
+            console.log('Auth state changed - user:', user.email, 'UID:', user.uid);
+            
             // Try to get user profile by UID first
             const userDoc = await getDoc(doc(db as Firestore, 'users', user.uid));
 
             if (userDoc.exists()) {
+              const userData = userDoc.data();
+              console.log('Found user profile by UID:', userData);
+              
+              // Map database fields to UserProfile interface
               setUserProfile({
-                id: userDoc.id,
-                ...userDoc.data()
+                id: userDoc.id, // Use document ID as id
+                email: userData.email || '',
+                role: userData.role || 'user',
+                businessUnit: userData.businessUnit || userData.countries?.[0] || '',
+                countries: userData.countries || [],
+                name: userData.displayName || userData.name || ''
               } as UserProfile);
             } else {
-              // Fallback to email lookup
-              const userByEmailDoc = await getDoc(doc(db as Firestore, 'users', user.email || ''));
-
-              if (userByEmailDoc.exists()) {
-                setUserProfile({
-                  id: userByEmailDoc.id,
-                  ...userByEmailDoc.data()
-                } as UserProfile);
-              } else {
-                console.error('No user profile found');
-                setError('No user profile found');
+              // Fallback to email lookup - query by email field
+              console.log('User profile not found by UID, trying email lookup for:', user.email);
+              
+              // Import the necessary Firestore functions
+              const { collection, query, where, getDocs } = await import('firebase/firestore');
+              
+              try {
+                const usersRef = collection(db as Firestore, 'users');
+                const q = query(usersRef, where('email', '==', user.email));
+                const querySnapshot = await getDocs(q);
+                
+                if (!querySnapshot.empty) {
+                  const userDoc = querySnapshot.docs[0];
+                  const userData = userDoc.data();
+                  console.log('Found user profile by email:', userData);
+                  
+                  // Map database fields to UserProfile interface
+                  setUserProfile({
+                    id: userDoc.id, // Use document ID as id
+                    email: userData.email || '',
+                    role: userData.role || 'user',
+                    businessUnit: userData.businessUnit || userData.countries?.[0] || '',
+                    countries: userData.countries || [],
+                    name: userData.displayName || userData.name || ''
+                  } as UserProfile);
+                } else {
+                  console.error('No user profile found for email:', user.email);
+                  setError('No user profile found. Please contact your administrator.');
+                  if (auth) auth.signOut();
+                }
+              } catch (emailLookupError) {
+                console.error('Error in email lookup:', emailLookupError);
+                setError('Error fetching user profile');
                 if (auth) auth.signOut();
               }
             }

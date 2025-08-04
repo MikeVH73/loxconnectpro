@@ -1,0 +1,1 @@
+Always check SYSTEM_REFERENCE.md for the complete system architecture

@@ -10,6 +10,7 @@ import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import dynamic from 'next/dynamic';
 import DashboardNotifications from "../components/DashboardNotifications";
+import { deleteQuoteRequest } from "../utils/quoteRequestUtils";
 
 // Dynamically import components with no SSR to prevent hydration issues
 const NotificationBadge = dynamic(() => import('../components/NotificationBadge'), {
@@ -78,7 +79,9 @@ export default function DashboardPage() {
   const [labels, setLabels] = useState<Label[]>([]);
   const [showNotificationsMenu, setShowNotificationsMenu] = useState(false);
   const [selectedQuoteRequest, setSelectedQuoteRequest] = useState<string | null>(null);
-  const { userProfile, user, signOutUser } = useAuth();
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
+  const [deletingQuoteRequest, setDeletingQuoteRequest] = useState<string | null>(null);
+  const { userProfile, user, loading: authLoading, signOutUser } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
@@ -98,8 +101,60 @@ export default function DashboardPage() {
     return label ? label.name : id;
   };
 
+  // Delete handler functions
+  const handleDeleteClick = (quoteRequestId: string) => {
+    setShowDeleteConfirm(quoteRequestId);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!showDeleteConfirm || !userProfile || !user) return;
+
+    const quoteRequest = quoteRequests.find(qr => qr.id === showDeleteConfirm);
+    if (!quoteRequest) return;
+
+    setDeletingQuoteRequest(showDeleteConfirm);
+
+    try {
+      const result = await deleteQuoteRequest({
+        quoteRequestId: showDeleteConfirm,
+        quoteRequestTitle: quoteRequest.title,
+        creatorCountry: quoteRequest.creatorCountry,
+        involvedCountry: quoteRequest.involvedCountry,
+        userEmail: user.email || '',
+        userCountry: userProfile.businessUnit || ''
+      });
+
+      if (result.success) {
+        // Remove the quote request from the local state
+        setQuoteRequests(prev => prev.filter(qr => qr.id !== showDeleteConfirm));
+        setShowDeleteConfirm(null);
+      } else {
+        alert(result.error || 'Failed to delete quote request');
+      }
+    } catch (error) {
+      console.error('Error deleting quote request:', error);
+      alert('Failed to delete quote request');
+    } finally {
+      setDeletingQuoteRequest(null);
+    }
+  };
+
+  const handleCancelDelete = () => {
+    setShowDeleteConfirm(null);
+  };
+
+  // Check if user can delete a quote request (only creator can delete)
+  const canDeleteQuoteRequest = (quoteRequest: QuoteRequest) => {
+    return userProfile?.businessUnit === quoteRequest.creatorCountry;
+  };
+
   useEffect(() => {
     const checkAuth = async () => {
+      // Wait for authentication to complete
+      if (authLoading) {
+        return;
+      }
+
       if (!user) {
         router.push('/login');
         return;
@@ -220,7 +275,7 @@ export default function DashboardPage() {
 
         // Filter active quotes
         const activeQuotes = combinedQRs.filter(qr => 
-          qr.status === "In Progress" || qr.status === "Snoozed"
+          qr.status === "New" || qr.status === "In Progress" || qr.status === "Snoozed"
         );
 
         setQuoteRequests(activeQuotes);
@@ -234,7 +289,7 @@ export default function DashboardPage() {
     };
 
     checkAuth();
-  }, [db, userProfile, user, router]);
+  }, [db, userProfile, user, router, authLoading]);
 
   // Assign each quote request to only one column based on priority
   const snoozed: QuoteRequest[] = [];
@@ -274,10 +329,26 @@ export default function DashboardPage() {
     );
   }
 
-  if (loading) {
+  if (loading || authLoading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-gray-900"></div>
+      </div>
+    );
+  }
+
+  if (!authLoading && !userProfile) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="text-red-500 mb-4">User profile not found. Please log in again.</div>
+          <button
+            onClick={() => window.location.href = '/login'}
+            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+          >
+            Go to Login
+          </button>
+        </div>
       </div>
     );
   }
@@ -320,8 +391,10 @@ export default function DashboardPage() {
                     customers={customers}
                     labels={labels}
                     onCardClick={() => setSelectedQuoteRequest(qr.id)}
+                    onDeleteClick={handleDeleteClick}
                     getCustomerName={getCustomerName}
                     getLabelName={getLabelName}
+                    canDelete={canDeleteQuoteRequest(qr)}
                   />
                 ))}
                 {urgentProblems.length === 0 && (
@@ -341,8 +414,10 @@ export default function DashboardPage() {
                     customers={customers}
                     labels={labels}
                     onCardClick={() => setSelectedQuoteRequest(qr.id)}
+                    onDeleteClick={handleDeleteClick}
                     getCustomerName={getCustomerName}
                     getLabelName={getLabelName}
+                    canDelete={canDeleteQuoteRequest(qr)}
                   />
                 ))}
                 {waiting.length === 0 && (
@@ -362,8 +437,10 @@ export default function DashboardPage() {
                     customers={customers}
                     labels={labels}
                     onCardClick={() => setSelectedQuoteRequest(qr.id)}
+                    onDeleteClick={handleDeleteClick}
                     getCustomerName={getCustomerName}
                     getLabelName={getLabelName}
+                    canDelete={canDeleteQuoteRequest(qr)}
                   />
                 ))}
                 {standard.length === 0 && (
@@ -383,8 +460,10 @@ export default function DashboardPage() {
                     customers={customers}
                     labels={labels}
                     onCardClick={() => setSelectedQuoteRequest(qr.id)}
+                    onDeleteClick={handleDeleteClick}
                     getCustomerName={getCustomerName}
                     getLabelName={getLabelName}
+                    canDelete={canDeleteQuoteRequest(qr)}
                   />
                 ))}
                 {snoozed.length === 0 && (
@@ -409,6 +488,39 @@ export default function DashboardPage() {
           )}
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg p-6 max-w-sm w-full">
+            <h3 className="text-lg font-semibold mb-4 text-red-600">Confirm Delete</h3>
+            <p className="mb-4">Are you sure you want to delete this quote request? This action cannot be undone.</p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={handleCancelDelete}
+                disabled={deletingQuoteRequest === showDeleteConfirm}
+                className="px-4 py-2 text-gray-600 hover:text-gray-800 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                disabled={deletingQuoteRequest === showDeleteConfirm}
+                className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50 flex items-center gap-2"
+              >
+                {deletingQuoteRequest === showDeleteConfirm ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    Deleting...
+                  </>
+                ) : (
+                  'Delete'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -9,6 +9,7 @@ import relativeTime from "dayjs/plugin/relativeTime";
 import dynamic from 'next/dynamic';
 import QuoteRequestCard from "../components/QuoteRequestCard";
 import { useRouter } from "next/navigation";
+import { deleteQuoteRequest } from "../utils/quoteRequestUtils";
 
 // Initialize dayjs plugins
 dayjs.extend(relativeTime);
@@ -63,12 +64,21 @@ const QuoteRequestsPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [labels, setLabels] = useState<Label[]>([]);
-  const { userProfile } = useAuth();
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
+  const [deletingQuoteRequest, setDeletingQuoteRequest] = useState<string | null>(null);
+  const { userProfile, user, loading: authLoading } = useAuth();
 
   useEffect(() => {
     const fetchData = async () => {
-      if (!db || !userProfile) {
-        console.error("Firestore or user profile not initialized");
+      if (!db) {
+        console.error("Firestore not initialized");
+        setError("Database connection failed. Please refresh the page.");
+        setLoading(false);
+        return;
+      }
+
+      if (!userProfile) {
+        console.log("User profile not yet loaded, waiting...");
         return;
       }
 
@@ -119,11 +129,14 @@ const QuoteRequestsPage = () => {
           allRequests = allRequests.filter(qr => 
             // Filter by business unit
             (qr.creatorCountry === userProfile.businessUnit ||
-            qr.involvedCountry === userProfile.businessUnit) &&
-            // Filter out completed requests
-            !["Won", "Lost", "Cancelled"].includes(qr.status)
+            qr.involvedCountry === userProfile.businessUnit)
           );
         }
+
+        // Filter out completed requests for all users (they should only appear in Archived)
+        allRequests = allRequests.filter(qr => 
+          !["Won", "Lost", "Cancelled"].includes(qr.status)
+        );
 
         // Update flags based on labels
         allRequests = allRequests.map(qr => ({
@@ -154,7 +167,7 @@ const QuoteRequestsPage = () => {
     };
 
     fetchData();
-  }, [userProfile]);
+  }, [userProfile, db]);
 
   const getCustomerName = (id: string | undefined): string => {
     if (!id) return 'Unknown Customer';
@@ -172,7 +185,54 @@ const QuoteRequestsPage = () => {
     router.push(`/quote-requests/${id}/edit`);
   };
 
-  if (loading) {
+  // Delete handler functions
+  const handleDeleteClick = (quoteRequestId: string) => {
+    setShowDeleteConfirm(quoteRequestId);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!showDeleteConfirm || !userProfile || !user) return;
+
+    const quoteRequest = quoteRequests.find(qr => qr.id === showDeleteConfirm);
+    if (!quoteRequest) return;
+
+    setDeletingQuoteRequest(showDeleteConfirm);
+
+    try {
+      const result = await deleteQuoteRequest({
+        quoteRequestId: showDeleteConfirm,
+        quoteRequestTitle: quoteRequest.title,
+        creatorCountry: quoteRequest.creatorCountry,
+        involvedCountry: quoteRequest.involvedCountry,
+        userEmail: user.email || '',
+        userCountry: userProfile.businessUnit || ''
+      });
+
+      if (result.success) {
+        // Remove the quote request from the local state
+        setQuoteRequests(prev => prev.filter(qr => qr.id !== showDeleteConfirm));
+        setShowDeleteConfirm(null);
+      } else {
+        alert(result.error || 'Failed to delete quote request');
+      }
+    } catch (error) {
+      console.error('Error deleting quote request:', error);
+      alert('Failed to delete quote request');
+    } finally {
+      setDeletingQuoteRequest(null);
+    }
+  };
+
+  const handleCancelDelete = () => {
+    setShowDeleteConfirm(null);
+  };
+
+  // Check if user can delete a quote request (only creator can delete)
+  const canDeleteQuoteRequest = (quoteRequest: QuoteRequest) => {
+    return userProfile?.businessUnit === quoteRequest.creatorCountry;
+  };
+
+  if (loading || authLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <LoadingSpinner />
@@ -184,6 +244,22 @@ const QuoteRequestsPage = () => {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-red-500">{error}</div>
+      </div>
+    );
+  }
+
+  if (!authLoading && !userProfile) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="text-red-500 mb-4">User profile not found. Please log in again.</div>
+          <button
+            onClick={() => window.location.href = '/login'}
+            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+          >
+            Go to Login
+          </button>
+        </div>
       </div>
     );
   }
@@ -208,8 +284,10 @@ const QuoteRequestsPage = () => {
             customers={customers}
             labels={labels}
             onCardClick={handleCardClick}
+            onDeleteClick={handleDeleteClick}
             getCustomerName={getCustomerName}
             getLabelName={getLabelName}
+            canDelete={canDeleteQuoteRequest(qr)}
           />
         ))}
         {quoteRequests.length === 0 && (
@@ -218,6 +296,39 @@ const QuoteRequestsPage = () => {
                         </div>
                       )}
                     </div>
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg p-6 max-w-sm w-full">
+            <h3 className="text-lg font-semibold mb-4 text-red-600">Confirm Delete</h3>
+            <p className="mb-4">Are you sure you want to delete this quote request? This action cannot be undone.</p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={handleCancelDelete}
+                disabled={deletingQuoteRequest === showDeleteConfirm}
+                className="px-4 py-2 text-gray-600 hover:text-gray-800 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                disabled={deletingQuoteRequest === showDeleteConfirm}
+                className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50 flex items-center gap-2"
+              >
+                {deletingQuoteRequest === showDeleteConfirm ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    Deleting...
+                  </>
+                ) : (
+                  'Delete'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

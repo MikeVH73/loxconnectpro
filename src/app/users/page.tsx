@@ -4,6 +4,7 @@ import { useAuth } from "../AuthProvider";
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, setDoc } from "firebase/firestore";
 import { createUserWithEmailAndPassword, updateProfile, signInWithEmailAndPassword, signOut } from "firebase/auth";
 import { db, auth } from "../../firebaseClient";
+import { checkAndFixUserProfiles } from "../utils/userProfileFixer";
 
 export default function UsersPage() {
   const { user, loading, userProfile } = useAuth();
@@ -29,6 +30,8 @@ export default function UsersPage() {
     role: "readOnly",
     countries: [] as string[],
   });
+  const [fixingProfiles, setFixingProfiles] = useState(false);
+  const [resettingPassword, setResettingPassword] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -217,9 +220,11 @@ export default function UsersPage() {
       // Create Firestore user document with the Firebase Auth UID as document ID
       await setDoc(doc(db, "users", userCredential.user.uid), {
         displayName: newUser.displayName.trim(),
+        name: newUser.displayName.trim(), // Add name field for compatibility
         email: newUser.email.trim(),
         role: newUser.role,
         countries: newUser.countries,
+        businessUnit: newUser.countries.length > 0 ? newUser.countries[0] : 'Unknown', // Add businessUnit
         uid: userCredential.user.uid,
         createdAt: new Date()
       });
@@ -319,6 +324,93 @@ export default function UsersPage() {
       setUsers(visibleUsers);
     } catch (error) {
       console.error("Error deleting user:", error);
+    }
+  };
+
+  const handleFixUserProfiles = async () => {
+    try {
+      setFixingProfiles(true);
+      setError("");
+      setSuccess("");
+      
+      const results = await checkAndFixUserProfiles();
+      
+      if (results.errors.length > 0) {
+        setError(`Fixed ${results.fixedUsers} users but encountered ${results.errors.length} errors. Check console for details.`);
+      } else {
+        setSuccess(`Successfully fixed ${results.fixedUsers} out of ${results.totalUsers} user profiles!`);
+      }
+      
+      // Refresh users list
+      const usersSnap = await getDocs(collection(db, "users"));
+      const allUsers = usersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      
+      // If user is superAdmin, show all users
+      if (userProfile?.role === "superAdmin") {
+        setUsers(allUsers);
+      } else {
+        // Otherwise, filter users by current user's countries
+        const userCountries = userProfile?.countries || [];
+        const visibleUsers = userCountries.length > 0
+          ? allUsers.filter((userData: any) => {
+              // Show users that have any country in common with current user
+              return userData.countries?.some((country: string) => userCountries.includes(country));
+            })
+          : allUsers;
+        setUsers(visibleUsers);
+      }
+      
+    } catch (error) {
+      console.error("Error fixing user profiles:", error);
+      setError("Failed to fix user profiles");
+    } finally {
+      setFixingProfiles(false);
+    }
+  };
+
+  // Create temporary password for a user
+  const handleCreateTemporaryPassword = async (userId: string, userEmail: string, userCountries: string[]) => {
+    try {
+      setResettingPassword(userId);
+      setError("");
+      setSuccess("");
+
+      // Check authorization
+      if (userProfile?.role === "superAdmin") {
+        // superAdmin can reset password for any user
+      } else if (userProfile?.role === "admin") {
+        // admin can only reset password for users in the same country
+        const currentUserCountries = userProfile?.countries || [];
+        const hasCommonCountry = currentUserCountries.some(country => 
+          userCountries.includes(country)
+        );
+        if (!hasCommonCountry) {
+          setError("You can only reset passwords for users in your country");
+          return;
+        }
+      } else {
+        setError("You don't have permission to reset passwords");
+        return;
+      }
+
+      // Generate a temporary password
+      const tempPassword = Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-4);
+      
+      // Update the user profile in Firestore with temporary password
+      await updateDoc(doc(db, "users", userId), {
+        tempPassword: tempPassword,
+        passwordResetAt: new Date(),
+        passwordResetBy: userProfile?.email || 'unknown',
+        passwordResetRequired: true
+      });
+
+      setSuccess(`Temporary password created for ${userEmail}: ${tempPassword}. The user will be prompted to change this password on their next login.`);
+      
+    } catch (error) {
+      console.error("Error creating temporary password:", error);
+      setError(`Failed to create temporary password: ${error.message}`);
+    } finally {
+      setResettingPassword(null);
     }
   };
 
@@ -506,25 +598,36 @@ export default function UsersPage() {
         <div className="card-modern">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-semibold">Users List</h2>
-            {canManageUsers && (
-              <button
-                onClick={() => {
-                  // Reset form completely when opening modal
-                  setNewUser({
-                    displayName: "",
-                    email: "",
-                    password: "",
-                    role: "readOnly",
-                    countries: [],
-                  });
-                  setError("");
-                  setShowCreateUser(true);
-                }}
-                className="bg-[#e40115] text-white px-4 py-2 rounded-md hover:bg-[#c7010e] transition font-semibold"
-              >
-                Add New User
-              </button>
-            )}
+            <div className="flex gap-2">
+              {canManageUsers && (
+                <>
+                  <button
+                    onClick={handleFixUserProfiles}
+                    disabled={fixingProfiles}
+                    className="bg-yellow-600 text-white px-4 py-2 rounded-md hover:bg-yellow-700 transition font-semibold disabled:opacity-50"
+                  >
+                    {fixingProfiles ? "Fixing..." : "Fix User Profiles"}
+                  </button>
+                  <button
+                    onClick={() => {
+                      // Reset form completely when opening modal
+                      setNewUser({
+                        displayName: "",
+                        email: "",
+                        password: "",
+                        role: "readOnly",
+                        countries: [],
+                      });
+                      setError("");
+                      setShowCreateUser(true);
+                    }}
+                    className="bg-[#e40115] text-white px-4 py-2 rounded-md hover:bg-[#c7010e] transition font-semibold"
+                  >
+                    Add New User
+                  </button>
+                </>
+              )}
+            </div>
           </div>
           
           {users.length === 0 ? (
@@ -584,6 +687,19 @@ export default function UsersPage() {
                             >
                               Delete
                             </button>
+                            {(userProfile?.role === "admin" || userProfile?.role === "superAdmin") && (
+                              <button
+                                onClick={() => handleCreateTemporaryPassword(
+                                  userData.id, 
+                                  userData.email, 
+                                  userData.countries || []
+                                )}
+                                disabled={resettingPassword === userData.id}
+                                className="text-green-600 hover:text-green-800 font-medium text-sm disabled:opacity-50"
+                              >
+                                {resettingPassword === userData.id ? "Creating..." : "Reset Password"}
+                              </button>
+                            )}
                           </div>
                         </td>
                       )}

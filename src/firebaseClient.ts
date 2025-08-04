@@ -18,14 +18,15 @@ function initializeFirebase() {
   }
 
   try {
+    // Use hardcoded values for client-side to avoid process.env issues
     const firebaseConfig = {
-      apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-      authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-      projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-      storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-      messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-      appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
-      measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
+      apiKey: "AIzaSyD3LGcmPieAnJuGrNUyIRTQw3bQ1Gzsjj0",
+      authDomain: "loxconnect-pro.firebaseapp.com",
+      projectId: "loxconnect-pro",
+      storageBucket: "loxconnect-pro.firebasestorage.app",
+      messagingSenderId: "767888928675",
+      appId: "1:767888928675:web:e4c6bb3914fc97ecf4b416",
+      measurementId: "G-5P1C1YTGQT"
     };
 
     // Check if any required config is missing

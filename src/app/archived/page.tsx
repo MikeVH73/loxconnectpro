@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Chip } from "@mui/material";
 import { useAuth } from "../AuthProvider";
 import MessageHistoryIndicator from "../components/MessageHistoryIndicator";
+import { deleteQuoteRequest } from "../utils/quoteRequestUtils";
 
 interface QuoteRequest {
   id: string;
@@ -24,7 +25,9 @@ export default function ArchivedPage() {
   const [loading, setLoading] = useState(true);
   const [labels, setLabels] = useState<any[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
-  const { userProfile } = useAuth();
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
+  const [deletingQuoteRequest, setDeletingQuoteRequest] = useState<string | null>(null);
+  const { userProfile, user, loading: authLoading } = useAuth();
 
   useEffect(() => {
     const fetchData = async () => {
@@ -71,10 +74,74 @@ export default function ArchivedPage() {
   const getLastNote = (notes: any[] = []) => notes.length ? notes[notes.length - 1].text : '';
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm("Are you sure you want to delete this quote request? This cannot be undone.")) return;
-    await deleteDoc(doc(db, "quoteRequests", id));
-    setQuoteRequests(qrs => qrs.filter(qr => qr.id !== id));
+    setShowDeleteConfirm(id);
   };
+
+  const handleConfirmDelete = async () => {
+    if (!showDeleteConfirm || !userProfile || !user) return;
+
+    const quoteRequest = quoteRequests.find(qr => qr.id === showDeleteConfirm);
+    if (!quoteRequest) return;
+
+    setDeletingQuoteRequest(showDeleteConfirm);
+
+    try {
+      const result = await deleteQuoteRequest({
+        quoteRequestId: showDeleteConfirm,
+        quoteRequestTitle: quoteRequest.title,
+        creatorCountry: quoteRequest.creatorCountry,
+        involvedCountry: quoteRequest.involvedCountry,
+        userEmail: user.email || '',
+        userCountry: userProfile.businessUnit || ''
+      });
+
+      if (result.success) {
+        // Remove the quote request from the local state
+        setQuoteRequests(prev => prev.filter(qr => qr.id !== showDeleteConfirm));
+        setShowDeleteConfirm(null);
+      } else {
+        alert(result.error || 'Failed to delete quote request');
+      }
+    } catch (error) {
+      console.error('Error deleting quote request:', error);
+      alert('Failed to delete quote request');
+    } finally {
+      setDeletingQuoteRequest(null);
+    }
+  };
+
+  const handleCancelDelete = () => {
+    setShowDeleteConfirm(null);
+  };
+
+  // Check if user can delete a quote request (only creator can delete)
+  const canDeleteQuoteRequest = (quoteRequest: QuoteRequest) => {
+    return userProfile?.businessUnit === quoteRequest.creatorCountry;
+  };
+
+  if (loading || authLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-gray-900"></div>
+      </div>
+    );
+  }
+
+  if (!authLoading && !userProfile) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="text-red-500 mb-4">User profile not found. Please log in again.</div>
+          <button
+            onClick={() => window.location.href = '/login'}
+            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+          >
+            Go to Login
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-8">
@@ -124,7 +191,7 @@ export default function ArchivedPage() {
                         </div>
                         <div className="mt-2 flex items-center gap-4">
                           <span className="text-[#e40115] underline">Edit</span>
-                          {userProfile && ["admin", "superAdmin"].includes(userProfile.role) && (
+                          {canDeleteQuoteRequest(qr) && (
                             <button
                               type="button"
                               className="text-xs text-white bg-[#e40115] rounded px-3 py-1 ml-2 hover:bg-red-700 transition"
@@ -143,6 +210,39 @@ export default function ArchivedPage() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg p-6 max-w-sm w-full">
+            <h3 className="text-lg font-semibold mb-4 text-red-600">Confirm Delete</h3>
+            <p className="mb-4">Are you sure you want to delete this quote request? This action cannot be undone.</p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={handleCancelDelete}
+                disabled={deletingQuoteRequest === showDeleteConfirm}
+                className="px-4 py-2 text-gray-600 hover:text-gray-800 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                disabled={deletingQuoteRequest === showDeleteConfirm}
+                className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50 flex items-center gap-2"
+              >
+                {deletingQuoteRequest === showDeleteConfirm ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    Deleting...
+                  </>
+                ) : (
+                  'Delete'
+                )}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

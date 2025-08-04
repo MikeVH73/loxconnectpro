@@ -29,7 +29,7 @@ export default function CustomersPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
   const [showEditModal, setShowEditModal] = useState<string | null>(null);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
-  const { userProfile } = useAuth();
+  const { userProfile, loading: authLoading } = useAuth();
   const { countryNames: countries, loading: countriesLoading } = useCountries();
 
   useEffect(() => {
@@ -68,7 +68,7 @@ export default function CustomersPage() {
         console.log('User profile:', userProfile);
 
         // Filter customers based on user role and countries
-        if (userProfile?.role === "user" && userProfile.countries?.length > 0) {
+        if (userProfile?.role === "user" && userProfile.countries && userProfile.countries.length > 0) {
           console.log('Filtering customers for user countries:', userProfile.countries);
           fetchedCustomers = fetchedCustomers.filter(customer => {
             const customerCountries = customer.countries || Object.keys(customer.customerNumbers || {});
@@ -87,10 +87,10 @@ export default function CustomersPage() {
       }
     };
 
-    if (!countriesLoading) {
+    if (!countriesLoading && !authLoading) {
       fetchCustomers();
     }
-  }, [userProfile, countriesLoading]);
+  }, [userProfile, countriesLoading, authLoading]);
 
   // Group customers by country
   const groupedCustomers = customers.reduce<{ [country: string]: Customer[] }>((acc, customer) => {

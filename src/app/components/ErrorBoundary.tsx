@@ -66,7 +66,7 @@ class ErrorBoundary extends Component<Props, State> {
                   Go back to previous page
                 </button>
               </div>
-              {process.env.NODE_ENV === 'development' && this.state.errorInfo && (
+              {typeof process !== 'undefined' && process.env?.NODE_ENV === 'development' && this.state.errorInfo && (
                 <details className="mt-4 text-left">
                   <summary className="text-sm text-gray-600 cursor-pointer hover:text-gray-900">
                     Technical Details
