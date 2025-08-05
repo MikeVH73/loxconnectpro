@@ -1034,15 +1034,16 @@ export default function EditQuoteRequest() {
                           value={product.description}
                           onChange={(e) => handleInputChange(`products.${index}.description`, e.target.value)}
                           placeholder="Description"
-                          className="col-span-7 p-2 border border-gray-300 rounded"
+                          className="col-span-6 p-2 border border-gray-300 rounded"
                           disabled={isReadOnly}
                         />
                         <input
                           type="number"
                           value={product.quantity}
                           onChange={(e) => handleInputChange(`products.${index}.quantity`, parseInt(e.target.value))}
-                          className="col-span-1 p-2 border border-gray-300 rounded"
+                          className="col-span-2 p-2 border border-gray-300 rounded"
                           disabled={isReadOnly}
+                          min="1"
                         />
                         {!isReadOnly && (
                           <button

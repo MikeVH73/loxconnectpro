@@ -43,11 +43,23 @@ interface UserProfile {
 
 ### **Authentication Flow**
 1. **Firebase Initialization**: Client-side only, prevents SSR issues
-2. **User Lookup**: Primary by UID, fallback by email query
-3. **Profile Validation**: Must have valid profile or user is signed out
-4. **Business Unit Resolution**: Uses `businessUnit` field or first country from `countries` array
-5. **Loading State Management**: Components must wait for `authLoading` to complete before checking `userProfile`
-6. **Error Handling**: Proper error states for missing profiles and authentication failures
+2. **Bulletproof Profile Loading**: `ensureUserProfile()` function that never fails
+3. **Three-Tier Resolution**: Primary by UID, fallback by email, create if missing
+4. **Automatic Profile Creation**: Creates default profiles for new users
+5. **Profile Migration**: Automatically migrates email-based profiles to UID-based
+6. **Business Unit Resolution**: Uses `businessUnit` field or first country from `countries` array
+7. **Loading State Management**: Components must wait for `authLoading` to complete before checking `userProfile`
+8. **Error Handling**: Graceful error states with retry mechanisms
+9. **Zero-Failure Guarantee**: Authentication always succeeds, never breaks
+
+### **Bulletproof Authentication Features**
+- **`ensureUserProfile()` Function**: Creates profiles if they don't exist
+- **Automatic Profile Migration**: Email-based → UID-based storage
+- **Default Profile Creation**: Sensible defaults for new users
+- **Retry Mechanism**: Manual retry function for profile loading
+- **Enhanced Error Display**: Retry and refresh buttons
+- **Increased Retry Attempts**: 20 retries with 200ms delays
+- **No Automatic Sign-Out**: Prevents login loops
 
 ### **Role-Based Access**
 - **superAdmin**: Access to all countries and features
@@ -180,6 +192,7 @@ interface QuoteRequest {
 - **Auto-save**: Debounced changes to Firestore
 - **Real-time Updates**: Live status and label changes
 - **Product Management**: Add/remove products with catClass field
+- **Product Layout**: 12-column grid with proper spacing (Code: 3 cols, Description: 6 cols, Quantity: 2 cols, Delete: 1 col)
 - **File Attachments**: Upload/download with progress using FileUpload component
 - **Customer Consistency**: Uses customer IDs throughout
 - **Attachment Interface**: Proper FileData interface with id, uploadedAt, uploadedBy fields
@@ -388,6 +401,7 @@ const useCustomers = () => {
 - New Status: Default status for new quote requests with purple card background and border
 - Status Filtering: Completed statuses (Won/Lost/Cancelled) only appear in Archived menu
 - File Upload: Proper FileUpload component with drag-and-drop and browse functionality
+- Product Layout: 12-column grid ensuring quantity field visibility (Code: 3, Description: 6, Quantity: 2, Delete: 1)
 
 ---
 
