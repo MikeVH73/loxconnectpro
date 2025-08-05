@@ -395,6 +395,7 @@ export default function DashboardPage() {
                     getCustomerName={getCustomerName}
                     getLabelName={getLabelName}
                     canDelete={canDeleteQuoteRequest(qr)}
+                    showDeleteButton={false}
                   />
                 ))}
                 {urgentProblems.length === 0 && (
@@ -418,6 +419,7 @@ export default function DashboardPage() {
                     getCustomerName={getCustomerName}
                     getLabelName={getLabelName}
                     canDelete={canDeleteQuoteRequest(qr)}
+                    showDeleteButton={false}
                   />
                 ))}
                 {waiting.length === 0 && (
@@ -441,6 +443,7 @@ export default function DashboardPage() {
                     getCustomerName={getCustomerName}
                     getLabelName={getLabelName}
                     canDelete={canDeleteQuoteRequest(qr)}
+                    showDeleteButton={false}
                   />
                 ))}
                 {standard.length === 0 && (
@@ -464,6 +467,7 @@ export default function DashboardPage() {
                     getCustomerName={getCustomerName}
                     getLabelName={getLabelName}
                     canDelete={canDeleteQuoteRequest(qr)}
+                    showDeleteButton={false}
                   />
                 ))}
                 {snoozed.length === 0 && (

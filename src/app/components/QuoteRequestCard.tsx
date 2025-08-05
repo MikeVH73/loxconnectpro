@@ -58,13 +58,14 @@ interface QuoteRequestCardProps {
   getCustomerName: (id: string | undefined) => string;
   getLabelName: (id: string | undefined) => string;
   canDelete?: boolean;
+  showDeleteButton?: boolean; // New prop to control delete button visibility
 }
 
 interface QuoteRequestWithDynamicKeys extends QuoteRequest {
   [key: string]: any;
 }
 
-export default function QuoteRequestCard({ qr, customers, labels, onCardClick, onDeleteClick, getCustomerName, getLabelName, canDelete }: QuoteRequestCardProps) {
+export default function QuoteRequestCard({ qr, customers, labels, onCardClick, onDeleteClick, getCustomerName, getLabelName, canDelete, showDeleteButton = true }: QuoteRequestCardProps) {
   const { userProfile } = useAuth();
   const [isClient, setIsClient] = useState(false);
 
@@ -131,7 +132,7 @@ export default function QuoteRequestCard({ qr, customers, labels, onCardClick, o
       }`}
     >
       {/* Delete Button - Only show if user can delete */}
-      {canDelete && onDeleteClick && (
+      {showDeleteButton && canDelete && onDeleteClick && (
         <button
           onClick={handleDeleteClick}
           className="delete-button absolute top-2 right-2 p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-full transition-colors duration-200"
@@ -145,12 +146,18 @@ export default function QuoteRequestCard({ qr, customers, labels, onCardClick, o
 
       {/* Title and Customer */}
       <div className="flex items-start justify-between mb-2">
-        <div className="flex-1">
-          <h3 className="font-medium text-gray-900 truncate">{qr.title}</h3>
-          <p className="text-sm text-gray-600">{getCustomerName(qr.customer)}</p>
+        <div className="flex-1 min-w-0">
+          <h3 className="font-medium text-gray-900 leading-tight break-words" style={{ 
+            wordBreak: 'break-word',
+            lineHeight: '1.3',
+            minHeight: '1.3em'
+          }}>
+            {qr.title}
+          </h3>
+          <p className="text-sm text-gray-600 mt-1">{getCustomerName(qr.customer)}</p>
         </div>
         {qr.hasUnreadMessages && (
-          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 ml-2 flex-shrink-0">
             New Messages
           </span>
         )}
