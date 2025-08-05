@@ -163,7 +163,7 @@ export default function QuoteRequestNotifications({ quoteRequestId, userCountry 
                       </span>
                     </p>
                     <p className="mt-1 text-xs text-gray-500">
-                      `From ${(activity as any).senderCountry} • ${formatDate(activity.createdAt)}`
+                      From {activity.senderCountry} • {formatDate(activity.createdAt)}
                     </p>
                   </div>
                 </div>
