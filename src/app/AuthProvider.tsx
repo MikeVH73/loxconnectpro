@@ -47,10 +47,18 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
     let unsubscribe = () => {};
 
     const initializeAuth = async () => {
-      if (!auth || !db) {
-        setError('Firebase is not properly configured. Please check your environment variables.');
-        setLoading(false);
-        return;
+      // Wait a bit for Firebase to initialize
+      let retries = 0;
+      const maxRetries = 10;
+      
+      while (!auth || !db) {
+        if (retries >= maxRetries) {
+          setError('Firebase is not properly configured. Please check your environment variables.');
+          setLoading(false);
+          return;
+        }
+        await new Promise(resolve => setTimeout(resolve, 100));
+        retries++;
       }
 
       unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -104,7 +112,7 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
                   } as UserProfile);
                 } else {
                   console.error('No user profile found for email:', user.email);
-                  setError('No user profile found. Please contact your administrator.');
+                  setError('User profile not found. Please contact your administrator.');
                   if (auth) auth.signOut();
                 }
               } catch (emailLookupError) {
