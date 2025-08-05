@@ -20,6 +20,7 @@ interface AuthContextType {
   loading: boolean;
   error: string | null;
   signOutUser: () => Promise<void>;
+  retryProfileLoad: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -28,6 +29,7 @@ const AuthContext = createContext<AuthContextType>({
   loading: true,
   error: null,
   signOutUser: async () => {},
+  retryProfileLoad: async () => {},
 });
 
 function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -75,14 +77,14 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
               const userData = userDoc.data();
               console.log('Found user profile by UID:', userData);
               
-              // Map database fields to UserProfile interface
+              // Map database fields to UserProfile interface with better fallbacks
               setUserProfile({
-                id: userDoc.id, // Use document ID as id
-                email: userData.email || '',
+                id: userDoc.id,
+                email: userData.email || user.email || '',
                 role: userData.role || 'user',
                 businessUnit: userData.businessUnit || userData.countries?.[0] || '',
                 countries: userData.countries || [],
-                name: userData.displayName || userData.name || ''
+                name: userData.displayName || userData.name || userData.email?.split('@')[0] || 'Unknown User'
               } as UserProfile);
             } else {
               // Fallback to email lookup - query by email field
@@ -101,29 +103,31 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
                   const userData = userDoc.data();
                   console.log('Found user profile by email:', userData);
                   
-                  // Map database fields to UserProfile interface
+                  // Map database fields to UserProfile interface with better fallbacks
                   setUserProfile({
-                    id: userDoc.id, // Use document ID as id
-                    email: userData.email || '',
+                    id: userDoc.id,
+                    email: userData.email || user.email || '',
                     role: userData.role || 'user',
                     businessUnit: userData.businessUnit || userData.countries?.[0] || '',
                     countries: userData.countries || [],
-                    name: userData.displayName || userData.name || ''
+                    name: userData.displayName || userData.name || userData.email?.split('@')[0] || 'Unknown User'
                   } as UserProfile);
                 } else {
                   console.error('No user profile found for email:', user.email);
+                  // Don't sign out immediately, just set an error
                   setError('User profile not found. Please contact your administrator.');
-                  if (auth) auth.signOut();
+                  // Don't sign out - let the user try to refresh
                 }
               } catch (emailLookupError) {
                 console.error('Error in email lookup:', emailLookupError);
                 setError('Error fetching user profile');
-                if (auth) auth.signOut();
+                // Don't sign out - let the user try to refresh
               }
             }
           } catch (err) {
             console.error('Error fetching user profile:', err);
             setError('Error fetching user profile');
+            // Don't sign out - let the user try to refresh
           }
         } else {
           setUserProfile(null);
@@ -148,10 +152,68 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
       await signOut(auth);
       setUser(null);
       setUserProfile(null);
+      setError(null);
       window.location.href = '/login';
     } catch (err) {
       console.error('Error signing out:', err);
       setError('Error signing out');
+    }
+  };
+
+  const retryProfileLoad = async () => {
+    if (!user || !db) return;
+    
+    setError(null);
+    setLoading(true);
+    
+    try {
+      console.log('Retrying profile load for user:', user.email);
+      
+      // Try to get user profile by UID first
+      const userDoc = await getDoc(doc(db as Firestore, 'users', user.uid));
+
+      if (userDoc.exists()) {
+        const userData = userDoc.data();
+        console.log('Found user profile by UID on retry:', userData);
+        
+        setUserProfile({
+          id: userDoc.id,
+          email: userData.email || user.email || '',
+          role: userData.role || 'user',
+          businessUnit: userData.businessUnit || userData.countries?.[0] || '',
+          countries: userData.countries || [],
+          name: userData.displayName || userData.name || userData.email?.split('@')[0] || 'Unknown User'
+        } as UserProfile);
+      } else {
+        // Fallback to email lookup
+        const { collection, query, where, getDocs } = await import('firebase/firestore');
+        
+        const usersRef = collection(db as Firestore, 'users');
+        const q = query(usersRef, where('email', '==', user.email));
+        const querySnapshot = await getDocs(q);
+        
+        if (!querySnapshot.empty) {
+          const userDoc = querySnapshot.docs[0];
+          const userData = userDoc.data();
+          console.log('Found user profile by email on retry:', userData);
+          
+          setUserProfile({
+            id: userDoc.id,
+            email: userData.email || user.email || '',
+            role: userData.role || 'user',
+            businessUnit: userData.businessUnit || userData.countries?.[0] || '',
+            countries: userData.countries || [],
+            name: userData.displayName || userData.name || userData.email?.split('@')[0] || 'Unknown User'
+          } as UserProfile);
+        } else {
+          setError('User profile not found. Please contact your administrator.');
+        }
+      }
+    } catch (err) {
+      console.error('Error retrying profile load:', err);
+      setError('Error fetching user profile');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -179,19 +241,27 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
               </p>
             )}
           </div>
-          <button
-            onClick={() => window.location.reload()}
-            className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-          >
-            Retry
-          </button>
+          <div className="mt-4 space-x-2">
+            <button
+              onClick={retryProfileLoad}
+              className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+            >
+              Retry
+            </button>
+            <button
+              onClick={() => window.location.reload()}
+              className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+            >
+              Refresh Page
+            </button>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <AuthContext.Provider value={{ user, userProfile, loading, error, signOutUser }}>
+    <AuthContext.Provider value={{ user, userProfile, loading, error, signOutUser, retryProfileLoad }}>
       {children}
     </AuthContext.Provider>
   );
