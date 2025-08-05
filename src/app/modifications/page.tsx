@@ -175,14 +175,60 @@ export default function ModificationsPage() {
                         } else if (chg.field === 'customer') {
                           from = from ? (customersMap[from]?.name || from) : '(none)';
                           to = to ? (customersMap[to]?.name || to) : '(none)';
+                        } else if (chg.field === 'attachments') {
+                          // Show attachment count changes instead of full JSON
+                          const fromCount = Array.isArray(from) ? from.length : 0;
+                          const toCount = Array.isArray(to) ? to.length : 0;
+                          if (fromCount === toCount) {
+                            return null; // Skip if no change in count
+                          } else if (toCount > fromCount) {
+                            return <li key={idx}><b>{chg.field}</b>: <span className="text-gray-500 line-through">{fromCount} attachment(s)</span> → <span className="text-[#e40115]">{toCount} attachment(s)</span></li>;
+                          } else {
+                            return <li key={idx}><b>{chg.field}</b>: <span className="text-gray-500 line-through">{fromCount} attachment(s)</span> → <span className="text-[#e40115]">{toCount} attachment(s)</span></li>;
+                          }
+                        } else if (chg.field === 'notes') {
+                          // Show note count changes instead of full JSON
+                          const fromCount = Array.isArray(from) ? from.length : 0;
+                          const toCount = Array.isArray(to) ? to.length : 0;
+                          if (fromCount === toCount) {
+                            return null; // Skip if no change in count
+                          } else if (toCount > fromCount) {
+                            return <li key={idx}><b>{chg.field}</b>: <span className="text-gray-500 line-through">{fromCount} note(s)</span> → <span className="text-[#e40115]">{toCount} note(s)</span></li>;
+                          } else {
+                            return <li key={idx}><b>{chg.field}</b>: <span className="text-gray-500 line-through">{fromCount} note(s)</span> → <span className="text-[#e40115]">{toCount} note(s)</span></li>;
+                          }
+                        } else if (chg.field === 'waitingForAnswer' || chg.field === 'urgent' || chg.field === 'problems' || chg.field === 'planned') {
+                          // Show boolean changes as label additions/removals
+                          const labelNames = {
+                            waitingForAnswer: 'Waiting for Answer',
+                            urgent: 'Urgent',
+                            problems: 'Problems',
+                            planned: 'Planned'
+                          };
+                          if (from === to) {
+                            return null; // Skip if no change
+                          } else if (to === true) {
+                            return <li key={idx}><b>labels</b>: <span className="text-gray-500 line-through">(none)</span> → <span className="text-[#e40115]">{labelNames[chg.field]}</span></li>;
+                          } else {
+                            return <li key={idx}><b>labels</b>: <span className="text-gray-500 line-through">{labelNames[chg.field]}</span> → <span className="text-[#e40115]">(removed)</span></li>;
+                          }
                         } else if (typeof from === 'object' || typeof to === 'object') {
-                          from = JSON.stringify(from);
-                          to = JSON.stringify(to);
+                          // For other objects, show a simple change description
+                          if (JSON.stringify(from) === JSON.stringify(to)) {
+                            return null; // Skip if no actual change
+                          }
+                          return <li key={idx}><b>{chg.field}</b>: <span className="text-gray-500 line-through">(updated)</span> → <span className="text-[#e40115]">(updated)</span></li>;
                         }
+                        
+                        // Only show if there's an actual change
+                        if (from === to) {
+                          return null;
+                        }
+                        
                         return (
-                          <li key={idx}><b>{chg.field}</b>: <span className="text-gray-500 line-through">{from}</span> → <span className="text-[#e40115]">{to}</span></li>
+                          <li key={idx}><b>{chg.field}</b>: <span className="text-gray-500 line-through">{String(from || '(none)')}</span> → <span className="text-[#e40115]">{String(to || '(none)')}</span></li>
                         );
-                      })}
+                      }).filter(Boolean)}
                     </ul>
                   </td>
                 </tr>

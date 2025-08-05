@@ -22,6 +22,18 @@ interface Notification {
   isRead: boolean;
 }
 
+interface Modification {
+  id: string;
+  quoteRequestId: string;
+  dateTime: Timestamp;
+  user: string;
+  changes: Array<{
+    field: string;
+    from: any;
+    to: any;
+  }>;
+}
+
 interface QuoteRequestNotificationsProps {
   quoteRequestId: string;
   userCountry: string;
@@ -31,6 +43,7 @@ const MAX_ACTIVITIES = 4;
 
 export default function QuoteRequestNotifications({ quoteRequestId, userCountry }: QuoteRequestNotificationsProps) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [modifications, setModifications] = useState<Modification[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Helper function to format date
@@ -52,15 +65,24 @@ export default function QuoteRequestNotifications({ quoteRequestId, userCountry 
   useEffect(() => {
     if (!db || !quoteRequestId || !userCountry) return;
 
+    // Fetch notifications
     const notificationsRef = collection(db as Firestore, 'notifications');
-    const q = query(
+    const notificationsQuery = query(
       notificationsRef,
       where('quoteRequestId', '==', quoteRequestId),
       where('targetCountry', '==', userCountry),
       orderBy('createdAt', 'desc')
     );
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    // Fetch modifications
+    const modificationsRef = collection(db as Firestore, 'modifications');
+    const modificationsQuery = query(
+      modificationsRef,
+      where('quoteRequestId', '==', quoteRequestId),
+      orderBy('dateTime', 'desc')
+    );
+
+    const unsubscribeNotifications = onSnapshot(notificationsQuery, (snapshot) => {
       const newNotifications = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
@@ -75,22 +97,28 @@ export default function QuoteRequestNotifications({ quoteRequestId, userCountry 
         return acc;
       }, {} as Record<string, Notification>);
 
-      const sortedNotifications = Object.values(uniqueNotifications)
-        .sort((a, b) => {
-          const dateA = a.createdAt?.toDate() || new Date(0);
-          const dateB = b.createdAt?.toDate() || new Date(0);
-          return dateB.getTime() - dateA.getTime();
-        })
-        .slice(0, MAX_ACTIVITIES); // Only keep the latest 4 activities
-
-      setNotifications(sortedNotifications);
-      setLoading(false);
+      setNotifications(Object.values(uniqueNotifications));
     }, (error) => {
       console.error('Error fetching notifications:', error);
+    });
+
+    const unsubscribeModifications = onSnapshot(modificationsQuery, (snapshot) => {
+      const newModifications = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Modification[];
+
+      setModifications(newModifications);
+      setLoading(false);
+    }, (error) => {
+      console.error('Error fetching modifications:', error);
       setLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribeNotifications();
+      unsubscribeModifications();
+    };
   }, [quoteRequestId, userCountry]);
 
   const handleClearNotifications = async () => {
@@ -99,6 +127,66 @@ export default function QuoteRequestNotifications({ quoteRequestId, userCountry 
     } catch (error) {
       console.error('Error clearing notifications:', error);
     }
+  };
+
+  // Combine notifications and modifications for display
+  const allActivities = [
+    ...notifications.map(notif => ({
+      id: notif.id,
+      type: 'notification' as const,
+      dateTime: notif.createdAt,
+      user: notif.sender,
+      content: notif.content,
+      notificationType: notif.notificationType,
+      senderCountry: notif.senderCountry
+    })),
+    ...modifications.map(mod => ({
+      id: mod.id,
+      type: 'modification' as const,
+      dateTime: mod.dateTime,
+      user: mod.user,
+      changes: mod.changes
+    }))
+  ].sort((a, b) => {
+    const dateA = a.dateTime?.toDate() || new Date(0);
+    const dateB = b.dateTime?.toDate() || new Date(0);
+    return dateB.getTime() - dateA.getTime();
+  }).slice(0, MAX_ACTIVITIES);
+
+  // Helper function to format modification changes
+  const formatModificationChanges = (changes: any[]) => {
+    return changes.map(change => {
+      const { field, from, to } = change;
+      
+      // Format different field types
+      if (field === 'products') {
+        const fromStr = Array.isArray(from) ? from.map((p: any) => `${p.catClass || ''} ${p.description || ''} x${p.quantity || 1}`).join('; ') : String(from);
+        const toStr = Array.isArray(to) ? to.map((p: any) => `${p.catClass || ''} ${p.description || ''} x${p.quantity || 1}`).join('; ') : String(to);
+        return `${field}: ${fromStr} → ${toStr}`;
+      } else if (field === 'attachments') {
+        const fromCount = Array.isArray(from) ? from.length : 0;
+        const toCount = Array.isArray(to) ? to.length : 0;
+        return `${field}: ${fromCount} → ${toCount} attachment(s)`;
+      } else if (field === 'notes') {
+        const fromCount = Array.isArray(from) ? from.length : 0;
+        const toCount = Array.isArray(to) ? to.length : 0;
+        return `${field}: ${fromCount} → ${toCount} note(s)`;
+      } else if (field === 'waitingForAnswer' || field === 'urgent' || field === 'problems' || field === 'planned') {
+        const labelNames: Record<string, string> = {
+          waitingForAnswer: 'Waiting for Answer',
+          urgent: 'Urgent',
+          problems: 'Problems',
+          planned: 'Planned'
+        };
+        if (to === true) {
+          return `Added ${labelNames[field] || field} label`;
+        } else {
+          return `Removed ${labelNames[field] || field} label`;
+        }
+      } else {
+        return `${field}: ${String(from || '(none)')} → ${String(to || '(none)')}`;
+      }
+    }).join(', ');
   };
 
   if (loading) {
@@ -128,23 +216,37 @@ export default function QuoteRequestNotifications({ quoteRequestId, userCountry 
         )}
       </div>
       <div className="overflow-y-hidden">
-        {notifications.length === 0 ? (
+        {allActivities.length === 0 ? (
           <div className="p-4 text-center text-gray-500">
             No recent activity
           </div>
         ) : (
           <ul className="divide-y divide-gray-200">
-            {notifications.map((notification) => (
-              <li key={notification.id} className={`p-4 hover:bg-gray-50 ${
-                notification.notificationType === 'message' ? 'bg-green-50' :
-                notification.notificationType === 'status_change' ? 'bg-yellow-50' :
-                'bg-purple-50'
-              }`}>
+            {allActivities.map((activity) => (
+              <li key={activity.id} className="p-4 hover:bg-gray-50">
                 <div className="flex items-start space-x-3">
                   <div className="flex-1">
-                    <p className="text-sm text-gray-900">{notification.content}</p>
+                    <p className="text-sm text-gray-900">
+                      {activity.type === 'notification' ? (
+                        <span className={`font-semibold ${
+                          activity.notificationType === 'message' ? 'text-green-600' :
+                          activity.notificationType === 'status_change' ? 'text-yellow-600' :
+                          'text-purple-600'
+                        }`}>
+                          {activity.content}
+                        </span>
+                      ) : (
+                        <span className="font-semibold text-blue-600">
+                          {activity.user} modified the quote request
+                        </span>
+                      )}
+                    </p>
                     <p className="mt-1 text-xs text-gray-500">
-                      From {notification.senderCountry} • {notification.createdAt && formatDate(notification.createdAt)}
+                      {activity.type === 'notification' ? (
+                        `From ${(activity as any).senderCountry} • ${formatDate(activity.dateTime)}`
+                      ) : (
+                        `${formatDate(activity.dateTime)} • ${formatModificationChanges(activity.changes)}`
+                      )}
                     </p>
                   </div>
                 </div>
