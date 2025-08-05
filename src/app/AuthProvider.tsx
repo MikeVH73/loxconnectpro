@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useState } from 'react';
 import { User, onAuthStateChanged, signOut } from 'firebase/auth';
-import { doc, getDoc, Firestore } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, query, where, getDocs, Firestore } from 'firebase/firestore';
 import { auth, db } from '../firebaseClient';
 
 interface UserProfile {
@@ -43,15 +43,93 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsClient(true);
   }, []);
 
+  // Bulletproof user profile creation/loading
+  const ensureUserProfile = async (user: User): Promise<UserProfile> => {
+    if (!db) throw new Error('Firebase not initialized');
+
+    console.log('Ensuring user profile for:', user.email, 'UID:', user.uid);
+
+    // First, try to get existing profile by UID
+    let userDoc = await getDoc(doc(db as Firestore, 'users', user.uid));
+    
+    if (userDoc.exists()) {
+      const userData = userDoc.data();
+      console.log('Found existing profile by UID:', userData);
+      
+      return {
+        id: userDoc.id,
+        email: userData.email || user.email || '',
+        role: userData.role || 'user',
+        businessUnit: userData.businessUnit || userData.countries?.[0] || '',
+        countries: userData.countries || [],
+        name: userData.displayName || userData.name || userData.email?.split('@')[0] || 'Unknown User'
+      } as UserProfile;
+    }
+
+    // If not found by UID, try email lookup
+    console.log('Profile not found by UID, trying email lookup...');
+    const usersRef = collection(db as Firestore, 'users');
+    const q = query(usersRef, where('email', '==', user.email));
+    const querySnapshot = await getDocs(q);
+    
+    if (!querySnapshot.empty) {
+      const existingDoc = querySnapshot.docs[0];
+      const userData = existingDoc.data();
+      console.log('Found existing profile by email:', userData);
+      
+      // Update the document to use UID as document ID for consistency
+      await setDoc(doc(db as Firestore, 'users', user.uid), {
+        ...userData,
+        uid: user.uid,
+        email: user.email
+      });
+      
+      return {
+        id: user.uid,
+        email: userData.email || user.email || '',
+        role: userData.role || 'user',
+        businessUnit: userData.businessUnit || userData.countries?.[0] || '',
+        countries: userData.countries || [],
+        name: userData.displayName || userData.name || userData.email?.split('@')[0] || 'Unknown User'
+      } as UserProfile;
+    }
+
+    // If no profile exists, create a default one
+    console.log('No profile found, creating default profile...');
+    const defaultProfile = {
+      displayName: user.displayName || user.email?.split('@')[0] || 'Unknown User',
+      name: user.displayName || user.email?.split('@')[0] || 'Unknown User',
+      email: user.email || '',
+      role: 'user',
+      countries: [],
+      businessUnit: 'Unknown',
+      uid: user.uid,
+      createdAt: new Date()
+    };
+
+    await setDoc(doc(db as Firestore, 'users', user.uid), defaultProfile);
+    
+    console.log('Created default profile:', defaultProfile);
+    
+    return {
+      id: user.uid,
+      email: defaultProfile.email,
+      role: defaultProfile.role,
+      businessUnit: defaultProfile.businessUnit,
+      countries: defaultProfile.countries,
+      name: defaultProfile.name
+    } as UserProfile;
+  };
+
   useEffect(() => {
     if (!isClient) return;
 
     let unsubscribe = () => {};
 
     const initializeAuth = async () => {
-      // Wait a bit for Firebase to initialize
+      // Wait for Firebase to initialize
       let retries = 0;
-      const maxRetries = 10;
+      const maxRetries = 20; // Increased retries
       
       while (!auth || !db) {
         if (retries >= maxRetries) {
@@ -59,78 +137,27 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
           setLoading(false);
           return;
         }
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise(resolve => setTimeout(resolve, 200)); // Increased delay
         retries++;
       }
 
       unsubscribe = onAuthStateChanged(auth, async (user) => {
+        console.log('Auth state changed:', user ? `User: ${user.email}` : 'No user');
         setUser(user);
 
         if (user && db) {
           try {
-            console.log('Auth state changed - user:', user.email, 'UID:', user.uid);
-            
-            // Try to get user profile by UID first
-            const userDoc = await getDoc(doc(db as Firestore, 'users', user.uid));
-
-            if (userDoc.exists()) {
-              const userData = userDoc.data();
-              console.log('Found user profile by UID:', userData);
-              
-              // Map database fields to UserProfile interface with better fallbacks
-              setUserProfile({
-                id: userDoc.id,
-                email: userData.email || user.email || '',
-                role: userData.role || 'user',
-                businessUnit: userData.businessUnit || userData.countries?.[0] || '',
-                countries: userData.countries || [],
-                name: userData.displayName || userData.name || userData.email?.split('@')[0] || 'Unknown User'
-              } as UserProfile);
-            } else {
-              // Fallback to email lookup - query by email field
-              console.log('User profile not found by UID, trying email lookup for:', user.email);
-              
-              // Import the necessary Firestore functions
-              const { collection, query, where, getDocs } = await import('firebase/firestore');
-              
-              try {
-                const usersRef = collection(db as Firestore, 'users');
-                const q = query(usersRef, where('email', '==', user.email));
-                const querySnapshot = await getDocs(q);
-                
-                if (!querySnapshot.empty) {
-                  const userDoc = querySnapshot.docs[0];
-                  const userData = userDoc.data();
-                  console.log('Found user profile by email:', userData);
-                  
-                  // Map database fields to UserProfile interface with better fallbacks
-                  setUserProfile({
-                    id: userDoc.id,
-                    email: userData.email || user.email || '',
-                    role: userData.role || 'user',
-                    businessUnit: userData.businessUnit || userData.countries?.[0] || '',
-                    countries: userData.countries || [],
-                    name: userData.displayName || userData.name || userData.email?.split('@')[0] || 'Unknown User'
-                  } as UserProfile);
-                } else {
-                  console.error('No user profile found for email:', user.email);
-                  // Don't sign out immediately, just set an error
-                  setError('User profile not found. Please contact your administrator.');
-                  // Don't sign out - let the user try to refresh
-                }
-              } catch (emailLookupError) {
-                console.error('Error in email lookup:', emailLookupError);
-                setError('Error fetching user profile');
-                // Don't sign out - let the user try to refresh
-              }
-            }
+            setError(null);
+            const profile = await ensureUserProfile(user);
+            setUserProfile(profile);
+            console.log('User profile loaded successfully:', profile);
           } catch (err) {
-            console.error('Error fetching user profile:', err);
-            setError('Error fetching user profile');
-            // Don't sign out - let the user try to refresh
+            console.error('Error ensuring user profile:', err);
+            setError('Error loading user profile. Please try again.');
           }
         } else {
           setUserProfile(null);
+          setError(null);
         }
 
         setLoading(false);
@@ -167,51 +194,12 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
     setLoading(true);
     
     try {
-      console.log('Retrying profile load for user:', user.email);
-      
-      // Try to get user profile by UID first
-      const userDoc = await getDoc(doc(db as Firestore, 'users', user.uid));
-
-      if (userDoc.exists()) {
-        const userData = userDoc.data();
-        console.log('Found user profile by UID on retry:', userData);
-        
-        setUserProfile({
-          id: userDoc.id,
-          email: userData.email || user.email || '',
-          role: userData.role || 'user',
-          businessUnit: userData.businessUnit || userData.countries?.[0] || '',
-          countries: userData.countries || [],
-          name: userData.displayName || userData.name || userData.email?.split('@')[0] || 'Unknown User'
-        } as UserProfile);
-      } else {
-        // Fallback to email lookup
-        const { collection, query, where, getDocs } = await import('firebase/firestore');
-        
-        const usersRef = collection(db as Firestore, 'users');
-        const q = query(usersRef, where('email', '==', user.email));
-        const querySnapshot = await getDocs(q);
-        
-        if (!querySnapshot.empty) {
-          const userDoc = querySnapshot.docs[0];
-          const userData = userDoc.data();
-          console.log('Found user profile by email on retry:', userData);
-          
-          setUserProfile({
-            id: userDoc.id,
-            email: userData.email || user.email || '',
-            role: userData.role || 'user',
-            businessUnit: userData.businessUnit || userData.countries?.[0] || '',
-            countries: userData.countries || [],
-            name: userData.displayName || userData.name || userData.email?.split('@')[0] || 'Unknown User'
-          } as UserProfile);
-        } else {
-          setError('User profile not found. Please contact your administrator.');
-        }
-      }
+      const profile = await ensureUserProfile(user);
+      setUserProfile(profile);
+      console.log('Profile load retry successful:', profile);
     } catch (err) {
       console.error('Error retrying profile load:', err);
-      setError('Error fetching user profile');
+      setError('Error loading user profile. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -235,11 +223,6 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
           <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative max-w-md mx-auto" role="alert">
             <strong className="font-bold">Error: </strong>
             <span className="block sm:inline">{error}</span>
-            {error.includes('Firebase') && (
-              <p className="text-sm mt-2">
-                Please make sure all required environment variables are set in .env.local
-              </p>
-            )}
           </div>
           <div className="mt-4 space-x-2">
             <button
