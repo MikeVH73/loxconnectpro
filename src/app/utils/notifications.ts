@@ -35,21 +35,6 @@ export async function createNotification({
   try {
     console.log('Creating notification:', { quoteRequestId, content, notificationType });
     
-    // Only create notifications for status_change and property_change, not for messages
-    if (notificationType === 'message') {
-      // For messages, only create recent activity entry, not notification
-      await createRecentActivity({
-        quoteRequestId,
-        quoteRequestTitle,
-        sender,
-        senderCountry,
-        targetCountry,
-        content,
-        activityType: notificationType,
-      });
-      return;
-    }
-    
     const notificationsRef = collection(db as Firestore, 'notifications');
     
     await addDoc(notificationsRef, {
@@ -66,8 +51,8 @@ export async function createNotification({
     
     console.log('Notification created successfully');
 
-    // Also create a recent activity entry (except for deletion notifications)
-    if (notificationType !== 'deletion') {
+    // Also create a recent activity entry (except for deletion notifications and messages)
+    if (notificationType !== 'deletion' && notificationType !== 'message') {
       await createRecentActivity({
         quoteRequestId,
         quoteRequestTitle,
