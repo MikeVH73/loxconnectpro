@@ -11,6 +11,16 @@ interface CreateNotificationParams {
   notificationType: 'message' | 'status_change' | 'property_change' | 'deletion';
 }
 
+interface CreateRecentActivityParams {
+  quoteRequestId: string;
+  quoteRequestTitle: string;
+  sender: string;
+  senderCountry: string;
+  targetCountry: string;
+  content: string;
+  activityType: 'message' | 'status_change' | 'property_change';
+}
+
 export async function createNotification({
   quoteRequestId,
   quoteRequestTitle,
@@ -22,19 +32,11 @@ export async function createNotification({
 }: CreateNotificationParams) {
   if (!db) throw new Error('Firebase not initialized');
 
-  console.log('[NOTIFICATION CREATION] Attempting to create notification:', {
-    quoteRequestId,
-    quoteRequestTitle,
-    sender,
-    senderCountry,
-    targetCountry,
-    content,
-    notificationType
-  });
-
   try {
+    console.log('Creating notification:', { quoteRequestId, content, notificationType });
     const notificationsRef = collection(db as Firestore, 'notifications');
-    const docRef = await addDoc(notificationsRef, {
+    
+    await addDoc(notificationsRef, {
       quoteRequestId,
       quoteRequestTitle,
       sender,
@@ -46,10 +48,56 @@ export async function createNotification({
       isRead: false,
     });
     
-    console.log('[NOTIFICATION CREATION] Successfully created notification with ID:', docRef.id);
+    console.log('Notification created successfully');
+
+    // Also create a recent activity entry (except for deletion notifications)
+    if (notificationType !== 'deletion') {
+      await createRecentActivity({
+        quoteRequestId,
+        quoteRequestTitle,
+        sender,
+        senderCountry,
+        targetCountry,
+        content,
+        activityType: notificationType,
+      });
+    }
   } catch (error) {
-    console.error('[NOTIFICATION CREATION] Error creating notification:', error);
+    console.error('Error creating notification:', error);
     // Don't throw the error - we don't want notification failures to break the main flow
+  }
+}
+
+export async function createRecentActivity({
+  quoteRequestId,
+  quoteRequestTitle,
+  sender,
+  senderCountry,
+  targetCountry,
+  content,
+  activityType,
+}: CreateRecentActivityParams) {
+  if (!db) throw new Error('Firebase not initialized');
+
+  try {
+    console.log('Creating recent activity:', { quoteRequestId, content, activityType });
+    const recentActivityRef = collection(db as Firestore, 'recentActivity');
+    
+    await addDoc(recentActivityRef, {
+      quoteRequestId,
+      quoteRequestTitle,
+      sender,
+      senderCountry,
+      targetCountry,
+      content,
+      activityType,
+      createdAt: serverTimestamp(),
+    });
+    
+    console.log('Recent activity created successfully');
+  } catch (error) {
+    console.error('Error creating recent activity:', error);
+    // Don't throw the error - we don't want recent activity failures to break the main flow
   }
 }
 
@@ -159,6 +207,36 @@ export async function clearQuoteRequestNotifications(quoteRequestId: string, tar
     console.log('Successfully cleared quote request notifications');
   } catch (error) {
     console.error('Error clearing quote request notifications:', error);
+    throw error; // Propagate error to handle it in the UI
+  }
+}
+
+export async function clearQuoteRequestRecentActivities(quoteRequestId: string, targetCountry: string) {
+  if (!db) throw new Error('Firebase not initialized');
+  if (!quoteRequestId) throw new Error('Quote request ID is required');
+  if (!targetCountry) throw new Error('Target country is required');
+
+  try {
+    console.log('Clearing recent activities for quote request:', quoteRequestId);
+    const recentActivityRef = collection(db as Firestore, 'recentActivity');
+    const q = query(
+      recentActivityRef,
+      where('quoteRequestId', '==', quoteRequestId),
+      where('targetCountry', '==', targetCountry)
+    );
+
+    const snapshot = await getDocs(q);
+    console.log(`Found ${snapshot.size} quote request recent activities to clear`);
+    
+    const deletePromises = snapshot.docs.map(doc => {
+      console.log('Deleting quote request recent activity:', doc.id);
+      return deleteDoc(doc.ref);
+    });
+
+    await Promise.all(deletePromises);
+    console.log('Successfully cleared quote request recent activities');
+  } catch (error) {
+    console.error('Error clearing quote request recent activities:', error);
     throw error; // Propagate error to handle it in the UI
   }
 } 

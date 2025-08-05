@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { collection, query, where, orderBy, onSnapshot, Firestore, Timestamp } from 'firebase/firestore';
 import { db } from '@/firebaseClient';
-import { clearQuoteRequestNotifications } from '../utils/notifications';
+import { clearQuoteRequestRecentActivities } from '../utils/notifications';
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 
@@ -22,6 +22,17 @@ interface Notification {
   isRead: boolean;
 }
 
+interface RecentActivity {
+  id: string;
+  quoteRequestId: string;
+  quoteRequestTitle: string;
+  createdAt: Timestamp;
+  sender: string;
+  senderCountry: string;
+  content: string;
+  activityType: 'message' | 'status_change' | 'property_change';
+}
+
 interface QuoteRequestNotificationsProps {
   quoteRequestId: string;
   userCountry: string;
@@ -30,7 +41,7 @@ interface QuoteRequestNotificationsProps {
 const MAX_ACTIVITIES = 4;
 
 export default function QuoteRequestNotifications({ quoteRequestId, userCountry }: QuoteRequestNotificationsProps) {
-  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [recentActivities, setRecentActivities] = useState<RecentActivity[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Helper function to format date
@@ -52,53 +63,53 @@ export default function QuoteRequestNotifications({ quoteRequestId, userCountry 
   useEffect(() => {
     if (!db || !quoteRequestId || !userCountry) return;
 
-    // Fetch notifications
-    const notificationsRef = collection(db as Firestore, 'notifications');
-    const notificationsQuery = query(
-      notificationsRef,
+    // Fetch recent activities
+    const recentActivityRef = collection(db as Firestore, 'recentActivity');
+    const recentActivityQuery = query(
+      recentActivityRef,
       where('quoteRequestId', '==', quoteRequestId),
       where('targetCountry', '==', userCountry),
       orderBy('createdAt', 'desc')
     );
 
-    const unsubscribeNotifications = onSnapshot(notificationsQuery, (snapshot) => {
-      const newNotifications = snapshot.docs.map(doc => ({
+    const unsubscribeRecentActivities = onSnapshot(recentActivityQuery, (snapshot) => {
+      const newRecentActivities = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
-      })) as Notification[];
+      })) as RecentActivity[];
 
-      // Remove duplicate notifications by content and timestamp
-      const uniqueNotifications = newNotifications.reduce((acc, curr) => {
+      // Remove duplicate activities by content and timestamp
+      const uniqueActivities = newRecentActivities.reduce((acc, curr) => {
         const key = `${curr.content}-${curr.createdAt?.toDate().getTime()}`;
         if (!acc[key]) {
           acc[key] = curr;
         }
         return acc;
-      }, {} as Record<string, Notification>);
+      }, {} as Record<string, RecentActivity>);
 
-      setNotifications(Object.values(uniqueNotifications));
+      setRecentActivities(Object.values(uniqueActivities));
       setLoading(false);
     }, (error) => {
-      console.error('Error fetching notifications:', error);
+      console.error('Error fetching recent activities:', error);
       setLoading(false);
     });
 
     return () => {
-      unsubscribeNotifications();
+      unsubscribeRecentActivities();
     };
   }, [quoteRequestId, userCountry]);
 
   const handleClearNotifications = async () => {
     try {
-      await clearQuoteRequestNotifications(quoteRequestId, userCountry);
+      await clearQuoteRequestRecentActivities(quoteRequestId, userCountry);
     } catch (error) {
       console.error('Error clearing notifications:', error);
     }
   };
 
-  // Combine notifications and modifications for display
-  const allActivities = notifications
-    .sort((a, b) => {
+  // Sort recent activities for display
+  const allActivities = recentActivities
+    .sort((a: RecentActivity, b: RecentActivity) => {
       const dateA = a.createdAt?.toDate() || new Date(0);
       const dateB = b.createdAt?.toDate() || new Date(0);
       return dateB.getTime() - dateA.getTime();
@@ -122,7 +133,7 @@ export default function QuoteRequestNotifications({ quoteRequestId, userCountry 
     <div className="mt-6 bg-white rounded-lg shadow overflow-hidden">
       <div className="p-4 border-b border-gray-200 flex justify-between items-center">
         <h3 className="text-lg font-medium text-gray-900">Recent Activity</h3>
-        {notifications.length > 0 && (
+        {recentActivities.length > 0 && (
           <button
             onClick={handleClearNotifications}
             className="px-3 py-1 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded"
@@ -144,8 +155,8 @@ export default function QuoteRequestNotifications({ quoteRequestId, userCountry 
                   <div className="flex-1">
                     <p className="text-sm text-gray-900">
                       <span className={`font-semibold ${
-                        activity.notificationType === 'message' ? 'text-green-600' :
-                        activity.notificationType === 'status_change' ? 'text-yellow-600' :
+                        activity.activityType === 'message' ? 'text-green-600' :
+                        activity.activityType === 'status_change' ? 'text-yellow-600' :
                         'text-purple-600'
                       }`}>
                         {activity.content}
