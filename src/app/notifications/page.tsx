@@ -7,7 +7,7 @@ import { useAuth } from '../AuthProvider';
 import Link from 'next/link';
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
-import { clearNotifications } from '../utils/notifications';
+import { clearDashboardNotifications } from '../utils/notifications';
 import toast from 'react-hot-toast';
 
 // Initialize dayjs plugins
@@ -39,7 +39,7 @@ export default function NotificationsPage() {
     
     try {
       setClearing(true);
-      await clearNotifications(userProfile.businessUnit);
+      await clearDashboardNotifications(userProfile.businessUnit);
       toast.success('All notifications cleared');
     } catch (error) {
       console.error('Error clearing notifications:', error);

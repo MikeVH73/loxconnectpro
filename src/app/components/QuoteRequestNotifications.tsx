@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { collection, query, where, orderBy, onSnapshot, Firestore, Timestamp } from 'firebase/firestore';
 import { db } from '@/firebaseClient';
-import { clearNotifications } from '../utils/notifications';
+import { clearQuoteRequestNotifications } from '../utils/notifications';
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 
@@ -95,7 +95,7 @@ export default function QuoteRequestNotifications({ quoteRequestId, userCountry 
 
   const handleClearNotifications = async () => {
     try {
-      await clearNotifications(userCountry);
+      await clearQuoteRequestNotifications(quoteRequestId, userCountry);
     } catch (error) {
       console.error('Error clearing notifications:', error);
     }

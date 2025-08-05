@@ -103,4 +103,73 @@ export async function clearNotifications(targetCountry: string) {
     console.error('Error clearing notifications:', error);
     throw error; // Propagate error to handle it in the UI
   }
+}
+
+export async function clearDashboardNotifications(targetCountry: string) {
+  if (!db) throw new Error('Firebase not initialized');
+  if (!targetCountry) throw new Error('Target country is required');
+
+  try {
+    console.log('Clearing dashboard notifications for country:', targetCountry);
+    const notificationsRef = collection(db as Firestore, 'notifications');
+    const q = query(
+      notificationsRef,
+      where('targetCountry', '==', targetCountry),
+      where('notificationType', 'in', ['status_change', 'property_change', 'message'])
+    );
+
+    const snapshot = await getDocs(q);
+    console.log(`Found ${snapshot.size} dashboard notifications to clear`);
+    
+    // Only delete notifications that are older than 24 hours or are marked as read
+    const now = new Date();
+    const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    
+    const deletePromises = snapshot.docs
+      .filter(doc => {
+        const data = doc.data();
+        const createdAt = data.createdAt?.toDate();
+        return data.isRead || (createdAt && createdAt < twentyFourHoursAgo);
+      })
+      .map(doc => {
+        console.log('Deleting dashboard notification:', doc.id);
+        return deleteDoc(doc.ref);
+      });
+
+    await Promise.all(deletePromises);
+    console.log('Successfully cleared dashboard notifications');
+  } catch (error) {
+    console.error('Error clearing dashboard notifications:', error);
+    throw error; // Propagate error to handle it in the UI
+  }
+}
+
+export async function clearQuoteRequestNotifications(quoteRequestId: string, targetCountry: string) {
+  if (!db) throw new Error('Firebase not initialized');
+  if (!quoteRequestId) throw new Error('Quote request ID is required');
+  if (!targetCountry) throw new Error('Target country is required');
+
+  try {
+    console.log('Clearing notifications for quote request:', quoteRequestId);
+    const notificationsRef = collection(db as Firestore, 'notifications');
+    const q = query(
+      notificationsRef,
+      where('quoteRequestId', '==', quoteRequestId),
+      where('targetCountry', '==', targetCountry)
+    );
+
+    const snapshot = await getDocs(q);
+    console.log(`Found ${snapshot.size} quote request notifications to clear`);
+    
+    const deletePromises = snapshot.docs.map(doc => {
+      console.log('Deleting quote request notification:', doc.id);
+      return deleteDoc(doc.ref);
+    });
+
+    await Promise.all(deletePromises);
+    console.log('Successfully cleared quote request notifications');
+  } catch (error) {
+    console.error('Error clearing quote request notifications:', error);
+    throw error; // Propagate error to handle it in the UI
+  }
 } 

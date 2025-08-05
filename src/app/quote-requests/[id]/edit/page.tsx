@@ -275,6 +275,40 @@ export default function EditQuoteRequest() {
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 2000);
 
+      // Create modification record for all changes except jobsiteContactId
+      const modifications = [];
+      const fieldsToTrack = [
+        'title', 'status', 'involvedCountry', 'startDate', 'endDate', 
+        'customer', 'waitingForAnswer', 'urgent', 'problems', 'planned',
+        'products', 'notes', 'attachments', 'jobsite', 'customerNumber',
+        'customerDecidesEndDate', 'latitude', 'longitude'
+      ];
+
+      for (const field of fieldsToTrack) {
+        if (originalData && originalData[field] !== quoteRequest[field]) {
+          modifications.push({
+            field,
+            from: originalData[field],
+            to: quoteRequest[field]
+          });
+        }
+      }
+
+      // Create modification record if there are changes
+      if (modifications.length > 0 && user?.email) {
+        try {
+          await addDoc(collection(db as Firestore, 'modifications'), {
+            dateTime: serverTimestamp(),
+            user: user.email,
+            quoteRequestId: id,
+            changes: modifications
+          });
+          console.log('[MODIFICATIONS] Created modification record with', modifications.length, 'changes');
+        } catch (modError) {
+          console.error('[MODIFICATIONS] Failed to create modification record:', modError);
+        }
+      }
+
       // Create notifications for changes
       const changes = [];
       
