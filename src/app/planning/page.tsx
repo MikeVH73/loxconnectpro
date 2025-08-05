@@ -28,6 +28,17 @@ interface Label {
   name: string;
 }
 
+interface Customer {
+  id: string;
+  name: string;
+  address?: string;
+  contact?: string;
+  phone?: string;
+  email?: string;
+  countries?: string[];
+  customerNumbers?: Record<string, string>;
+}
+
 interface QuoteRequest {
   id: string;
   title: string;
@@ -71,10 +82,18 @@ interface PositionedQuoteRequest extends QuoteRequest {
 export default function PlanningPage() {
   const { userProfile } = useAuth();
   const [quoteRequests, setQuoteRequests] = useState<QuoteRequest[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
   const [labels, setLabels] = useState<Label[]>([]);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  // Helper functions
+  const getCustomerName = (id: string | undefined) => {
+    if (!id) return '';
+    const customer = customers.find(c => c.id === id);
+    return customer ? customer.name : id;
+  };
 
   // Get the current week's days (Monday to Sunday)
   const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 }); // 1 = Monday
@@ -106,6 +125,14 @@ export default function PlanningPage() {
           ...doc.data() 
         } as Label));
         setLabels(labels);
+        
+        // Fetch customers
+        const customersSnapshot = await getDocs(collection(db, "customers"));
+        const customers = customersSnapshot.docs.map(doc => ({ 
+          id: doc.id, 
+          ...doc.data() 
+        } as Customer));
+        setCustomers(customers);
         
         const plannedLabelId = labels.find(label => 
           label.name.toLowerCase() === "planned"
@@ -371,7 +398,7 @@ export default function PlanningPage() {
                 {quote.title}
                 </div>
                 <div className={`text-xs truncate ${quote.planned ? 'text-red-700' : 'text-gray-600'}`}>
-                  {quote.customer}
+                  {getCustomerName(quote.customer)}
                 </div>
               </Link>
             );
