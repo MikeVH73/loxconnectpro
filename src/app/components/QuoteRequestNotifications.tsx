@@ -22,18 +22,6 @@ interface Notification {
   isRead: boolean;
 }
 
-interface Modification {
-  id: string;
-  quoteRequestId: string;
-  dateTime: Timestamp;
-  user: string;
-  changes: Array<{
-    field: string;
-    from: any;
-    to: any;
-  }>;
-}
-
 interface QuoteRequestNotificationsProps {
   quoteRequestId: string;
   userCountry: string;
@@ -43,7 +31,6 @@ const MAX_ACTIVITIES = 4;
 
 export default function QuoteRequestNotifications({ quoteRequestId, userCountry }: QuoteRequestNotificationsProps) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [modifications, setModifications] = useState<Modification[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Helper function to format date
@@ -74,14 +61,6 @@ export default function QuoteRequestNotifications({ quoteRequestId, userCountry 
       orderBy('createdAt', 'desc')
     );
 
-    // Fetch modifications
-    const modificationsRef = collection(db as Firestore, 'modifications');
-    const modificationsQuery = query(
-      modificationsRef,
-      where('quoteRequestId', '==', quoteRequestId),
-      orderBy('dateTime', 'desc')
-    );
-
     const unsubscribeNotifications = onSnapshot(notificationsQuery, (snapshot) => {
       const newNotifications = snapshot.docs.map(doc => ({
         id: doc.id,
@@ -98,26 +77,14 @@ export default function QuoteRequestNotifications({ quoteRequestId, userCountry 
       }, {} as Record<string, Notification>);
 
       setNotifications(Object.values(uniqueNotifications));
-    }, (error) => {
-      console.error('Error fetching notifications:', error);
-    });
-
-    const unsubscribeModifications = onSnapshot(modificationsQuery, (snapshot) => {
-      const newModifications = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Modification[];
-
-      setModifications(newModifications);
       setLoading(false);
     }, (error) => {
-      console.error('Error fetching modifications:', error);
+      console.error('Error fetching notifications:', error);
       setLoading(false);
     });
 
     return () => {
       unsubscribeNotifications();
-      unsubscribeModifications();
     };
   }, [quoteRequestId, userCountry]);
 
@@ -130,64 +97,13 @@ export default function QuoteRequestNotifications({ quoteRequestId, userCountry 
   };
 
   // Combine notifications and modifications for display
-  const allActivities = [
-    ...notifications.map(notif => ({
-      id: notif.id,
-      type: 'notification' as const,
-      dateTime: notif.createdAt,
-      user: notif.sender,
-      content: notif.content,
-      notificationType: notif.notificationType,
-      senderCountry: notif.senderCountry
-    })),
-    ...modifications.map(mod => ({
-      id: mod.id,
-      type: 'modification' as const,
-      dateTime: mod.dateTime,
-      user: mod.user,
-      changes: mod.changes
-    }))
-  ].sort((a, b) => {
-    const dateA = a.dateTime?.toDate() || new Date(0);
-    const dateB = b.dateTime?.toDate() || new Date(0);
-    return dateB.getTime() - dateA.getTime();
-  }).slice(0, MAX_ACTIVITIES);
-
-  // Helper function to format modification changes
-  const formatModificationChanges = (changes: any[]) => {
-    return changes.map(change => {
-      const { field, from, to } = change;
-      
-      // Format different field types
-      if (field === 'products') {
-        const fromStr = Array.isArray(from) ? from.map((p: any) => `${p.catClass || ''} ${p.description || ''} x${p.quantity || 1}`).join('; ') : String(from);
-        const toStr = Array.isArray(to) ? to.map((p: any) => `${p.catClass || ''} ${p.description || ''} x${p.quantity || 1}`).join('; ') : String(to);
-        return `${field}: ${fromStr} → ${toStr}`;
-      } else if (field === 'attachments') {
-        const fromCount = Array.isArray(from) ? from.length : 0;
-        const toCount = Array.isArray(to) ? to.length : 0;
-        return `${field}: ${fromCount} → ${toCount} attachment(s)`;
-      } else if (field === 'notes') {
-        const fromCount = Array.isArray(from) ? from.length : 0;
-        const toCount = Array.isArray(to) ? to.length : 0;
-        return `${field}: ${fromCount} → ${toCount} note(s)`;
-      } else if (field === 'waitingForAnswer' || field === 'urgent' || field === 'problems' || field === 'planned') {
-        const labelNames: Record<string, string> = {
-          waitingForAnswer: 'Waiting for Answer',
-          urgent: 'Urgent',
-          problems: 'Problems',
-          planned: 'Planned'
-        };
-        if (to === true) {
-          return `Added ${labelNames[field] || field} label`;
-        } else {
-          return `Removed ${labelNames[field] || field} label`;
-        }
-      } else {
-        return `${field}: ${String(from || '(none)')} → ${String(to || '(none)')}`;
-      }
-    }).join(', ');
-  };
+  const allActivities = notifications
+    .sort((a, b) => {
+      const dateA = a.createdAt?.toDate() || new Date(0);
+      const dateB = b.createdAt?.toDate() || new Date(0);
+      return dateB.getTime() - dateA.getTime();
+    })
+    .slice(0, MAX_ACTIVITIES);
 
   if (loading) {
     return (
@@ -227,26 +143,16 @@ export default function QuoteRequestNotifications({ quoteRequestId, userCountry 
                 <div className="flex items-start space-x-3">
                   <div className="flex-1">
                     <p className="text-sm text-gray-900">
-                      {activity.type === 'notification' ? (
-                        <span className={`font-semibold ${
-                          activity.notificationType === 'message' ? 'text-green-600' :
-                          activity.notificationType === 'status_change' ? 'text-yellow-600' :
-                          'text-purple-600'
-                        }`}>
-                          {activity.content}
-                        </span>
-                      ) : (
-                        <span className="font-semibold text-blue-600">
-                          {activity.user} modified the quote request
-                        </span>
-                      )}
+                      <span className={`font-semibold ${
+                        activity.notificationType === 'message' ? 'text-green-600' :
+                        activity.notificationType === 'status_change' ? 'text-yellow-600' :
+                        'text-purple-600'
+                      }`}>
+                        {activity.content}
+                      </span>
                     </p>
                     <p className="mt-1 text-xs text-gray-500">
-                      {activity.type === 'notification' ? (
-                        `From ${(activity as any).senderCountry} • ${formatDate(activity.dateTime)}`
-                      ) : (
-                        `${formatDate(activity.dateTime)} • ${formatModificationChanges(activity.changes)}`
-                      )}
+                      `From ${(activity as any).senderCountry} • ${formatDate(activity.createdAt)}`
                     </p>
                   </div>
                 </div>

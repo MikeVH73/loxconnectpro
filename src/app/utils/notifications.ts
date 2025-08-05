@@ -114,27 +114,16 @@ export async function clearDashboardNotifications(targetCountry: string) {
     const notificationsRef = collection(db as Firestore, 'notifications');
     const q = query(
       notificationsRef,
-      where('targetCountry', '==', targetCountry),
-      where('notificationType', 'in', ['status_change', 'property_change', 'message'])
+      where('targetCountry', '==', targetCountry)
     );
 
     const snapshot = await getDocs(q);
     console.log(`Found ${snapshot.size} dashboard notifications to clear`);
     
-    // Only delete notifications that are older than 24 hours or are marked as read
-    const now = new Date();
-    const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-    
-    const deletePromises = snapshot.docs
-      .filter(doc => {
-        const data = doc.data();
-        const createdAt = data.createdAt?.toDate();
-        return data.isRead || (createdAt && createdAt < twentyFourHoursAgo);
-      })
-      .map(doc => {
-        console.log('Deleting dashboard notification:', doc.id);
-        return deleteDoc(doc.ref);
-      });
+    const deletePromises = snapshot.docs.map(doc => {
+      console.log('Deleting dashboard notification:', doc.id);
+      return deleteDoc(doc.ref);
+    });
 
     await Promise.all(deletePromises);
     console.log('Successfully cleared dashboard notifications');
