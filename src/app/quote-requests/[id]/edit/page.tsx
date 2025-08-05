@@ -1020,7 +1020,7 @@ export default function EditQuoteRequest() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">Products</label>
                   <div className="space-y-2">
                     {quoteRequest.products.map((product, index) => (
-                      <div key={index} className="grid grid-cols-12 gap-2">
+                      <div key={index} className="grid grid-cols-12 gap-2 items-center">
                         <input
                           type="text"
                           value={product.catClass}
@@ -1041,9 +1041,20 @@ export default function EditQuoteRequest() {
                           type="number"
                           value={product.quantity}
                           onChange={(e) => handleInputChange(`products.${index}.quantity`, parseInt(e.target.value))}
-                          className="col-span-2 p-2 border border-gray-300 rounded"
+                          className="col-span-1 p-2 border border-gray-300 rounded"
                           disabled={isReadOnly}
                         />
+                        {!isReadOnly && (
+                          <button
+                            onClick={() => handleRemoveProduct(index)}
+                            className="col-span-1 text-red-500 hover:text-red-700 p-2"
+                            title="Remove product"
+                          >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        )}
                       </div>
                     ))}
                     {!isReadOnly && (
