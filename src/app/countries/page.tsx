@@ -25,6 +25,8 @@ export default function CountriesPage() {
   const [isClient, setIsClient] = useState(false);
 
   const isSuperAdmin = userProfile?.role === "superAdmin";
+  const isAdmin = userProfile?.role === "admin";
+  const canManageCountries = isSuperAdmin || isAdmin;
 
   // Ensure we're on the client side
   useEffect(() => {
@@ -72,8 +74,8 @@ export default function CountriesPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isSuperAdmin) {
-      setError("Only superAdmin can manage countries");
+    if (!canManageCountries) {
+      setError("Only superAdmin or admin can manage countries");
       return;
     }
 
@@ -139,14 +141,14 @@ export default function CountriesPage() {
   };
 
   const handleEdit = (country: Country) => {
-    if (!isSuperAdmin) return;
+    if (!canManageCountries) return;
     setEditingCountry(country);
     setCountryName(country.name);
     setShowModal(true);
   };
 
   const handleDelete = async (country: Country) => {
-    if (!isSuperAdmin) return;
+    if (!canManageCountries) return;
     
     if (!confirm(`Are you sure you want to delete "${country.name}"? This action cannot be undone.`)) {
       return;
@@ -188,13 +190,13 @@ export default function CountriesPage() {
         <div>
           <h1 className="text-2xl font-bold text-[#e40115] mb-2">Countries Management</h1>
           <p className="text-gray-600">
-            {isSuperAdmin 
+            {canManageCountries 
               ? "Manage countries that can be used throughout the application"
               : "View available countries"
             }
           </p>
         </div>
-        {isSuperAdmin && (
+        {canManageCountries && (
           <button
             onClick={() => setShowModal(true)}
             className="bg-[#e40115] text-white px-4 py-2 rounded hover:bg-red-700 transition"
@@ -231,7 +233,7 @@ export default function CountriesPage() {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Last Updated
                 </th>
-                {isSuperAdmin && (
+                {canManageCountries && (
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Actions
                   </th>
@@ -241,8 +243,8 @@ export default function CountriesPage() {
             <tbody className="bg-white divide-y divide-gray-200">
               {countries.length === 0 ? (
                 <tr>
-                  <td colSpan={isSuperAdmin ? 4 : 3} className="px-6 py-4 text-center text-gray-500">
-                    No countries found. {isSuperAdmin ? "Click 'Add Country' to create the first one." : ""}
+                  <td colSpan={canManageCountries ? 4 : 3} className="px-6 py-4 text-center text-gray-500">
+                    No countries found. {canManageCountries ? "Click 'Add Country' to create the first one." : ""}
                   </td>
                 </tr>
               ) : (
@@ -261,7 +263,7 @@ export default function CountriesPage() {
                         {country.updatedAt?.toDate?.()?.toLocaleDateString() || 'N/A'}
                       </div>
                     </td>
-                    {isSuperAdmin && (
+                    {canManageCountries && (
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <button
                           onClick={() => handleEdit(country)}

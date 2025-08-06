@@ -30,10 +30,10 @@ export default function Sidebar() {
   }
 
   // Only show restricted items if not readOnly
-  const restrictedLabels = ["Customers", "Labels", "Countries", "Users", "Notifications", "Modifications"];
+  const restrictedLabels = ["Labels", "Countries", "Users", "Modifications"];
   const filteredNavItems = navItems.filter(item => {
     if (restrictedLabels.includes(item.label)) {
-      return userProfile?.role !== "readOnly";
+      return userProfile?.role !== "Employee";
     }
     return true;
   });

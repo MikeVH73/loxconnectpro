@@ -19,6 +19,7 @@ import { createNotification } from '../../../utils/notifications';
 import dynamic from 'next/dynamic';
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
+import { createRecentActivity } from "../../../utils/notifications";
 
 // Initialize dayjs plugins
 dayjs.extend(relativeTime);
@@ -106,7 +107,7 @@ export default function EditQuoteRequest() {
   const params = useParams();
   const id = params?.id as string;
   const { user, userProfile } = useAuth();
-  const isReadOnly = userProfile?.role === "readOnly";
+  const isReadOnly = userProfile?.role === "Employee";
   const [quoteRequest, setQuoteRequest] = useState<QuoteRequest | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -317,6 +318,11 @@ export default function EditQuoteRequest() {
         changes.push(`Status changed to ${quoteRequest.status}`);
       }
 
+      // Check for title changes
+      if (originalData && originalData.title !== quoteRequest.title) {
+        changes.push(`Title changed from "${originalData.title}" to "${quoteRequest.title}"`);
+      }
+
       // Check for country changes
       if (originalData && originalData.involvedCountry !== quoteRequest.involvedCountry) {
         changes.push(`Involved country changed from ${originalData.involvedCountry} to ${quoteRequest.involvedCountry}`);
@@ -368,112 +374,46 @@ export default function EditQuoteRequest() {
       if (originalData.startDate !== quoteRequest.startDate) {
         changes.push(`Start date changed to ${quoteRequest.startDate || 'not set'}`);
       }
+      
       if (originalData.endDate !== quoteRequest.endDate) {
         changes.push(`End date changed to ${quoteRequest.endDate || 'not set'}`);
       }
-      
-      // Check for notes changes
-      const originalNotes = originalData.notes || [];
-      const currentNotes = quoteRequest.notes || [];
-      
-      if (originalNotes.length !== currentNotes.length) {
-        if (currentNotes.length > originalNotes.length) {
-          const newNotes = currentNotes.slice(originalNotes.length);
-          changes.push(`Added ${newNotes.length} new note(s)`);
-        } else {
-          changes.push(`Removed ${originalNotes.length - currentNotes.length} note(s)`);
-        }
+
+      // Check for jobsite address changes
+      const originalAddress = originalData.jobsite?.address || '';
+      const currentAddress = quoteRequest.jobsite?.address || '';
+      if (originalAddress !== currentAddress) {
+        changes.push(`Jobsite address changed from "${originalAddress}" to "${currentAddress}"`);
+      }
+
+      // Check for jobsite contact changes
+      const originalContact = originalData.jobsiteContact || {};
+      const currentContact = quoteRequest.jobsiteContact || {};
+      if (originalContact.name !== currentContact.name || originalContact.phone !== currentContact.phone) {
+        changes.push(`Jobsite contact changed from "${originalContact.name || 'none'}" to "${currentContact.name || 'none'}"`);
       }
       
-      // Check for attachment changes
-      const originalAttachments = originalData.attachments || [];
-      const currentAttachments = quoteRequest.attachments || [];
-      
-      if (originalAttachments.length !== currentAttachments.length) {
-        if (currentAttachments.length > originalAttachments.length) {
-          changes.push(`Added ${currentAttachments.length - originalAttachments.length} new attachment(s)`);
-        } else {
-          changes.push(`Removed ${originalAttachments.length - currentAttachments.length} attachment(s)`);
-        }
-      }
-      
-      // Create notification if there are changes
-      if (changes.length > 0 && userProfile?.businessUnit) {
-        console.log('[NOTIFICATION DEBUG] Changes detected:', changes);
-        console.log('[NOTIFICATION DEBUG] User profile:', {
-          businessUnit: userProfile.businessUnit,
-          email: user?.email,
-          countries: userProfile.countries
-        });
-        console.log('[NOTIFICATION DEBUG] Quote request:', {
-          id: quoteRequest.id,
-          title: quoteRequest.title,
-          creatorCountry: quoteRequest.creatorCountry,
-          involvedCountry: quoteRequest.involvedCountry
-        });
-        
-        // Fix target country logic: determine which country should receive the notification
-        // If I'm the creator, notify the involved country. If I'm involved, notify the creator.
-        const targetCountries = [];
-        
-        console.log('[NOTIFICATION DEBUG] Quote request countries:', {
-          creatorCountry: quoteRequest.creatorCountry,
-          involvedCountry: quoteRequest.involvedCountry,
-          myCountry: userProfile.businessUnit
-        });
-        
-        if (userProfile.businessUnit === quoteRequest.creatorCountry) {
-          // I'm the creator, notify the involved country
-          if (quoteRequest.involvedCountry && quoteRequest.involvedCountry !== userProfile.businessUnit) {
-            targetCountries.push(quoteRequest.involvedCountry);
-            console.log('[NOTIFICATION DEBUG] I am the creator, notifying involved country:', quoteRequest.involvedCountry);
-          }
-        } else if (userProfile.businessUnit === quoteRequest.involvedCountry) {
-          // I'm the involved country, notify the creator
-          if (quoteRequest.creatorCountry && quoteRequest.creatorCountry !== userProfile.businessUnit) {
-            targetCountries.push(quoteRequest.creatorCountry);
-            console.log('[NOTIFICATION DEBUG] I am involved, notifying creator:', quoteRequest.creatorCountry);
-          }
-        } else {
-          console.log('[NOTIFICATION DEBUG] I am neither creator nor involved country - no notifications sent');
-        }
-        
-        console.log('[NOTIFICATION DEBUG] Final target countries:', targetCountries);
-        
-        // Send notifications to all target countries
-        for (const targetCountry of targetCountries) {
-          if (targetCountry) {
-            console.log('[NOTIFICATION DEBUG] Creating notification for:', {
-              targetCountry,
+      // Create recent activity for each change
+      if (changes.length > 0 && user?.email && userProfile?.businessUnit) {
+        const targetCountry = quoteRequest.creatorCountry === userProfile.businessUnit 
+          ? quoteRequest.involvedCountry 
+          : quoteRequest.creatorCountry;
+
+        for (const change of changes) {
+          try {
+            await createRecentActivity({
+              quoteRequestId: id,
+              quoteRequestTitle: quoteRequest.title,
+              sender: user.email,
               senderCountry: userProfile.businessUnit,
-              content: changes.join(', ')
+              targetCountry,
+              content: change,
+              activityType: 'property_change'
             });
-            
-            try {
-              await createNotification({
-                quoteRequestId: id,
-                quoteRequestTitle: quoteRequest.title,
-                sender: user?.email || '',
-                senderCountry: userProfile.businessUnit,
-                targetCountry: targetCountry,
-                content: changes.join(', '),
-                notificationType: 'property_change'
-              });
-              console.log('[NOTIFICATION DEBUG] Notification created successfully for:', targetCountry);
-            } catch (notificationError) {
-              console.error('[NOTIFICATION DEBUG] Failed to create notification for:', targetCountry, notificationError);
-            }
+          } catch (activityError) {
+            console.error('Error creating recent activity:', activityError);
           }
         }
-        
-        if (targetCountries.length === 0) {
-          console.log('[NOTIFICATION DEBUG] No target countries found - no notifications sent');
-        }
-      } else {
-        console.log('[NOTIFICATION DEBUG] No changes detected or missing user profile:', {
-          changesLength: changes.length,
-          hasUserProfile: !!userProfile?.businessUnit
-        });
       }
 
     } catch (err) {

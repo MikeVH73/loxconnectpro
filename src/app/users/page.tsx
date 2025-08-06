@@ -27,7 +27,7 @@ export default function UsersPage() {
     displayName: "",
     email: "",
     password: "",
-    role: "readOnly",
+    role: "Employee",
     countries: [] as string[],
   });
   const [fixingProfiles, setFixingProfiles] = useState(false);
@@ -803,6 +803,7 @@ export default function UsersPage() {
                           userData.role === "superAdmin" ? "bg-red-600" :
                           userData.role === "admin" ? "bg-orange-500" :
                           userData.role === "user" ? "bg-blue-500" :
+                          userData.role === "Employee" ? "bg-green-500" :
                           "bg-gray-500"
                         }`}>
                           {userData.role || "—"}
@@ -904,7 +905,7 @@ export default function UsersPage() {
                   onChange={(e) => setNewUser({...newUser, role: e.target.value})}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#e40115]"
                 >
-                  <option value="readOnly">Read Only</option>
+                  <option value="Employee">Employee</option>
                   <option value="user">User</option>
                   <option value="admin">Admin</option>
                   <option value="superAdmin">Super Admin</option>
@@ -995,11 +996,11 @@ export default function UsersPage() {
               <div>
                 <label className="block text-sm font-medium mb-1">Role</label>
                 <select
-                  value={editingUser.role || "readOnly"}
+                  value={editingUser.role || "Employee"}
                   onChange={(e) => setEditingUser({...editingUser, role: e.target.value})}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#e40115]"
                 >
-                  <option value="readOnly">Read Only</option>
+                  <option value="Employee">Employee</option>
                   <option value="user">User</option>
                   <option value="admin">Admin</option>
                   <option value="superAdmin">Super Admin</option>
