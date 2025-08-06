@@ -282,18 +282,20 @@ export default function CustomersPage() {
       {/* Edit Modal */}
       {showEditModal && editingCustomer && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg p-6 max-w-2xl w-full">
+          <div className="bg-white rounded-lg p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <h3 className="text-lg font-semibold mb-4">
               {editingCustomer.id ? 'Edit Customer' : 'Add Customer'}
             </h3>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Left Column - General Customer Information */}
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium mb-1">Name</label>
                   <input
                     type="text"
                     value={editingCustomer.name}
-                  onChange={e => setEditingCustomer({ ...editingCustomer, name: e.target.value })}
-                  className="w-full border rounded px-3 py-2"
+                    onChange={e => setEditingCustomer({ ...editingCustomer, name: e.target.value })}
+                    className="w-full border rounded px-3 py-2"
                   />
                 </div>
                 <div>
@@ -301,17 +303,17 @@ export default function CustomersPage() {
                   <input
                     type="text"
                     value={editingCustomer.address}
-                  onChange={e => setEditingCustomer({ ...editingCustomer, address: e.target.value })}
-                  className="w-full border rounded px-3 py-2"
+                    onChange={e => setEditingCustomer({ ...editingCustomer, address: e.target.value })}
+                    className="w-full border rounded px-3 py-2"
                   />
                 </div>
                 <div>
-                <label className="block text-sm font-medium mb-1">Contact Person</label>
+                  <label className="block text-sm font-medium mb-1">Contact Person</label>
                   <input
                     type="text"
                     value={editingCustomer.contact || ''}
-                  onChange={e => setEditingCustomer({ ...editingCustomer, contact: e.target.value })}
-                  className="w-full border rounded px-3 py-2"
+                    onChange={e => setEditingCustomer({ ...editingCustomer, contact: e.target.value })}
+                    className="w-full border rounded px-3 py-2"
                   />
                 </div>
                 <div>
@@ -319,8 +321,8 @@ export default function CustomersPage() {
                   <input
                     type="text"
                     value={editingCustomer.phone || ''}
-                  onChange={e => setEditingCustomer({ ...editingCustomer, phone: e.target.value })}
-                  className="w-full border rounded px-3 py-2"
+                    onChange={e => setEditingCustomer({ ...editingCustomer, phone: e.target.value })}
+                    className="w-full border rounded px-3 py-2"
                   />
                 </div>
                 <div>
@@ -328,16 +330,19 @@ export default function CustomersPage() {
                   <input
                     type="email"
                     value={editingCustomer.email || ''}
-                  onChange={e => setEditingCustomer({ ...editingCustomer, email: e.target.value })}
-                  className="w-full border rounded px-3 py-2"
+                    onChange={e => setEditingCustomer({ ...editingCustomer, email: e.target.value })}
+                    className="w-full border rounded px-3 py-2"
                   />
+                </div>
               </div>
+
+              {/* Right Column - Customer Numbers */}
               <div>
-                <label className="block text-sm font-medium mb-1">Customer Numbers</label>
-                <div className="space-y-2">
+                <label className="block text-sm font-medium mb-3">Customer Numbers</label>
+                <div className="space-y-3 max-h-[60vh] overflow-y-auto">
                   {availableCountries.map((country: string) => (
-                    <div key={country} className="flex items-center gap-2">
-                      <span className="w-24">{country}:</span>
+                    <div key={country} className="flex items-center gap-3">
+                      <span className="w-32 text-sm font-medium">{country}:</span>
                       <input
                         type="text"
                         value={editingCustomer.customerNumbers[country] || ''}
@@ -348,7 +353,8 @@ export default function CustomersPage() {
                             [country]: e.target.value
                           }
                         })}
-                        className="flex-1 border rounded px-3 py-1"
+                        className="flex-1 border rounded px-3 py-2"
+                        placeholder="Enter customer number"
                       />
                     </div>
                   ))}
