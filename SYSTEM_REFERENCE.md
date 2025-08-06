@@ -236,6 +236,34 @@ const targetCountry = userCountry === creatorCountry
 - **UI Updates**: Real-time visual feedback
 - **False Notification Prevention**: No notifications for initial loading or default states
 
+### **Labels Management System**
+**Location**: `src/app/labels/page.tsx`
+
+**Core Features**:
+- **Full CRUD Operations**: Create, Read, Update, Delete labels
+- **Access Control**: Only `superAdmin` users can access and manage labels
+- **Duplicate Detection**: Automatic detection and removal of duplicate labels
+- **Smart Duplicate Resolution**: Prioritizes correct label names (e.g., "snooze" over "Snoozed")
+- **Real-time Updates**: Labels list refreshes automatically after changes
+- **Sorting**: Labels displayed alphabetically by name
+
+**Authorization Rules**:
+- **superAdmin**: Full access to create, edit, delete, and fix duplicate labels
+- **admin/user**: Access denied - see "Access Denied" message
+
+**Duplicate Label Fix**:
+- **`handleFixDuplicateLabels()` Function**: Automatically detects and removes duplicate labels
+- **Smart Detection**: Finds labels with similar names (case-insensitive)
+- **Special Handling**: Prioritizes the correct "snooze" label name that the system expects
+- **"Fix Duplicate Labels" Button**: User-friendly interface to trigger duplicate removal
+- **Success Feedback**: Shows detailed messages about what was fixed
+
+**Label Naming Standards**:
+- **System Expects**: "snooze" (lowercase) for snooze functionality
+- **Special Labels**: "urgent", "problems", "waiting for answer", "planned", "snooze"
+- **Consistency**: Ensures only one label per functionality exists
+- **Case Handling**: System searches case-insensitive but maintains original case in database
+
 ## 🎨 **USER INTERFACE & UX**
 
 ### **Design Principles**
@@ -326,12 +354,14 @@ const useCustomers = () => {
 2. **Real-time Communication**: Instant messaging and notifications
 3. **File Management**: Secure file uploads and sharing with proper FileUpload component
 4. **Status Tracking**: Comprehensive quote request lifecycle with proper filtering
-5. **Label System**: Visual organization and prioritization
+5. **Label System**: Visual organization and prioritization with full CRUD management
 6. **Customer Management**: Integrated customer database
 7. **Product Catalog**: Dynamic product selection with categories
 8. **Quote Request Deletion**: Creator-only deletion with notifications
 9. **User Management**: Complete user lifecycle with temporary password creation
 10. **Status Filtering**: Completed quote requests (Won/Lost/Cancelled) only appear in Archived menu
+11. **Labels Management**: Full CRUD operations with duplicate detection and smart resolution
+12. **Duplicate Label Prevention**: Automatic detection and removal of duplicate labels
 
 ### **Business Logic**
 - **Customer Number Generation**: Automatic based on country
@@ -402,6 +432,8 @@ const useCustomers = () => {
 - Status Filtering: Completed statuses (Won/Lost/Cancelled) only appear in Archived menu
 - File Upload: Proper FileUpload component with drag-and-drop and browse functionality
 - Product Layout: 12-column grid ensuring quantity field visibility (Code: 3, Description: 6, Quantity: 2, Delete: 1)
+- Labels Management: Full CRUD with duplicate detection and smart resolution
+- Duplicate Label Prevention: Automatic detection and removal of duplicate labels, prioritizes correct system names
 
 ---
 
