@@ -12,7 +12,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-  const [submitting, setSubmitting(false);
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (!loading && user) {
