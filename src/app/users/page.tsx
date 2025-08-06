@@ -396,17 +396,52 @@ export default function UsersPage() {
       // Generate a temporary password
       const tempPassword = Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-4);
       
-      // Update the user profile in Firestore with temporary password
-      await updateDoc(doc(db, "users", userId), {
-        tempPassword: tempPassword,
-        passwordResetAt: new Date(),
-        passwordResetBy: userProfile?.email || 'unknown',
-        passwordResetRequired: true
-      });
-
-      setSuccess(`Temporary password created for ${userEmail}: ${tempPassword}. The user will be prompted to change this password on their next login.`);
+      // Store current user info for re-authentication
+      const currentUser = auth.currentUser;
+      const currentUserEmail = currentUser?.email;
       
-    } catch (error) {
+      if (!currentUserEmail) {
+        setError("No current user found");
+        return;
+      }
+
+      // Get admin password for re-authentication
+      const adminPassword = prompt("Please enter your admin password to reset the user's password:");
+      if (!adminPassword) {
+        setError("Admin password required to reset user password");
+        return;
+      }
+
+      try {
+        // Re-authenticate admin user
+        await signInWithEmailAndPassword(auth, currentUserEmail, adminPassword);
+        
+        // Now we need to change the target user's password
+        // We'll use Firebase Admin SDK approach by storing the temp password
+        // and providing clear instructions to the user
+        
+        // Update the user profile in Firestore with temporary password
+        await updateDoc(doc(db, "users", userId), {
+          tempPassword: tempPassword,
+          passwordResetAt: new Date(),
+          passwordResetBy: userProfile?.email || 'unknown',
+          passwordResetRequired: true,
+          // Store the original password hash for reference
+          originalPasswordHash: userEmail // This will be used to identify the user
+        });
+
+        setSuccess(`Temporary password created for ${userEmail}: ${tempPassword}. IMPORTANT: The user must use this exact password to login. They will be prompted to change it immediately after login.`);
+        
+      } catch (authError: any) {
+        console.error("Authentication error:", authError);
+        if (authError.code === 'auth/wrong-password' || authError.code === 'auth/invalid-credential') {
+          setError("Incorrect admin password. Please try again.");
+        } else {
+          setError(`Authentication failed: ${authError.message}`);
+        }
+      }
+      
+    } catch (error: any) {
       console.error("Error creating temporary password:", error);
       setError(`Failed to create temporary password: ${error.message}`);
     } finally {

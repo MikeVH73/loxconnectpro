@@ -2,8 +2,9 @@
 import { useState, useEffect } from "react";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { useRouter } from "next/navigation";
-import { auth } from "../../firebaseClient";
+import { auth, db } from "../../firebaseClient";
 import { useAuth } from "../AuthProvider";
+import { doc, getDoc } from "firebase/firestore";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -11,7 +12,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-  const [submitting, setSubmitting] = useState(false);
+  const [submitting, setSubmitting(false);
 
   useEffect(() => {
     if (!loading && user) {
@@ -27,10 +28,33 @@ export default function LoginPage() {
     e.preventDefault();
     setSubmitting(true);
     setError("");
+    
     try {
+      // First, try normal Firebase Auth login
       await signInWithEmailAndPassword(auth, email, password);
       router.replace("/dashboard");
     } catch (err: any) {
+      // If normal login fails, check if it's a temporary password
+      if (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
+        try {
+          // Check if there's a temporary password in Firestore
+          const userDoc = await getDoc(doc(db, "users", email));
+          if (userDoc.exists()) {
+            const userData = userDoc.data();
+            if (userData.tempPassword === password) {
+              // Temporary password matches, allow login
+              // We need to create a custom auth session or redirect to password change
+              setError("Temporary password accepted. Please change your password on the next page.");
+              // For now, we'll redirect to profile page to change password
+              router.replace("/users/profile?tempPassword=true");
+              return;
+            }
+          }
+        } catch (firestoreErr) {
+          console.error("Error checking temporary password:", firestoreErr);
+        }
+      }
+      
       setError(err.message || "Login failed");
     } finally {
       setSubmitting(false);
