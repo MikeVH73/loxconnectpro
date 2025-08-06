@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useAuth } from "../AuthProvider";
-import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, setDoc } from "firebase/firestore";
+import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, setDoc, Firestore } from "firebase/firestore";
 import { createUserWithEmailAndPassword, updateProfile, signInWithEmailAndPassword, signOut } from "firebase/auth";
 import { db, auth } from "../../firebaseClient";
 import { checkAndFixUserProfiles } from "../utils/userProfileFixer";
@@ -605,6 +605,96 @@ export default function UsersPage() {
     }
   };
 
+  const handleCancel = () => {
+    setEditingUser(null);
+    setShowCreateUser(false);
+    setNewUser({
+      displayName: "",
+      email: "",
+      password: "",
+      role: "readOnly",
+      countries: [],
+    });
+    setError("");
+    setSuccess("");
+  };
+
+  // Function to detect and fix duplicate users
+  const handleFixDuplicateUsers = async () => {
+    try {
+      setSubmitting(true);
+      setError("");
+      setSuccess("");
+
+      if (!db) {
+        setError("Firebase not initialized");
+        return;
+      }
+
+      // Get all users
+      const snapshot = await getDocs(collection(db as Firestore, "users"));
+      const allUsers = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+
+      // Find duplicates by email
+      const emailGroups = allUsers.reduce((acc, user) => {
+        const email = user.email?.toLowerCase().trim();
+        if (email) {
+          if (!acc[email]) {
+            acc[email] = [];
+          }
+          acc[email].push(user);
+        }
+        return acc;
+      }, {} as Record<string, any[]>);
+
+      // Find duplicates
+      const duplicates = Object.entries(emailGroups)
+        .filter(([email, users]) => users.length > 1)
+        .map(([email, users]) => ({ email, users }));
+
+      if (duplicates.length === 0) {
+        setSuccess("No duplicate users found.");
+        return;
+      }
+
+      // Remove duplicates, keeping the first one (usually the one with UID as document ID)
+      let removedCount = 0;
+      for (const { email, users } of duplicates) {
+        // Sort by document ID - UID-based documents usually come first
+        users.sort((a, b) => a.id.localeCompare(b.id));
+        
+        // Keep the first one, remove the rest
+        const toRemove = users.slice(1);
+        for (const user of toRemove) {
+          await deleteDoc(doc(db as Firestore, "users", user.id));
+          removedCount++;
+        }
+      }
+
+      setSuccess(`Fixed ${removedCount} duplicate users. Kept the first occurrence of each email.`);
+
+      // Refresh users list
+      const newSnapshot = await getDocs(collection(db as Firestore, "users"));
+      const newUsers = newSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const userCountries = userProfile?.countries || [];
+      const visibleUsers = userCountries.length > 0
+        ? newUsers.filter((userData: any) => {
+            return userData.countries?.some((country: string) => userCountries.includes(country));
+          })
+        : newUsers;
+      setUsers(visibleUsers);
+
+    } catch (error: any) {
+      console.error("Error fixing duplicate users:", error);
+      setError(`Failed to fix duplicate users: ${error.message}`);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   if (loading || !user) {
     return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
   }
@@ -625,7 +715,31 @@ export default function UsersPage() {
 
   return (
     <div className="p-8">
-      <h1 className="text-2xl font-bold text-[#e40115] mb-6">Users Management</h1>
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold">User Management</h1>
+        <div className="flex gap-2">
+          <button
+            onClick={handleFixDuplicateUsers}
+            disabled={submitting}
+            className="px-4 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700 disabled:opacity-50"
+          >
+            {submitting ? "Fixing..." : "Fix Duplicate Users"}
+          </button>
+          <button
+            onClick={handleFixUserProfiles}
+            disabled={fixingProfiles}
+            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+          >
+            {fixingProfiles ? "Fixing..." : "Fix User Profiles"}
+          </button>
+          <button
+            onClick={() => setShowCreateUser(true)}
+            className="px-4 py-2 bg-[#e40115] text-white rounded hover:bg-red-700"
+          >
+            Add User
+          </button>
+        </div>
+      </div>
       
       {loadingUsers ? (
         <div className="text-center py-4">Loading users...</div>
@@ -928,7 +1042,7 @@ export default function UsersPage() {
                 Save Changes
               </button>
               <button
-                onClick={() => setEditingUser(null)}
+                onClick={handleCancel}
                 className="flex-1 btn-modern btn-modern-secondary"
               >
                 Cancel

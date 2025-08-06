@@ -104,7 +104,7 @@ export default function MessagingPanel({
     }
   };
 
-  const handleKeyPress = (e: KeyboardEvent<HTMLInputElement>) => {
+  const handleKeyPress = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSubmit(e as any);
@@ -114,7 +114,29 @@ export default function MessagingPanel({
   const formatTimestamp = (timestamp: Timestamp | Date | null) => {
     if (!timestamp) return "";
     try {
-      const date = timestamp instanceof Timestamp ? timestamp.toDate() : timestamp;
+      let date: Date;
+      
+      // Handle different timestamp formats
+      if (timestamp instanceof Timestamp) {
+        date = timestamp.toDate();
+      } else if (timestamp instanceof Date) {
+        date = timestamp;
+      } else if (typeof timestamp === 'string') {
+        date = new Date(timestamp);
+      } else if (timestamp && typeof timestamp === 'object' && 'seconds' in timestamp) {
+        // Handle Firestore timestamp object
+        date = new Date((timestamp as any).seconds * 1000);
+      } else {
+        console.warn('Unknown timestamp format:', timestamp);
+        return "";
+      }
+      
+      // Validate the date
+      if (isNaN(date.getTime())) {
+        console.warn('Invalid date:', timestamp);
+        return "";
+      }
+      
       const now = new Date();
       const diff = now.getTime() - date.getTime();
       
@@ -207,7 +229,7 @@ export default function MessagingPanel({
                 </div>
               )}
                   <div className="text-xs mt-1 opacity-75">
-                    {dayjs(message.createdAt).fromNow()}
+                    {formatTimestamp(message.createdAt)}
                   </div>
                 </div>
               </div>

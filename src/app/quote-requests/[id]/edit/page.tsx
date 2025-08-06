@@ -72,7 +72,7 @@ interface QuoteRequest {
     dateTime: Date;
   }>;
   customerNumber?: string;
-  customerDecidesEndDate?: boolean;
+  customerDecidesEnd?: boolean;
   latitude?: string;
   longitude?: string;
   updatedAt?: Date;
@@ -181,7 +181,7 @@ export default function EditQuoteRequest() {
             jobsite: data.jobsite || {},
             jobsiteContact: data.jobsiteContact || {},
             customerNumber: data.customerNumber || '',
-            customerDecidesEndDate: data.customerDecidesEndDate || false,
+            customerDecidesEnd: data.customerDecidesEnd || false,
             latitude: data.latitude || '',
             longitude: data.longitude || '',
             notes: data.notes || [],
@@ -281,7 +281,7 @@ export default function EditQuoteRequest() {
         'title', 'status', 'involvedCountry', 'startDate', 'endDate', 
         'customer', 'waitingForAnswer', 'urgent', 'problems', 'planned',
         'products', 'notes', 'attachments', 'jobsite', 'customerNumber',
-        'customerDecidesEndDate', 'latitude', 'longitude'
+        'customerDecidesEnd', 'latitude', 'longitude'
       ];
 
       for (const field of fieldsToTrack) {
@@ -533,7 +533,7 @@ export default function EditQuoteRequest() {
         jobsite: quoteRequest.jobsite || {},
         jobsiteContact: quoteRequest.jobsiteContact || {},
         customerNumber: quoteRequest.customerNumber || '',
-        customerDecidesEndDate: quoteRequest.customerDecidesEndDate || false,
+        customerDecidesEnd: quoteRequest.customerDecidesEnd || false,
         latitude: quoteRequest.latitude || '',
         longitude: quoteRequest.longitude || '',
         notes: quoteRequest.notes || [],
@@ -560,7 +560,7 @@ export default function EditQuoteRequest() {
       jobsite: quoteRequest.jobsite || {},
       jobsiteContact: quoteRequest.jobsiteContact || {},
       customerNumber: quoteRequest.customerNumber || '',
-      customerDecidesEndDate: quoteRequest.customerDecidesEndDate || false,
+      customerDecidesEnd: quoteRequest.customerDecidesEnd || false,
       latitude: quoteRequest.latitude || '',
       longitude: quoteRequest.longitude || '',
       notes: quoteRequest.notes || [],
@@ -1135,7 +1135,7 @@ export default function EditQuoteRequest() {
                       value={quoteRequest.endDate}
                       onChange={(e) => handleInputChange("endDate", e.target.value)}
                       className="w-full p-3 border border-gray-300 rounded-md"
-                      disabled={isReadOnly || quoteRequest.customerDecidesEndDate}
+                      disabled={isReadOnly || quoteRequest.customerDecidesEnd}
                     />
                   </div>
                 </div>
@@ -1145,8 +1145,8 @@ export default function EditQuoteRequest() {
                   <label className="flex items-center">
                     <input
                       type="checkbox"
-                      checked={quoteRequest.customerDecidesEndDate || false}
-                      onChange={(e) => handleInputChange("customerDecidesEndDate", e.target.checked)}
+                      checked={quoteRequest.customerDecidesEnd || false}
+                      onChange={(e) => handleInputChange("customerDecidesEnd", e.target.checked)}
                       className="mr-2"
                       disabled={isReadOnly}
                     />
