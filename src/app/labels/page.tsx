@@ -138,6 +138,81 @@ function LabelsPage() {
     setError("");
   };
 
+  // Function to detect and fix duplicate labels
+  const handleFixDuplicateLabels = async () => {
+    try {
+      setSubmitting(true);
+      setError("");
+      setSuccess("");
+
+      // Get all labels
+      const snapshot = await getDocs(collection(db as Firestore, "labels"));
+      const allLabels = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Label[];
+
+      // Find potential duplicates
+      const duplicates = [];
+      const processedNames = new Set<string>();
+
+      for (const label of allLabels) {
+        const normalizedName = label.name.toLowerCase().trim();
+        if (processedNames.has(normalizedName)) {
+          duplicates.push(label);
+        } else {
+          processedNames.add(normalizedName);
+        }
+      }
+
+      // Special handling for snooze/snoozed duplicates
+      const snoozeLabels = allLabels.filter(label => 
+        label.name.toLowerCase().includes('snooze')
+      );
+
+      if (snoozeLabels.length > 1) {
+        // The system expects "snooze" (lowercase), so keep that one if it exists
+        const preferredSnooze = snoozeLabels.find(label => 
+          label.name.toLowerCase() === 'snooze'
+        );
+        
+        const toDelete = preferredSnooze 
+          ? snoozeLabels.filter(label => label.id !== preferredSnooze.id)
+          : snoozeLabels.slice(1); // Keep first if no exact "snooze" match
+
+        for (const label of toDelete) {
+          await deleteDoc(doc(db as Firestore, "labels", label.id));
+        }
+
+        const keptLabel = preferredSnooze || snoozeLabels[0];
+        setSuccess(`Fixed ${toDelete.length} duplicate snooze labels. Kept "${keptLabel.name}" and removed the others.`);
+      } else if (duplicates.length > 0) {
+        // Handle other duplicates
+        for (const label of duplicates) {
+          await deleteDoc(doc(db as Firestore, "labels", label.id));
+        }
+        setSuccess(`Fixed ${duplicates.length} duplicate labels.`);
+      } else {
+        setSuccess("No duplicate labels found.");
+      }
+
+      // Refresh labels list
+      const newSnapshot = await getDocs(collection(db as Firestore, "labels"));
+      const labelsData = newSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Label[];
+      labelsData.sort((a, b) => a.name.localeCompare(b.name));
+      setLabels(labelsData);
+
+    } catch (error) {
+      console.error("Error fixing duplicate labels:", error);
+      setError("Failed to fix duplicate labels");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   if (!isClient) {
     return <LoadingSpinner />;
   }
@@ -156,12 +231,21 @@ function LabelsPage() {
     <div className="container mx-auto px-4 py-8">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Labels Management</h1>
-        <button
-          onClick={() => setShowModal(true)}
-          className="px-4 py-2 bg-[#e40115] text-white rounded hover:bg-red-700"
-        >
-          Add New Label
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={handleFixDuplicateLabels}
+            disabled={submitting}
+            className="px-4 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700 disabled:opacity-50"
+          >
+            {submitting ? "Fixing..." : "Fix Duplicate Labels"}
+          </button>
+          <button
+            onClick={() => setShowModal(true)}
+            className="px-4 py-2 bg-[#e40115] text-white rounded hover:bg-red-700"
+          >
+            Add New Label
+          </button>
+        </div>
       </div>
 
       {/* Success/Error Messages */}
