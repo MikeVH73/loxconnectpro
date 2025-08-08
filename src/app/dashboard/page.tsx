@@ -337,7 +337,7 @@ export default function DashboardPage() {
     );
   }
 
-  if (!authLoading && !userProfile) {
+  if (!authLoading && user === null && !userProfile) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="text-center">
