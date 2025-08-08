@@ -205,49 +205,34 @@ export default function DashboardPage() {
         const snoozeLabelId = labelsData.find(l => l.name.toLowerCase() === 'snooze')?.id;
         const plannedLabelId = labelsData.find(l => l.name.toLowerCase() === 'planned')?.id;
 
-        // Fetch quote requests
-        const qrRef = collection(db as Firestore, "quoteRequests");
-        const [qrSnapCreator, qrSnapInvolved, customerSnap] = await Promise.all([
-          getDocs(query(qrRef, where('creatorCountry', '==', userProfile?.businessUnit))),
-          getDocs(query(qrRef, where('involvedCountry', '==', userProfile?.businessUnit))),
+        // Fetch quote requests (all), then filter per visibility rules
+        const [qrSnapAll, customerSnap] = await Promise.all([
+          getDocs(collection(db as Firestore, "quoteRequests")),
           getDocs(collection(db as Firestore, "customers")),
         ]);
 
         const seenIds = new Set<string>();
         const combinedQRs: QuoteRequest[] = [];
 
-        // Process creator quotes
-        qrSnapCreator.docs.forEach(doc => {
-          if (!seenIds.has(doc.id)) {
-            const data = doc.data();
-            combinedQRs.push({
-              id: doc.id,
-              ...data,
-              labels: data.labels || [],
-              urgent: Boolean(data.urgent) || (data.labels || []).includes(urgentLabelId || ''),
-              problems: Boolean(data.problems) || (data.labels || []).includes(problemsLabelId || ''),
-              waitingForAnswer: Boolean(data.waitingForAnswer) || (data.labels || []).includes(waitingLabelId || ''),
-              planned: Boolean(data.planned) || (data.labels || []).includes(plannedLabelId || '')
-            } as QuoteRequest);
-            seenIds.add(doc.id);
-          }
-        });
+        // Process and apply visibility filter by allowed countries
+        const allowed = new Set<string>();
+        if (userProfile?.businessUnit) allowed.add(userProfile.businessUnit);
+        (userProfile?.countries || []).forEach(c => allowed.add(c));
 
-        // Process involved quotes
-        qrSnapInvolved.docs.forEach(doc => {
-          if (!seenIds.has(doc.id)) {
-            const data = doc.data();
-            combinedQRs.push({
-              id: doc.id,
-              ...data,
-              labels: data.labels || [],
-              urgent: Boolean(data.urgent) || (data.labels || []).includes(urgentLabelId || ''),
-              problems: Boolean(data.problems) || (data.labels || []).includes(problemsLabelId || ''),
-              waitingForAnswer: Boolean(data.waitingForAnswer) || (data.labels || []).includes(waitingLabelId || ''),
-              planned: Boolean(data.planned) || (data.labels || []).includes(plannedLabelId || '')
-            } as QuoteRequest);
-            seenIds.add(doc.id);
+        qrSnapAll.docs.forEach(docSnap => {
+          const data = docSnap.data();
+          if (allowed.size > 0 && !(allowed.has(data.creatorCountry) || allowed.has(data.involvedCountry))) {
+            return;
           }
+          combinedQRs.push({
+            id: docSnap.id,
+            ...data,
+            labels: data.labels || [],
+            urgent: Boolean(data.urgent) || (data.labels || []).includes(urgentLabelId || ''),
+            problems: Boolean(data.problems) || (data.labels || []).includes(problemsLabelId || ''),
+            waitingForAnswer: Boolean(data.waitingForAnswer) || (data.labels || []).includes(waitingLabelId || ''),
+            planned: Boolean(data.planned) || (data.labels || []).includes(plannedLabelId || '')
+          } as QuoteRequest);
         });
 
         // Update Firestore to ensure consistency

@@ -257,8 +257,11 @@ export default function EditQuoteRequest() {
     
     try {
       const quoteRequestRef = doc(db as Firestore, "quoteRequests", id);
+      const canAssign = (userProfile?.role === 'superAdmin' || userProfile?.role === 'admin' || userProfile?.businessUnit === quoteRequest.involvedCountry || (userProfile?.countries || []).includes(quoteRequest.involvedCountry));
       const updateData: any = {
         ...quoteRequest,
+        // If user cannot assign, strip any local assignment changes from update
+        ...(canAssign ? {} : { assignedUserId: originalData?.assignedUserId, assignedUserName: originalData?.assignedUserName }),
         updatedAt: serverTimestamp(),
         updatedBy: user?.email || ""
       };
@@ -323,7 +326,7 @@ export default function EditQuoteRequest() {
         }
 
         // Check for handler assignment changes
-        if ((originalData.assignedUserId || '') !== (quoteRequest as any).assignedUserId) {
+        if (canAssign && (originalData.assignedUserId || '') !== (quoteRequest as any).assignedUserId) {
           const newAssignee = (quoteRequest as any).assignedUserName || 'Unassigned';
           changes.push(`Handler changed to ${newAssignee}`);
         }

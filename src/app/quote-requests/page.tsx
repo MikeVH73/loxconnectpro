@@ -97,16 +97,9 @@ const QuoteRequestsPage = () => {
         const waitingLabelId = labelsData.find(l => l.name.toLowerCase() === 'waiting for answer')?.id;
         const plannedLabelId = labelsData.find(l => l.name.toLowerCase() === 'planned')?.id;
 
-        // Fetch quote requests based on user's business unit
+        // Fetch all quote requests; apply visibility filtering client-side per business rules
         const qrRef = collection(db as Firestore, "quoteRequests");
-        let qrQuery;
-
-        if (userProfile.role === "superAdmin") {
-          qrQuery = query(qrRef, orderBy("createdAt", "desc"));
-        } else {
-          // First get all quote requests
-          qrQuery = query(qrRef, orderBy("createdAt", "desc"));
-        }
+        const qrQuery = query(qrRef, orderBy("createdAt", "desc"));
 
       const [qrSnap, custSnap] = await Promise.all([
           getDocs(qrQuery),
@@ -124,13 +117,12 @@ const QuoteRequestsPage = () => {
           ...doc.data()
         })) as QuoteRequest[];
 
-        // Filter by user's business unit if not superAdmin
-        if (userProfile.role !== "superAdmin" && userProfile.businessUnit) {
-          allRequests = allRequests.filter(qr => 
-            // Filter by business unit
-            (qr.creatorCountry === userProfile.businessUnit ||
-            qr.involvedCountry === userProfile.businessUnit)
-          );
+        // Visibility filtering for ALL roles
+        const allowed = new Set<string>();
+        if (userProfile.businessUnit) allowed.add(userProfile.businessUnit);
+        (userProfile.countries || []).forEach(c => allowed.add(c));
+        if (allowed.size > 0) {
+          allRequests = allRequests.filter(qr => allowed.has(qr.creatorCountry) || allowed.has(qr.involvedCountry));
         }
 
         // Filter out completed requests for all users (they should only appear in Archived)
