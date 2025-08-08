@@ -67,6 +67,15 @@ const QuoteRequestsPage = () => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
   const [deletingQuoteRequest, setDeletingQuoteRequest] = useState<string | null>(null);
   const { userProfile, user, loading: authLoading } = useAuth();
+  const [showAllCountries, setShowAllCountries] = useState<boolean>(false);
+
+  useEffect(() => {
+    // Load persisted toggle for superAdmin
+    if (typeof window !== 'undefined' && userProfile?.role === 'superAdmin') {
+      const saved = localStorage.getItem('superAdminShowAllCountries');
+      if (saved != null) setShowAllCountries(saved === 'true');
+    }
+  }, [userProfile?.role]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -117,12 +126,15 @@ const QuoteRequestsPage = () => {
           ...doc.data()
         })) as QuoteRequest[];
 
-        // Visibility filtering for ALL roles
-        const allowed = new Set<string>();
-        if (userProfile.businessUnit) allowed.add(userProfile.businessUnit);
-        (userProfile.countries || []).forEach(c => allowed.add(c));
-        if (allowed.size > 0) {
-          allRequests = allRequests.filter(qr => allowed.has(qr.creatorCountry) || allowed.has(qr.involvedCountry));
+        // Visibility filtering (can be overridden by superAdmin toggle)
+        const shouldFilter = userProfile.role !== 'superAdmin' || !showAllCountries;
+        if (shouldFilter) {
+          const allowed = new Set<string>();
+          if (userProfile.businessUnit) allowed.add(userProfile.businessUnit);
+          (userProfile.countries || []).forEach(c => allowed.add(c));
+          if (allowed.size > 0) {
+            allRequests = allRequests.filter(qr => allowed.has(qr.creatorCountry) || allowed.has(qr.involvedCountry));
+          }
         }
 
         // Filter out completed requests for all users (they should only appear in Archived)
@@ -159,7 +171,7 @@ const QuoteRequestsPage = () => {
     };
 
     fetchData();
-  }, [userProfile, db]);
+  }, [userProfile, db, showAllCountries]);
 
   const getCustomerName = (id: string | undefined): string => {
     if (!id) return 'Unknown Customer';
@@ -260,12 +272,29 @@ const QuoteRequestsPage = () => {
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-[#e40115]">Quote Requests</h1>
-        <Link
-          href="/quote-requests/new"
-          className="bg-[#e40115] text-white px-4 py-2 rounded hover:bg-red-700 transition"
-        >
-          + New Quote Request
-        </Link>
+        <div className="flex items-center gap-4">
+          {userProfile?.role === 'superAdmin' && (
+            <label className="flex items-center gap-2 text-sm text-gray-600">
+              <input
+                type="checkbox"
+                checked={showAllCountries}
+                onChange={(e) => {
+                  setShowAllCountries(e.target.checked);
+                  if (typeof window !== 'undefined') {
+                    localStorage.setItem('superAdminShowAllCountries', String(e.target.checked));
+                  }
+                }}
+              />
+              Show all countries
+            </label>
+          )}
+          <Link
+            href="/quote-requests/new"
+            className="bg-[#e40115] text-white px-4 py-2 rounded hover:bg-red-700 transition"
+          >
+            + New Quote Request
+          </Link>
+        </div>
       </div>
 
         <div className="space-y-4">

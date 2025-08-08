@@ -85,10 +85,18 @@ export default function DashboardPage() {
   const [deletingQuoteRequest, setDeletingQuoteRequest] = useState<string | null>(null);
   const { userProfile, user, loading: authLoading, signOutUser } = useAuth();
   const router = useRouter();
+  const [showAllCountries, setShowAllCountries] = useState<boolean>(false);
 
   useEffect(() => {
     setIsClient(true);
   }, []);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && userProfile?.role === 'superAdmin') {
+      const saved = localStorage.getItem('superAdminShowAllCountries');
+      if (saved != null) setShowAllCountries(saved === 'true');
+    }
+  }, [userProfile?.role]);
 
   // Helper functions
   const getCustomerName = (id: string | undefined) => {
@@ -214,14 +222,17 @@ export default function DashboardPage() {
         const seenIds = new Set<string>();
         const combinedQRs: QuoteRequest[] = [];
 
-        // Process and apply visibility filter by allowed countries
+        // Process and apply visibility filter (respect superAdmin toggle)
+        const shouldFilter = userProfile?.role !== 'superAdmin' || !showAllCountries;
         const allowed = new Set<string>();
-        if (userProfile?.businessUnit) allowed.add(userProfile.businessUnit);
-        (userProfile?.countries || []).forEach(c => allowed.add(c));
+        if (shouldFilter) {
+          if (userProfile?.businessUnit) allowed.add(userProfile.businessUnit);
+          (userProfile?.countries || []).forEach(c => allowed.add(c));
+        }
 
         qrSnapAll.docs.forEach(docSnap => {
           const data = docSnap.data();
-          if (allowed.size > 0 && !(allowed.has(data.creatorCountry) || allowed.has(data.involvedCountry))) {
+          if (shouldFilter && allowed.size > 0 && !(allowed.has(data.creatorCountry) || allowed.has(data.involvedCountry))) {
             return;
           }
           combinedQRs.push({
@@ -276,7 +287,7 @@ export default function DashboardPage() {
     };
 
     checkAuth();
-  }, [db, userProfile, user, router, authLoading]);
+  }, [db, userProfile, user, router, authLoading, showAllCountries]);
 
   // Assign each quote request to only one column based on priority
   const snoozed: QuoteRequest[] = [];
@@ -364,7 +375,24 @@ export default function DashboardPage() {
       <div className="flex">
         {/* Kanban Board */}
         <div className="flex-1 pr-96">
-          <h1 className="text-2xl font-bold text-[#e40115] mb-6">Dashboard</h1>
+          <div className="flex items-center justify-between mb-6">
+            <h1 className="text-2xl font-bold text-[#e40115]">Dashboard</h1>
+            {userProfile?.role === 'superAdmin' && (
+              <label className="flex items-center gap-2 text-sm text-gray-600">
+                <input
+                  type="checkbox"
+                  checked={showAllCountries}
+                  onChange={(e) => {
+                    setShowAllCountries(e.target.checked);
+                    if (typeof window !== 'undefined') {
+                      localStorage.setItem('superAdminShowAllCountries', String(e.target.checked));
+                    }
+                  }}
+                />
+                Show all countries
+              </label>
+            )}
+          </div>
           
           <div className="grid grid-cols-4 gap-6">
             {/* Urgent/Problems Column */}
