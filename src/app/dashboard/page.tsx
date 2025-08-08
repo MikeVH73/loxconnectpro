@@ -68,6 +68,8 @@ interface QuoteRequest {
     name: string;
     phone: string;
   };
+  assignedUserId?: string;
+  assignedUserName?: string;
 }
 
 export default function DashboardPage() {

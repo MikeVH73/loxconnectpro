@@ -47,6 +47,8 @@ interface QuoteRequest {
     name: string;
     phone: string;
   };
+  assignedUserId?: string;
+  assignedUserName?: string;
 }
 
 interface QuoteRequestCardProps {
@@ -167,6 +169,18 @@ export default function QuoteRequestCard({ qr, customers, labels, onCardClick, o
       <div className="text-sm text-gray-600 mb-2">
         {qr.creatorCountry} → {qr.involvedCountry}
       </div>
+
+      {/* Assignee */}
+      {qr.assignedUserName && (
+        <div className="mb-2">
+          <span className="inline-flex items-center gap-2 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+            <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-gray-300 text-[10px] text-gray-800">
+              {qr.assignedUserName.slice(0,1).toUpperCase()}
+            </span>
+            {qr.assignedUserName}
+          </span>
+        </div>
+      )}
 
       {/* Status Indicators and Special Labels */}
       <div className="flex flex-wrap items-center gap-2 mb-2">

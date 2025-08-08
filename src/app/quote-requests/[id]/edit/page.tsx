@@ -81,6 +81,8 @@ interface QuoteRequest {
   urgent: boolean;
   problems: boolean;
   planned: boolean;
+  assignedUserId?: string;
+  assignedUserName?: string;
 }
 
 const statuses = ["New", "In Progress", "Snoozed", "Won", "Lost", "Cancelled"];
@@ -136,6 +138,9 @@ export default function EditQuoteRequest() {
   const [showNewContact, setShowNewContact] = useState(false);
   const [newContact, setNewContact] = useState({ name: "", phone: "" });
   const [customerDetails, setCustomerDetails] = useState<Customer | null>(null);
+  // Team assignment state
+  const [teamMembers, setTeamMembers] = useState<Array<{ id: string; displayName: string; email?: string }>>([]);
+  const [assignedUserId, setAssignedUserId] = useState<string>("");
   const [isMounted, setIsMounted] = useState(false);
   const [newNote, setNewNote] = useState("");
   const { messages, loading: messagesLoading, error: messagesError, sendMessage } = useMessages(id);
@@ -213,7 +218,9 @@ export default function EditQuoteRequest() {
             waitingForAnswer: data.waitingForAnswer || false,
             urgent: data.urgent || false,
             problems: data.problems || false,
-            planned: data.planned || false
+            planned: data.planned || false,
+            assignedUserId: data.assignedUserId || '',
+            assignedUserName: data.assignedUserName || ''
           } as QuoteRequestWithDynamicKeys);
           setOriginalData(data as QuoteRequestWithDynamicKeys); // Store original data for comparison
         } else {
@@ -315,6 +322,12 @@ export default function EditQuoteRequest() {
           changes.push(`Jobsite contact changed from "${originalData.jobsiteContact?.name || 'Not set'}" to "${quoteRequest.jobsiteContact?.name || 'Not set'}"`);
         }
 
+        // Check for handler assignment changes
+        if ((originalData.assignedUserId || '') !== (quoteRequest as any).assignedUserId) {
+          const newAssignee = (quoteRequest as any).assignedUserName || 'Unassigned';
+          changes.push(`Handler changed to ${newAssignee}`);
+        }
+
         // Check for notes changes
         if (JSON.stringify(originalData.notes) !== JSON.stringify(quoteRequest.notes)) {
           changes.push('Notes updated');
@@ -403,7 +416,9 @@ export default function EditQuoteRequest() {
         latitude: quoteRequest.latitude || '',
         longitude: quoteRequest.longitude || '',
         notes: quoteRequest.notes || [],
-        attachments: quoteRequest.attachments || []
+        attachments: quoteRequest.attachments || [],
+        assignedUserId: quoteRequest.assignedUserId || '',
+        assignedUserName: quoteRequest.assignedUserName || ''
       });
       previousQuoteRequest.current = initialState;
       return;
@@ -430,7 +445,9 @@ export default function EditQuoteRequest() {
       latitude: quoteRequest.latitude || '',
       longitude: quoteRequest.longitude || '',
       notes: quoteRequest.notes || [],
-      attachments: quoteRequest.attachments || []
+      attachments: quoteRequest.attachments || [],
+      assignedUserId: quoteRequest.assignedUserId || '',
+      assignedUserName: quoteRequest.assignedUserName || ''
     });
 
     // Only save if data changed
@@ -687,6 +704,29 @@ export default function EditQuoteRequest() {
       fetchCustomerContacts(quoteRequest.customer);
     }
   }, [quoteRequest.customer, fetchCustomerContacts]);
+
+  // Load team members (users belonging to creatorCountry)
+  useEffect(() => {
+    const loadTeam = async () => {
+      try {
+        if (!db || !quoteRequest.creatorCountry) return;
+        const usersSnap = await getDocs(collection(db as Firestore, 'users'));
+        const allUsers = usersSnap.docs.map(u => ({ id: u.id, ...(u.data() as any) }));
+        const creator = quoteRequest.creatorCountry;
+        const filtered = allUsers.filter((u: any) => (
+          (Array.isArray(u.countries) && u.countries.includes(creator)) || u.businessUnit === creator
+        ));
+        const normalized = filtered.map((u: any) => ({ id: u.id, displayName: u.displayName || u.name || u.email || 'Unknown' , email: u.email }));
+        setTeamMembers(normalized);
+        if (quoteRequest.assignedUserId) {
+          setAssignedUserId(quoteRequest.assignedUserId);
+        }
+      } catch (err) {
+        console.error('Failed to load team members:', err);
+      }
+    };
+    loadTeam();
+  }, [db, quoteRequest.creatorCountry, quoteRequest.assignedUserId]);
 
   // Get the user's business unit for notifications
   const userCountry = userProfile?.businessUnit || (userProfile?.countries && userProfile.countries[0]) || '';
@@ -1110,6 +1150,48 @@ export default function EditQuoteRequest() {
                     className="w-full p-3 border border-gray-300 rounded-md"
                     disabled={isReadOnly}
                   />
+                </div>
+
+                {/* Handled By (Team Assignment) */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Handled by</label>
+                  <div className="space-y-2 p-3 border border-gray-200 rounded-md bg-gray-50">
+                    <label className="flex items-center gap-2 text-sm">
+                      <input
+                        type="radio"
+                        name="assignedUser"
+                        checked={!assignedUserId}
+                        onChange={() => {
+                          setAssignedUserId("");
+                          handleInputChange('assignedUserId', '');
+                          handleInputChange('assignedUserName', '');
+                        }}
+                        disabled={isReadOnly}
+                      />
+                      <span className="text-gray-600">Unassigned</span>
+                    </label>
+                    {teamMembers.map((member) => (
+                      <label key={member.id} className="flex items-center gap-2 text-sm">
+                        <input
+                          type="radio"
+                          name="assignedUser"
+                          checked={assignedUserId === member.id}
+                          onChange={() => {
+                            setAssignedUserId(member.id);
+                            handleInputChange('assignedUserId', member.id);
+                            handleInputChange('assignedUserName', member.displayName);
+                          }}
+                          disabled={isReadOnly}
+                        />
+                        <span className="inline-flex items-center gap-2">
+                          <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-gray-300 text-xs text-gray-800">
+                            {member.displayName?.slice(0,1).toUpperCase()}
+                          </span>
+                          {member.displayName}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
