@@ -794,18 +794,20 @@ export default function UsersPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {users.map((userData) => (
+                  {users.map((userData) => {
+                    const normalizedRole = userData.role === 'readOnly' || userData.role === 'user' ? 'Employee' : userData.role;
+                    return (
                     <tr key={userData.id} className="border-b border-gray-100 hover:bg-gray-50">
                       <td className="py-3 px-4">{userData.displayName || "—"}</td>
                       <td className="py-3 px-4">{userData.email || "—"}</td>
                       <td className="py-3 px-4">
                         <span className={`pill-modern ${
-                          userData.role === "superAdmin" ? "bg-red-600" :
-                          userData.role === "admin" ? "bg-orange-500" :
-                          userData.role === "user" ? "bg-green-500" :
+                          normalizedRole === "superAdmin" ? "bg-red-600" :
+                          normalizedRole === "admin" ? "bg-orange-500" :
+                          normalizedRole === "Employee" ? "bg-green-500" :
                           "bg-gray-500"
                         }`}>
-                          {userData.role || "—"}
+                          {normalizedRole || "—"}
                         </span>
                       </td>
                       <td className="py-3 px-4">
@@ -853,7 +855,7 @@ export default function UsersPage() {
                         </td>
                       )}
                     </tr>
-                  ))}
+                  );})}
                 </tbody>
               </table>
             </div>

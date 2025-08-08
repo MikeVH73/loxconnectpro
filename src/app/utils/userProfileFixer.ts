@@ -91,6 +91,12 @@ export async function checkAndFixUserProfiles(): Promise<{
           needsUpdate = true;
         }
         
+        // Normalize role
+        if (userData.role === 'readOnly' || userData.role === 'user') {
+          (updatedData as any).role = 'Employee';
+          needsUpdate = true;
+        }
+
         // Update the user profile if needed
         if (needsUpdate) {
           console.log(`Fixing user ${userId}:`, updatedData);

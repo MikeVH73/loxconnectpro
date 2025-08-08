@@ -6,7 +6,7 @@
 - A user can only see quote requests where their assigned country matches either:
   - The creator country OR
   - The involved country
-- This rule applies to ALL users regardless of their role (superAdmin, admin, readOnly)
+- This rule applies to ALL users regardless of their role (superAdmin, admin, Employee)
 - If a user has no countries assigned (rare case), they can see all quote requests
 
 ### Country Names
@@ -26,7 +26,7 @@
 ### Available Roles
 - superAdmin: Can manage users and countries, but follows same quote request visibility rules
 - admin: Can manage users within their assigned countries
-- readOnly: Can only view content, cannot create/edit
+- Employee: Can only view content, cannot create/edit
 
 ### Country Assignment
 - Users must be assigned to specific countries

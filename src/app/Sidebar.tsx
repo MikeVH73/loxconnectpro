@@ -29,7 +29,7 @@ export default function Sidebar() {
     return null;
   }
 
-  // Only show restricted items if not readOnly
+  // Only show restricted items if not Employee
   const restrictedLabels = ["Labels", "Countries", "Users", "Modifications"];
   const filteredNavItems = navItems.filter(item => {
     if (restrictedLabels.includes(item.label)) {
