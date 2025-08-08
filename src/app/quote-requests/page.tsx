@@ -36,6 +36,16 @@ interface Customer {
   customerNumbers?: Record<string, string>;
 }
 
+interface UserProfile {
+  id: string;
+  name?: string;
+  displayName?: string;
+  email: string;
+  role: string;
+  countries?: string[];
+  businessUnit?: string;
+}
+
 interface QuoteRequest {
   id: string;
   title: string;
@@ -55,12 +65,16 @@ interface QuoteRequest {
   planned: boolean;
   hasUnreadMessages?: boolean;
   lastMessageAt?: any;
+  assignedUserId?: string;
+  assignedUserName?: string;
+  startDate?: string;
 }
 
 const QuoteRequestsPage = () => {
   const router = useRouter();
   const [quoteRequests, setQuoteRequests] = useState<QuoteRequest[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [labels, setLabels] = useState<Label[]>([]);
@@ -68,6 +82,18 @@ const QuoteRequestsPage = () => {
   const [deletingQuoteRequest, setDeletingQuoteRequest] = useState<string | null>(null);
   const { userProfile, user, loading: authLoading } = useAuth();
   const [showAllCountries, setShowAllCountries] = useState<boolean>(false);
+  
+  // Filters
+  const [search, setSearch] = useState("");
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [filterLabels, setFilterLabels] = useState<string[]>([]);
+  const [filterCreatorCountries, setFilterCreatorCountries] = useState<string[]>([]);
+  const [filterInvolvedCountries, setFilterInvolvedCountries] = useState<string[]>([]);
+  const [filterStartFrom, setFilterStartFrom] = useState<string>("");
+  const [filterStartTo, setFilterStartTo] = useState<string>("");
+  const [filterCustomers, setFilterCustomers] = useState<string[]>([]);
+  const [filterHandledBy, setFilterHandledBy] = useState<string[]>([]);
+  const [filterProduct, setFilterProduct] = useState<string>("");
 
   useEffect(() => {
     // Load persisted toggle for superAdmin
@@ -106,20 +132,24 @@ const QuoteRequestsPage = () => {
         const waitingLabelId = labelsData.find(l => l.name.toLowerCase() === 'waiting for answer')?.id;
         const plannedLabelId = labelsData.find(l => l.name.toLowerCase() === 'planned')?.id;
 
-        // Fetch all quote requests; apply visibility filtering client-side per business rules
-        const qrRef = collection(db as Firestore, "quoteRequests");
-        const qrQuery = query(qrRef, orderBy("createdAt", "desc"));
-
-      const [qrSnap, custSnap] = await Promise.all([
-          getDocs(qrQuery),
-          getDocs(collection(db as Firestore, "customers"))
-      ]);
+        // Fetch all data in parallel
+        const [qrSnap, custSnap, usersSnap] = await Promise.all([
+          getDocs(query(collection(db as Firestore, "quoteRequests"), orderBy("createdAt", "desc"))),
+          getDocs(collection(db as Firestore, "customers")),
+          getDocs(collection(db as Firestore, "users"))
+        ]);
 
         const customersArr = custSnap.docs.map(doc => ({
-        id: doc.id, 
-        ...doc.data() 
+          id: doc.id, 
+          ...doc.data() 
         })) as Customer[];
-      setCustomers(customersArr);
+        setCustomers(customersArr);
+
+        const usersArr = usersSnap.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as UserProfile[];
+        setUsers(usersArr);
 
         let allRequests = qrSnap.docs.map(doc => ({
           id: doc.id,
@@ -161,7 +191,76 @@ const QuoteRequestsPage = () => {
         console.log('Fetched quote requests:', allRequests.length);
         console.log('Sample quote request:', allRequests[0]);
 
-        setQuoteRequests(allRequests);
+        // Apply search and advanced filters client-side
+        const searchLower = search.trim().toLowerCase();
+        let filtered = allRequests.filter(qr => {
+          // Search across title, customer name, products, assignee, id
+          if (searchLower) {
+            const customerName = getCustomerName(qr.customer).toLowerCase();
+            const assigneeName = qr.assignedUserName?.toLowerCase() || '';
+            const productsText = (qr.products || []).map((p: any) => `${p.catClass || ''} ${p.description || ''}`).join(' ').toLowerCase();
+            const hay = `${qr.title || ''} ${customerName} ${productsText} ${assigneeName} ${qr.id}`.toLowerCase();
+            if (!hay.includes(searchLower)) return false;
+          }
+
+          // Labels filter (must include all selected label ids)
+          if (filterLabels.length > 0) {
+            const hasAll = filterLabels.every(l => (qr.labels || []).includes(l));
+            if (!hasAll) return false;
+          }
+
+          // Creator country filter
+          if (filterCreatorCountries.length > 0 && !filterCreatorCountries.includes(qr.creatorCountry)) return false;
+
+          // Involved country filter
+          if (filterInvolvedCountries.length > 0 && !filterInvolvedCountries.includes(qr.involvedCountry)) return false;
+
+          // Start date range filter
+          if (filterStartFrom || filterStartTo) {
+            const startDate = qr.startDate;
+            if (!startDate) {
+              // If no startDate and we have date filters, exclude this item
+              return false;
+            }
+            
+            try {
+              const start = new Date(startDate);
+              if (isNaN(start.getTime())) {
+                // If startDate is not a valid date, exclude this item
+                return false;
+              }
+              
+              if (filterStartFrom && start < new Date(filterStartFrom)) return false;
+              if (filterStartTo && start > new Date(filterStartTo)) return false;
+            } catch (error) {
+              // If there's an error parsing the date, exclude this item
+              return false;
+            }
+          }
+
+          // Customer filter
+          if (filterCustomers.length > 0 && !filterCustomers.includes(qr.customer)) return false;
+
+          // Handled by filter
+          if (filterHandledBy.length > 0) {
+            const assignedUserId = qr.assignedUserId || '';
+            if (!filterHandledBy.includes(assignedUserId)) return false;
+          }
+
+          // Product filter
+          if (filterProduct.trim()) {
+            const prodNeedle = filterProduct.trim().toLowerCase();
+            const has = (qr.products || []).some((p: any) =>
+              `${p.catClass || ''}`.toLowerCase().includes(prodNeedle) ||
+              `${p.description || ''}`.toLowerCase().includes(prodNeedle)
+            );
+            if (!has) return false;
+          }
+
+          return true;
+        });
+
+        setQuoteRequests(filtered);
       } catch (error) {
         console.error("Error fetching data:", error);
         setError("Failed to load quote requests");
@@ -171,7 +270,7 @@ const QuoteRequestsPage = () => {
     };
 
     fetchData();
-  }, [userProfile, db, showAllCountries]);
+  }, [userProfile, db, showAllCountries, search, filterLabels, filterCreatorCountries, filterInvolvedCountries, filterStartFrom, filterStartTo, filterCustomers, filterHandledBy, filterProduct]);
 
   const getCustomerName = (id: string | undefined): string => {
     if (!id) return 'Unknown Customer';
@@ -183,6 +282,12 @@ const QuoteRequestsPage = () => {
     if (!id) return 'Unknown Label';
     const label = labels.find(l => l.id === id);
     return label ? label.name : id;
+  };
+
+  const getUserName = (id: string | undefined): string => {
+    if (!id) return 'Unassigned';
+    const user = users.find(u => u.id === id);
+    return user ? (user.displayName || user.name || user.email) : 'Unknown User';
   };
 
   const handleCardClick = (id: string) => {
@@ -236,6 +341,29 @@ const QuoteRequestsPage = () => {
     return userProfile?.businessUnit === quoteRequest.creatorCountry;
   };
 
+  // Get unique countries for filter dropdowns
+  const getUniqueCountries = () => {
+    const countries = new Set<string>();
+    quoteRequests.forEach(qr => {
+      if (qr.creatorCountry) countries.add(qr.creatorCountry);
+      if (qr.involvedCountry) countries.add(qr.involvedCountry);
+    });
+    return Array.from(countries).sort();
+  };
+
+  // Clear all filters
+  const clearAllFilters = () => {
+    setSearch("");
+    setFilterLabels([]);
+    setFilterCreatorCountries([]);
+    setFilterInvolvedCountries([]);
+    setFilterStartFrom("");
+    setFilterStartTo("");
+    setFilterCustomers([]);
+    setFilterHandledBy([]);
+    setFilterProduct("");
+  };
+
   if (loading || authLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -268,6 +396,8 @@ const QuoteRequestsPage = () => {
      );
    }
 
+  const uniqueCountries = getUniqueCountries();
+
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
@@ -288,6 +418,12 @@ const QuoteRequestsPage = () => {
               Show all countries
             </label>
           )}
+          <button
+            className="px-3 py-2 text-sm bg-gray-100 rounded hover:bg-gray-200 transition-colors"
+            onClick={() => setFiltersOpen(!filtersOpen)}
+          >
+            {filtersOpen ? 'Hide Filters' : 'Advanced Filters'}
+          </button>
           <Link
             href="/quote-requests/new"
             className="bg-[#e40115] text-white px-4 py-2 rounded hover:bg-red-700 transition"
@@ -297,7 +433,183 @@ const QuoteRequestsPage = () => {
         </div>
       </div>
 
-        <div className="space-y-4">
+      {/* Search Bar */}
+      <div className="mb-4">
+        <div className="relative">
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search title, customer, product, assignee, ID..."
+            className="w-full px-4 py-3 pl-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#e40115] focus:border-transparent"
+          />
+          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      {/* Advanced Filters */}
+      {filtersOpen && (
+        <div className="mb-6 bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {/* Labels */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Labels</label>
+              <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
+                {labels.map(l => (
+                  <label key={l.id} className={`px-3 py-1 text-sm rounded-full cursor-pointer transition-colors ${
+                    filterLabels.includes(l.id) 
+                      ? 'bg-[#e40115] text-white' 
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}>
+                    <input 
+                      type="checkbox" 
+                      className="hidden" 
+                      checked={filterLabels.includes(l.id)} 
+                      onChange={(e) => {
+                        setFilterLabels(prev => e.target.checked 
+                          ? [...prev, l.id] 
+                          : prev.filter(x => x !== l.id)
+                        );
+                      }} 
+                    />
+                    {l.name}
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Creator Country */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Creator Country</label>
+              <select
+                multiple
+                value={filterCreatorCountries}
+                onChange={(e) => {
+                  const selected = Array.from(e.target.selectedOptions, option => option.value);
+                  setFilterCreatorCountries(selected);
+                }}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#e40115] focus:border-transparent"
+                size={4}
+              >
+                {uniqueCountries.map(country => (
+                  <option key={country} value={country}>{country}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Involved Country */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Involved Country</label>
+              <select
+                multiple
+                value={filterInvolvedCountries}
+                onChange={(e) => {
+                  const selected = Array.from(e.target.selectedOptions, option => option.value);
+                  setFilterInvolvedCountries(selected);
+                }}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#e40115] focus:border-transparent"
+                size={4}
+              >
+                {uniqueCountries.map(country => (
+                  <option key={country} value={country}>{country}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Start Date range */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Start Date From</label>
+              <input 
+                type="date" 
+                value={filterStartFrom} 
+                onChange={(e) => setFilterStartFrom(e.target.value)} 
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#e40115] focus:border-transparent" 
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Start Date To</label>
+              <input 
+                type="date" 
+                value={filterStartTo} 
+                onChange={(e) => setFilterStartTo(e.target.value)} 
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#e40115] focus:border-transparent" 
+              />
+            </div>
+
+            {/* Customer */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Customer</label>
+              <select
+                multiple
+                value={filterCustomers}
+                onChange={(e) => {
+                  const selected = Array.from(e.target.selectedOptions, option => option.value);
+                  setFilterCustomers(selected);
+                }}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#e40115] focus:border-transparent"
+                size={4}
+              >
+                {customers.map(customer => (
+                  <option key={customer.id} value={customer.id}>{customer.name}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Handled By */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Handled By</label>
+              <select
+                multiple
+                value={filterHandledBy}
+                onChange={(e) => {
+                  const selected = Array.from(e.target.selectedOptions, option => option.value);
+                  setFilterHandledBy(selected);
+                }}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#e40115] focus:border-transparent"
+                size={4}
+              >
+                {users.map(user => (
+                  <option key={user.id} value={user.id}>
+                    {user.displayName || user.name || user.email}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Products */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Products</label>
+              <input
+                type="text"
+                placeholder="Search cat-class or description"
+                value={filterProduct}
+                onChange={(e) => setFilterProduct(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#e40115] focus:border-transparent"
+              />
+            </div>
+          </div>
+
+          {/* Filter Actions */}
+          <div className="mt-6 flex justify-between items-center pt-4 border-t border-gray-200">
+            <div className="text-sm text-gray-600">
+              {quoteRequests.length} quote request{quoteRequests.length !== 1 ? 's' : ''} found
+            </div>
+            <button 
+              className="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors" 
+              onClick={clearAllFilters}
+            >
+              Clear All Filters
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Quote Requests List */}
+      <div className="space-y-4">
         {quoteRequests.map((qr) => (
           <QuoteRequestCard
             key={qr.id}
@@ -312,11 +624,19 @@ const QuoteRequestsPage = () => {
           />
         ))}
         {quoteRequests.length === 0 && (
-          <div className="text-center py-8 text-gray-500">
-            No quote requests found
-                        </div>
-                      )}
-                    </div>
+          <div className="text-center py-12 text-gray-500">
+            <div className="text-lg font-medium mb-2">No quote requests found</div>
+            <div className="text-sm">
+              {search || filterLabels.length > 0 || filterCreatorCountries.length > 0 || 
+               filterInvolvedCountries.length > 0 || filterStartFrom || filterStartTo || 
+               filterCustomers.length > 0 || filterHandledBy.length > 0 || filterProduct
+                ? "Try adjusting your search or filters"
+                : "Create your first quote request to get started"
+              }
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Delete Confirmation Modal */}
       {showDeleteConfirm && (
