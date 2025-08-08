@@ -320,7 +320,15 @@ export default function CustomerDetailPage() {
 
   return (
     <div className="max-w-3xl mx-auto p-8 bg-white rounded shadow mt-8">
-      <h1 className="text-2xl font-bold text-[#e40115] mb-6">Customer Details</h1>
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold text-[#e40115]">Customer Details</h1>
+        <button
+          onClick={() => router.push("/customers")}
+          className="px-4 py-2 bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+        >
+          ← Back to Customers
+        </button>
+      </div>
       <div className="mb-6">
         <h2 className="text-lg font-semibold mb-2">Company Info</h2>
         <div className="grid grid-cols-2 gap-4">
@@ -330,6 +338,20 @@ export default function CustomerDetailPage() {
           <div><strong>Email:</strong> {form.email}</div>
         </div>
       </div>
+      
+      {/* Customer Numbers */}
+      {form.customerNumbers && Object.keys(form.customerNumbers).length > 0 && (
+        <div className="mb-6">
+          <h2 className="text-lg font-semibold mb-2">Customer Numbers</h2>
+          <div className="grid grid-cols-2 gap-4">
+            {Object.entries(form.customerNumbers).map(([country, number]) => (
+              <div key={country}>
+                <strong>{country}:</strong> {number || 'Not set'}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       <div className="mb-6">
         <h2 className="text-lg font-semibold mb-2">First Contact</h2>
         {firstContact ? (
@@ -396,7 +418,7 @@ export default function CustomerDetailPage() {
               <select
             className="w-full border rounded px-3 py-2"
                 value={newContact.type}
-                onChange={e => setNewContact({ ...newContact, type: e.target.value })}
+                onChange={e => setNewContact({ ...newContact, type: e.target.value as 'first' | 'jobsite' })}
               >
                 <option value="first">First Contact</option>
                 <option value="jobsite">Jobsite Contact</option>
