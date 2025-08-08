@@ -240,7 +240,7 @@ export default function UsersPage() {
         displayName: "",
         email: "",
         password: "",
-        role: "readOnly",
+        role: "Employee",
         countries: [],
       });
       setAdminPassword("");
@@ -612,7 +612,7 @@ export default function UsersPage() {
       displayName: "",
       email: "",
       password: "",
-      role: "readOnly",
+      role: "Employee",
       countries: [],
     });
     setError("");
@@ -764,7 +764,7 @@ export default function UsersPage() {
                         displayName: "",
                         email: "",
                         password: "",
-                        role: "readOnly",
+                        role: "Employee",
                         countries: [],
                       });
                       setError("");
@@ -802,8 +802,7 @@ export default function UsersPage() {
                         <span className={`pill-modern ${
                           userData.role === "superAdmin" ? "bg-red-600" :
                           userData.role === "admin" ? "bg-orange-500" :
-                          userData.role === "user" ? "bg-blue-500" :
-                          userData.role === "Employee" ? "bg-green-500" :
+                          userData.role === "user" ? "bg-green-500" :
                           "bg-gray-500"
                         }`}>
                           {userData.role || "—"}
@@ -906,7 +905,6 @@ export default function UsersPage() {
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#e40115]"
                 >
                   <option value="Employee">Employee</option>
-                  <option value="user">User</option>
                   <option value="admin">Admin</option>
                   <option value="superAdmin">Super Admin</option>
                 </select>
@@ -955,7 +953,7 @@ export default function UsersPage() {
                     displayName: "",
                     email: "",
                     password: "",
-                    role: "readOnly",
+                    role: "Employee",
                     countries: [],
                   });
                   setError("");
@@ -1001,7 +999,6 @@ export default function UsersPage() {
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#e40115]"
                 >
                   <option value="Employee">Employee</option>
-                  <option value="user">User</option>
                   <option value="admin">Admin</option>
                   <option value="superAdmin">Super Admin</option>
                 </select>

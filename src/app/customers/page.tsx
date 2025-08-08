@@ -68,7 +68,7 @@ export default function CustomersPage() {
         console.log('User profile:', userProfile);
 
         // Filter customers based on user role and countries
-        if (userProfile?.role === "user" && userProfile.countries && userProfile.countries.length > 0) {
+        if (userProfile?.role === "Employee" && userProfile.countries && userProfile.countries.length > 0) {
           console.log('Filtering customers for user countries:', userProfile.countries);
           fetchedCustomers = fetchedCustomers.filter(customer => {
             const customerCountries = customer.countries || Object.keys(customer.customerNumbers || {});
@@ -162,7 +162,7 @@ export default function CustomersPage() {
   }
 
   // Filter countries based on user role
-  const availableCountries = userProfile?.role === "user" 
+  const availableCountries = userProfile?.role === "Employee" 
     ? (userProfile.countries || [])
     : countries;
 

@@ -56,10 +56,19 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
       const userData = userDoc.data();
       console.log('Found existing profile by UID:', userData);
       
+      // Normalize role: map deprecated 'user' -> 'Employee'
+      const normalizedRole = userData.role === 'user' ? 'Employee' : (userData.role || 'Employee');
+      if (normalizedRole !== userData.role) {
+        try {
+          await setDoc(doc(db as Firestore, 'users', user.uid), { role: normalizedRole }, { merge: true });
+        } catch (e) {
+          console.warn('Failed to persist role normalization', e);
+        }
+      }
       return {
         id: userDoc.id,
         email: userData.email || user.email || '',
-        role: userData.role || 'user',
+        role: normalizedRole,
         businessUnit: userData.businessUnit || userData.countries?.[0] || '',
         countries: userData.countries || [],
         name: userData.displayName || userData.name || userData.email?.split('@')[0] || 'Unknown User'
@@ -77,17 +86,18 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
       const userData = existingDoc.data();
       console.log('Found existing profile by email:', userData);
       
-      // Update the document to use UID as document ID for consistency
-      await setDoc(doc(db as Firestore, 'users', user.uid), {
-        ...userData,
-        uid: user.uid,
-        email: user.email
-      });
-      
+      const normalizedRoleEmail = userData.role === 'user' ? 'Employee' : (userData.role || 'Employee');
+      if (normalizedRoleEmail !== userData.role) {
+        try {
+          await setDoc(doc(db as Firestore, 'users', user.uid), { role: normalizedRoleEmail }, { merge: true });
+        } catch (e) {
+          console.warn('Failed to persist role normalization (email path)', e);
+        }
+      }
       return {
         id: user.uid,
         email: userData.email || user.email || '',
-        role: userData.role || 'user',
+        role: normalizedRoleEmail,
         businessUnit: userData.businessUnit || userData.countries?.[0] || '',
         countries: userData.countries || [],
         name: userData.displayName || userData.name || userData.email?.split('@')[0] || 'Unknown User'
@@ -100,7 +110,7 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
       displayName: user.displayName || user.email?.split('@')[0] || 'Unknown User',
       name: user.displayName || user.email?.split('@')[0] || 'Unknown User',
       email: user.email || '',
-      role: 'user',
+      role: 'Employee',
       countries: [],
       businessUnit: 'Unknown',
       uid: user.uid,
