@@ -705,16 +705,16 @@ export default function EditQuoteRequest() {
     }
   }, [quoteRequest.customer, fetchCustomerContacts]);
 
-  // Load team members (users belonging to creatorCountry)
+  // Load team members (users belonging to involvedCountry)
   useEffect(() => {
     const loadTeam = async () => {
       try {
-        if (!db || !quoteRequest.creatorCountry) return;
+        if (!db || !quoteRequest.involvedCountry) return;
         const usersSnap = await getDocs(collection(db as Firestore, 'users'));
         const allUsers = usersSnap.docs.map(u => ({ id: u.id, ...(u.data() as any) }));
-        const creator = quoteRequest.creatorCountry;
+        const involved = quoteRequest.involvedCountry;
         const filtered = allUsers.filter((u: any) => (
-          (Array.isArray(u.countries) && u.countries.includes(creator)) || u.businessUnit === creator
+          (Array.isArray(u.countries) && u.countries.includes(involved)) || u.businessUnit === involved
         ));
         const normalized = filtered.map((u: any) => ({ id: u.id, displayName: u.displayName || u.name || u.email || 'Unknown' , email: u.email }));
         setTeamMembers(normalized);
@@ -726,7 +726,7 @@ export default function EditQuoteRequest() {
       }
     };
     loadTeam();
-  }, [db, quoteRequest.creatorCountry, quoteRequest.assignedUserId]);
+  }, [db, quoteRequest.involvedCountry, quoteRequest.assignedUserId]);
 
   // Get the user's business unit for notifications
   const userCountry = userProfile?.businessUnit || (userProfile?.countries && userProfile.countries[0]) || '';
@@ -1155,6 +1155,14 @@ export default function EditQuoteRequest() {
                 {/* Handled By (Team Assignment) */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Handled by</label>
+                  {(() => {
+                    const canAssign = !isReadOnly && (
+                      userProfile?.role === 'superAdmin' ||
+                      userProfile?.role === 'admin' ||
+                      userProfile?.businessUnit === quoteRequest.involvedCountry ||
+                      (userProfile?.countries || []).includes(quoteRequest.involvedCountry)
+                    );
+                    return (
                   <div className="space-y-2 p-3 border border-gray-200 rounded-md bg-gray-50">
                     <label className="flex items-center gap-2 text-sm">
                       <input
@@ -1166,7 +1174,7 @@ export default function EditQuoteRequest() {
                           handleInputChange('assignedUserId', '');
                           handleInputChange('assignedUserName', '');
                         }}
-                        disabled={isReadOnly}
+                        disabled={!canAssign}
                       />
                       <span className="text-gray-600">Unassigned</span>
                     </label>
@@ -1181,7 +1189,7 @@ export default function EditQuoteRequest() {
                             handleInputChange('assignedUserId', member.id);
                             handleInputChange('assignedUserName', member.displayName);
                           }}
-                          disabled={isReadOnly}
+                          disabled={!canAssign}
                         />
                         <span className="inline-flex items-center gap-2">
                           <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-gray-300 text-xs text-gray-800">
@@ -1192,6 +1200,8 @@ export default function EditQuoteRequest() {
                       </label>
                     ))}
                   </div>
+                    );
+                  })()}
                 </div>
               </div>
             </div>
