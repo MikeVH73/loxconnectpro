@@ -15,11 +15,10 @@ import { useCustomers } from '../../../hooks/useCustomers';
 import Link from 'next/link';
 import { debounce } from 'lodash';
 import Script from 'next/script';
-import { createNotification } from '../../../utils/notifications';
+import { createNotification, createRecentActivity } from "../../../utils/notifications";
 import dynamic from 'next/dynamic';
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
-import { createRecentActivity } from "../../../utils/notifications";
 
 // Initialize dayjs plugins
 dayjs.extend(relativeTime);
@@ -102,26 +101,50 @@ interface QuoteRequestWithDynamicKeys extends QuoteRequest {
   labels: string[];
 }
 
+interface Contact {
+  id: string;
+  name: string;
+  phone: string;
+  email?: string;
+  type: 'first' | 'jobsite';
+}
+
+interface Customer {
+  id: string;
+  name: string;
+  address: string;
+  contact?: string;
+  phone?: string;
+  email?: string;
+  customerNumbers?: { [country: string]: string };
+}
+
 export default function EditQuoteRequest() {
   const router = useRouter();
   const params = useParams();
   const id = params?.id as string;
   const { user, userProfile } = useAuth();
   const isReadOnly = userProfile?.role === "Employee";
-  const [quoteRequest, setQuoteRequest] = useState<QuoteRequest | null>(null);
+  const [quoteRequest, setQuoteRequest] = useState<QuoteRequestWithDynamicKeys>({} as QuoteRequestWithDynamicKeys);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isAutoSaving, setIsAutoSaving] = useState(false);
-  const [saveSuccess, setSaveSuccess] = useState(false);
-  const [newNote, setNewNote] = useState('');
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [labels, setLabels] = useState<any[]>([]);
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [jobsiteContactId, setJobsiteContactId] = useState("");
+  const [showNewContact, setShowNewContact] = useState(false);
+  const [newContact, setNewContact] = useState({ name: "", phone: "" });
+  const [customerDetails, setCustomerDetails] = useState<Customer | null>(null);
   const [isMounted, setIsMounted] = useState(false);
+  const [newNote, setNewNote] = useState("");
   const { messages, loading: messagesLoading, error: messagesError, sendMessage } = useMessages(id);
-  const { customers } = useCustomers();
+  const { customers: fetchedCustomers } = useCustomers();
+  const [originalData, setOriginalData] = useState<QuoteRequestWithDynamicKeys | null>(null);
 
   // Helper function to get customer name from ID
   const getCustomerName = (customerId: string) => {
-    const customer = customers.find(c => c.id === customerId);
+    const customer = fetchedCustomers.find(c => c.id === customerId);
     return customer ? customer.name : customerId;
   };
 
@@ -132,10 +155,9 @@ export default function EditQuoteRequest() {
       return customerName;
     }
     // Otherwise, try to find the customer by name
-    const customer = customers.find(c => c.name === customerName);
+    const customer = fetchedCustomers.find(c => c.name === customerName);
     return customer ? customer.id : customerName;
   };
-  const [labels, setLabels] = useState<any[]>([]);
 
   useEffect(() => {
     setIsMounted(true);
@@ -192,7 +214,8 @@ export default function EditQuoteRequest() {
             urgent: data.urgent || false,
             problems: data.problems || false,
             planned: data.planned || false
-          } as QuoteRequest);
+          } as QuoteRequestWithDynamicKeys);
+          setOriginalData(data as QuoteRequestWithDynamicKeys); // Store original data for comparison
         } else {
           setError('Quote request not found');
         }
@@ -208,236 +231,139 @@ export default function EditQuoteRequest() {
   }, [id, user, db]);
 
   const saveChanges = useCallback(async (isAutoSave = false) => {
-    if (!quoteRequest || isSaving || !db) {
-      console.log('[SAVE] Skipping save - quoteRequest or isSaving check failed:', { 
+    if (!quoteRequest || saving || !db) {
+      console.log('[SAVE] Skipping save - quoteRequest or saving check failed:', { 
         hasQuoteRequest: !!quoteRequest, 
-        isSaving 
+        isSaving: saving, 
+        hasDb: !!db 
       });
       return;
     }
 
-    // Skip auto-save on initial load to prevent false notifications
-    if (isAutoSave && !quoteRequest.updatedAt) {
-      console.log('[SAVE] Skipping auto-save on initial load');
-      return;
-    }
-
-    console.log('[SAVE] Save triggered:', isAutoSave ? 'Auto-save' : 'Manual save');
-    console.log('[SAVE] Current quote request:', quoteRequest);
-
     if (isAutoSave) {
-      setIsAutoSaving(true);
+      setSaving(true);
     } else {
-    setIsSaving(true);
+      setSaving(true);
     }
     
-    setSaveSuccess(false);
-    setError(null);
-    
-    let originalData: QuoteRequestWithDynamicKeys | null = null;
+    setError("");
     
     try {
-      const quoteRef = doc(db as Firestore, 'quoteRequests', id);
-      
-      // Get original data for comparison
-      const docSnapshot = await getDoc(quoteRef);
-      if (!docSnapshot.exists()) {
-        throw new Error('Quote request no longer exists');
-      }
-      originalData = docSnapshot.data() as QuoteRequestWithDynamicKeys;
-      
-      console.log('[SAVE] Original data:', originalData);
-      
-      // Create update object with all fields
-      const updateData = {
+      const quoteRequestRef = doc(db as Firestore, "quoteRequests", id);
+      const updateData: any = {
         ...quoteRequest,
-        updatedAt: new Date(),
-        updatedBy: user?.email || ''
+        updatedAt: serverTimestamp(),
+        updatedBy: user?.email || ""
       };
 
-      // Ensure planned status is properly set
-      if (originalData && quoteRequest.planned !== originalData.planned) {
-        console.log('[SAVE] Updating planned status:', {
-          old: originalData.planned,
-          new: quoteRequest.planned
-        });
-      }
-
-      // Log all changes before saving
-      const changedFields = Object.keys(updateData).filter(key => 
-        originalData && JSON.stringify(updateData[key as keyof QuoteRequestWithDynamicKeys]) !== JSON.stringify(originalData[key as keyof QuoteRequestWithDynamicKeys])
-      );
-      console.log('[SAVE] Changed fields:', changedFields);
-
-      // Perform the update
-      await updateDoc(quoteRef, updateData);
-
+      await updateDoc(quoteRequestRef, updateData);
       console.log('[SAVE] Save successful!');
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 2000);
 
       // Create modification record for all changes except jobsiteContactId
-      const modifications = [];
-      const fieldsToTrack = [
-        'title', 'status', 'involvedCountry', 'startDate', 'endDate', 
-        'customer', 'waitingForAnswer', 'urgent', 'problems', 'planned',
-        'products', 'notes', 'attachments', 'jobsite', 'customerNumber',
-        'customerDecidesEnd', 'latitude', 'longitude'
-      ];
-
-      for (const field of fieldsToTrack) {
-        if (originalData && originalData[field] !== quoteRequest[field]) {
-          modifications.push({
-            field,
-            from: originalData[field],
-            to: quoteRequest[field]
-          });
-        }
-      }
-
-      // Create modification record if there are changes
-      if (modifications.length > 0 && user?.email) {
-        try {
-          await addDoc(collection(db as Firestore, 'modifications'), {
-            dateTime: serverTimestamp(),
-            user: user.email,
-            quoteRequestId: id,
-            changes: modifications
-          });
-          console.log('[MODIFICATIONS] Created modification record with', modifications.length, 'changes');
-        } catch (modError) {
-          console.error('[MODIFICATIONS] Failed to create modification record:', modError);
-        }
-      }
-
-      // Create notifications for changes
-      const changes = [];
-      
-      // Check for status changes
-      if (originalData && originalData.status !== quoteRequest.status) {
-        changes.push(`Status changed to ${quoteRequest.status}`);
-      }
-
-      // Check for title changes
-      if (originalData && originalData.title !== quoteRequest.title) {
-        changes.push(`Title changed from "${originalData.title}" to "${quoteRequest.title}"`);
-      }
-
-      // Check for country changes
-      if (originalData && originalData.involvedCountry !== quoteRequest.involvedCountry) {
-        changes.push(`Involved country changed from ${originalData.involvedCountry} to ${quoteRequest.involvedCountry}`);
-      }
-      
-      // Check for flag changes (labels) - only notify if there are actual changes
-      const labelFields: (keyof Pick<QuoteRequest, 'waitingForAnswer' | 'urgent' | 'problems' | 'planned'>)[] = 
-        ['waitingForAnswer', 'urgent', 'problems', 'planned'];
-      
-      for (const field of labelFields) {
-        // Only create notifications for actual changes, not for initial loading
-        if (originalData[field] !== quoteRequest[field] && 
-            !(originalData[field] === false && quoteRequest[field] === false)) {
-          changes.push(`${quoteRequest[field] ? 'Added' : 'Removed'} "${labelTexts[field]}" label`);
-        }
-      }
-      
-      // Check for product changes
-      const originalProducts = originalData.products || [];
-      const currentProducts = quoteRequest.products || [];
-      
-      if (originalProducts.length !== currentProducts.length) {
-        if (currentProducts.length > originalProducts.length) {
-          changes.push(`Added ${currentProducts.length - originalProducts.length} new product(s)`);
-        } else {
-          changes.push(`Removed ${originalProducts.length - currentProducts.length} product(s)`);
-        }
-      }
-      
-      // Check for product changes (catClass and quantity)
-      const productChanges = [];
-      for (let i = 0; i < Math.max(originalProducts.length, currentProducts.length); i++) {
-        const original = originalProducts[i] || {};
-        const current = currentProducts[i] || {};
+      if (originalData) {
+        const changes = [];
         
-        if (original.catClass !== current.catClass) {
-          productChanges.push(`Cat-Class changed from '${original.catClass || 'empty'}' to '${current.catClass || 'empty'}'`);
+        // Check for status changes
+        if (originalData.status !== quoteRequest.status) {
+          changes.push(`Status changed to ${quoteRequest.status}`);
         }
-        if (original.quantity !== current.quantity) {
-          productChanges.push(`Quantity changed from ${original.quantity || 0} to ${current.quantity || 0} for ${current.catClass || 'product'}`);
+
+        // Check for title changes
+        if (originalData.title !== quoteRequest.title) {
+          changes.push(`Title changed from "${originalData.title}" to "${quoteRequest.title}"`);
         }
-      }
-      
-      if (productChanges.length > 0) {
-        changes.push(`Product changes: ${productChanges.join(', ')}`);
-      }
-      
-      // Check for date changes
-      if (originalData.startDate !== quoteRequest.startDate) {
-        changes.push(`Start date changed to ${quoteRequest.startDate || 'not set'}`);
-      }
-      
-      if (originalData.endDate !== quoteRequest.endDate) {
-        changes.push(`End date changed to ${quoteRequest.endDate || 'not set'}`);
-      }
 
-      // Check for jobsite address changes
-      const originalAddress = originalData.jobsite?.address || '';
-      const currentAddress = quoteRequest.jobsite?.address || '';
-      if (originalAddress !== currentAddress) {
-        changes.push(`Jobsite address changed from "${originalAddress}" to "${currentAddress}"`);
-      }
-
-      // Check for jobsite contact changes
-      const originalContact = originalData.jobsiteContact || {};
-      const currentContact = quoteRequest.jobsiteContact || {};
-      if (originalContact.name !== currentContact.name || originalContact.phone !== currentContact.phone) {
-        changes.push(`Jobsite contact changed from "${originalContact.name || 'none'}" to "${currentContact.name || 'none'}"`);
-      }
-      
-      // Create recent activity for each change
-      if (changes.length > 0 && user?.email && userProfile?.businessUnit) {
-        const targetCountry = quoteRequest.creatorCountry === userProfile.businessUnit 
-          ? quoteRequest.involvedCountry 
-          : quoteRequest.creatorCountry;
-
-        for (const change of changes) {
-          try {
-            await createRecentActivity({
-              quoteRequestId: id,
-              quoteRequestTitle: quoteRequest.title,
-              sender: user.email,
-              senderCountry: userProfile.businessUnit,
-              targetCountry,
-              content: change,
-              activityType: 'property_change'
-            });
-          } catch (activityError) {
-            console.error('Error creating recent activity:', activityError);
+        // Check for country changes
+        if (originalData.involvedCountry !== quoteRequest.involvedCountry) {
+          changes.push(`Involved country changed from ${originalData.involvedCountry} to ${quoteRequest.involvedCountry}`);
+        }
+        
+        // Check for flag changes (labels) - only notify if they were actually changed
+        const labelFields = ['waitingForAnswer', 'urgent', 'problems', 'planned'] as const;
+        labelFields.forEach(field => {
+          if (originalData && (originalData as any)[field] !== (quoteRequest as any)[field]) {
+            const labelName = field === 'waitingForAnswer' ? 'Waiting for Answer' : 
+                            field === 'urgent' ? 'Urgent' : 
+                            field === 'problems' ? 'Problems' : 'Planned';
+            changes.push(`${labelName} label ${(quoteRequest as any)[field] ? 'added' : 'removed'}`);
           }
+        });
+
+        // Check for product changes
+        if (JSON.stringify(originalData.products) !== JSON.stringify(quoteRequest.products)) {
+          changes.push('Products updated');
+        }
+
+        // Check for date changes
+        if (originalData.startDate !== quoteRequest.startDate) {
+          changes.push(`Start date changed from ${originalData.startDate} to ${quoteRequest.startDate}`);
+        }
+        if (originalData.endDate !== quoteRequest.endDate) {
+          const oldEndDate = originalData.endDate || 'Not set';
+          const newEndDate = quoteRequest.endDate || 'Not set';
+          changes.push(`End date changed from ${oldEndDate} to ${newEndDate}`);
+        }
+
+        // Check for jobsite address changes
+        if (originalData.jobsite?.address !== quoteRequest.jobsite?.address) {
+          changes.push(`Jobsite address changed from "${originalData.jobsite?.address || 'Not set'}" to "${quoteRequest.jobsite?.address || 'Not set'}"`);
+        }
+
+        // Check for jobsite contact changes
+        if (originalData.jobsiteContact?.name !== quoteRequest.jobsiteContact?.name || 
+            originalData.jobsiteContact?.phone !== quoteRequest.jobsiteContact?.phone) {
+          changes.push(`Jobsite contact changed from "${originalData.jobsiteContact?.name || 'Not set'}" to "${quoteRequest.jobsiteContact?.name || 'Not set'}"`);
+        }
+
+        // Check for notes changes
+        if (JSON.stringify(originalData.notes) !== JSON.stringify(quoteRequest.notes)) {
+          changes.push('Notes updated');
+        }
+
+        // Check for attachments changes
+        if (JSON.stringify(originalData.attachments) !== JSON.stringify(quoteRequest.attachments)) {
+          changes.push('Attachments updated');
+        }
+
+        // Create notifications for changes
+        if (changes.length > 0) {
+          const targetCountry = userProfile?.businessUnit === quoteRequest.creatorCountry 
+            ? quoteRequest.involvedCountry 
+            : quoteRequest.creatorCountry;
+
+          await createNotification({
+            quoteRequestId: id,
+            quoteRequestTitle: quoteRequest.title,
+            sender: user?.email || '',
+            senderCountry: userProfile?.businessUnit || '',
+            targetCountry,
+            content: changes.join(', '),
+            notificationType: 'property_change'
+          });
+
+          // Create recent activity entry
+          await createRecentActivity({
+            quoteRequestId: id,
+            quoteRequestTitle: quoteRequest.title,
+            sender: user?.email || '',
+            senderCountry: userProfile?.businessUnit || '',
+            targetCountry,
+            content: changes.join(', '),
+            activityType: 'property_change'
+          });
         }
       }
-
     } catch (err) {
       console.error('[SAVE] Error saving quote request:', err);
-      setError(err instanceof Error ? err.message : 'Failed to save changes');
-      
-      // Revert local state on error
-      if (originalData) {
-        setQuoteRequest(prev => {
-          if (!prev) return prev;
-          return {
-            ...prev,
-            ...originalData
-          } as QuoteRequestWithDynamicKeys;
-        });
-      }
+      setError(err instanceof Error ? err.message : "Failed to save quote request");
     } finally {
       if (isAutoSave) {
-        setIsAutoSaving(false);
+        setSaving(false);
       } else {
-      setIsSaving(false);
+        setSaving(false);
+      }
     }
-    }
-  }, [quoteRequest, isSaving, db, id, user?.email]);
+  }, [quoteRequest, saving, db, id, user?.email, userProfile?.businessUnit]);
 
   // Create a ref to store the previous state for comparison
   const previousQuoteRequest = useRef<string | null>(null);
@@ -522,99 +448,42 @@ export default function EditQuoteRequest() {
     };
   }, [debouncedSave]);
 
-  const handleInputChange = (field: keyof QuoteRequestWithDynamicKeys, value: any) => {
-    if (!quoteRequest) return;
-
-    // Handle nested fields (e.g., products.0.catClass)
-    if (field.includes('.')) {
-      const [parent, index, child] = field.split('.');
-      setQuoteRequest(prev => {
-        if (!prev) return prev;
-        
-        // Safely get the parent array
-        const parentArray = prev[parent as keyof QuoteRequest];
-        if (!Array.isArray(parentArray)) {
-          console.error('Parent is not an array:', parent, parentArray);
-          return prev;
-        }
-        
-        // Create a new array with the updated value
-        const newArray = [...parentArray];
-        const idx = parseInt(index);
-        
-        // Ensure the index exists
-        if (idx < 0 || idx >= newArray.length) {
-          console.error('Invalid index:', idx, 'for array length:', newArray.length);
-          return prev;
-        }
-        
-        // Update the specific field
-        if (typeof newArray[idx] === 'object' && newArray[idx] !== null) {
-          newArray[idx] = {
-            ...newArray[idx],
-            [child]: value
-          };
-        } else {
-          console.error('Array item is not an object:', newArray[idx]);
-          return prev;
-        }
-        
-        return {
-          ...prev,
-          [parent]: newArray
-        } as QuoteRequestWithDynamicKeys;
-      });
-    } else {
-      setQuoteRequest(prev => {
-        if (!prev) return prev;
-        const updatedRequest = {
-        ...prev,
-        [field]: value
-        } as QuoteRequestWithDynamicKeys;
-        
-        // If we're updating the involved country, trigger a save
-        if (field === 'involvedCountry') {
-          saveChanges(true);
-        }
-        
-        return updatedRequest;
-      });
-    }
+  const handleInputChange = (field: string, value: any) => {
+    setQuoteRequest(prev => ({
+      ...prev,
+      [field]: value
+    }));
   };
 
   const handleAddProduct = () => {
-    setQuoteRequest(prev => prev ? {
+    setQuoteRequest(prev => ({
       ...prev,
-      products: [
-        ...prev.products,
-        { catClass: '', description: '', quantity: 1 }
-      ]
-    } : null);
+      products: [...(prev.products || []), { catClass: "", description: "", quantity: 1 }]
+    }));
   };
 
   const handleRemoveProduct = (index: number) => {
-    setQuoteRequest(prev => prev ? {
+    setQuoteRequest(prev => ({
       ...prev,
-      products: prev.products.filter((_, i) => i !== index)
-    } : null);
+      products: (prev.products || []).filter((_, i) => i !== index)
+    }));
   };
 
   const handleAddNote = () => {
-    if (!newNote.trim() || !user?.email) return;
+    if (!newNote.trim()) return;
     
-    setQuoteRequest(prev => {
-      if (!prev) return prev;
-      const newNotes = [...(prev.notes || []), {
-        text: newNote.trim(),
-        user: user.email!,
-        dateTime: new Date()
-      }];
-      return {
-        ...prev,
-        notes: newNotes
-      };
-    });
-    setNewNote('');
+    const note = {
+      text: newNote,
+      user: user?.email || "",
+      dateTime: new Date()
+    };
+    
+    setQuoteRequest(prev => ({
+      ...prev,
+      notes: [...(prev.notes || []), note]
+    }));
+    
+    setNewNote("");
   };
 
   const handleSendMessage = async (text: string, files: any[] = []) => {
@@ -741,8 +610,8 @@ export default function EditQuoteRequest() {
       }
 
       console.log(`[DEBUG] Label ${key} updated successfully to ${newValue}`);
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 2000);
+      // setSaveSuccess(true); // This state was removed, so this line is removed
+      // setTimeout(() => setSaveSuccess(false), 2000); // This state was removed, so this line is removed
     } catch (err) {
       console.error('[DEBUG] Error updating label:', err);
       // Revert local state on error
@@ -751,8 +620,8 @@ export default function EditQuoteRequest() {
           if (!prevState) return prevState;
           const revertedState: QuoteRequestWithDynamicKeys = {
             ...prevState,
-            [key]: originalData[key],
-            labels: originalData.labels || []
+            [key]: originalData ? (originalData as any)[key] : prevState[key],
+            labels: originalData?.labels || prevState.labels || []
           };
           return revertedState;
         });
@@ -760,6 +629,64 @@ export default function EditQuoteRequest() {
       setError(`Failed to update ${labelTexts[key]} label`);
     }
   };
+
+  // Fetch customer contacts when customer changes
+  const fetchCustomerContacts = useCallback(async (customerId: string) => {
+    if (!customerId || !db) return;
+
+    try {
+      const customerDoc = await getDoc(doc(db as Firestore, "customers", customerId));
+      if (customerDoc.exists()) {
+        const customerData = customerDoc.data() as Customer;
+        setCustomerDetails(customerData);
+        
+        let allContacts: Contact[] = [];
+        
+        // Add first contact if it exists
+        if (customerData.contact && customerData.phone) {
+          allContacts.push({
+            id: 'main',
+            name: customerData.contact,
+            phone: customerData.phone,
+            email: customerData.email || '',
+            type: 'first'
+          });
+        }
+        
+        // Fetch jobsite contacts from subcollection
+        const contactsRef = collection(db as Firestore, `customers/${customerId}/contacts`);
+        const contactsSnapshot = await getDocs(contactsRef);
+        const jobsiteContacts = contactsSnapshot.docs.map(doc => ({
+          id: doc.id,
+          name: doc.data().name,
+          phone: doc.data().phone,
+          email: doc.data().email || '',
+          type: 'jobsite' as const
+        }));
+        
+        allContacts = [...allContacts, ...jobsiteContacts];
+        setContacts(allContacts);
+        
+        // Set the current jobsite contact if it exists
+        if (quoteRequest.jobsiteContact?.name) {
+          const existingContact = allContacts.find(c => c.name === quoteRequest.jobsiteContact?.name);
+          if (existingContact) {
+            setJobsiteContactId(existingContact.id);
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Error fetching customer contacts:", err);
+      setError("Failed to fetch customer contacts");
+    }
+  }, [db, quoteRequest.jobsiteContact?.name]);
+
+  // Fetch contacts when customer changes
+  useEffect(() => {
+    if (quoteRequest.customer) {
+      fetchCustomerContacts(quoteRequest.customer);
+    }
+  }, [quoteRequest.customer, fetchCustomerContacts]);
 
   // Get the user's business unit for notifications
   const userCountry = userProfile?.businessUnit || (userProfile?.countries && userProfile.countries[0]) || '';
@@ -862,12 +789,12 @@ export default function EditQuoteRequest() {
                 </span>
                 </div>
               <div className="flex items-center space-x-4">
-                <span className={`text-sm ${isAutoSaving ? 'text-blue-600' : isSaving ? 'text-yellow-600' : saveSuccess ? 'text-green-600' : 'text-gray-500'}`}>
-                  {isAutoSaving ? 'Auto-saving...' : isSaving ? 'Saving...' : saveSuccess ? 'Successfully saved!' : 'Auto-save ON'}
+                <span className={`text-sm ${saving ? 'text-blue-600' : saving ? 'text-yellow-600' : 'text-gray-500'}`}>
+                  {saving ? 'Saving...' : 'Auto-save ON'}
                 </span>
                 <button 
                   onClick={() => saveChanges(false)}
-                  disabled={isSaving || isAutoSaving || isReadOnly}
+                  disabled={saving || isReadOnly}
                   className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
                 >
                   Save Changes
@@ -927,7 +854,7 @@ export default function EditQuoteRequest() {
                     disabled={isReadOnly}
                   >
                     <option value="">Select Customer</option>
-                    {customers.map(customer => (
+                    {fetchedCustomers.map(customer => (
                       <option key={customer.id} value={customer.id}>
                         {customer.name}
                       </option>
@@ -1141,24 +1068,36 @@ export default function EditQuoteRequest() {
                 {/* Jobsite Contact */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Jobsite Contact</label>
-                  <div className="grid grid-cols-2 gap-4">
-                    <input
-                      type="text"
-                      value={quoteRequest.jobsiteContact?.name || ''}
-                      onChange={(e) => handleInputChange("jobsiteContact.name", e.target.value)}
-                      placeholder="Contact Name"
-                      className="p-3 border border-gray-300 rounded-md"
-                      disabled={isReadOnly}
-                    />
-                    <input
-                      type="text"
-                      value={quoteRequest.jobsiteContact?.phone || ''}
-                      onChange={(e) => handleInputChange("jobsiteContact.phone", e.target.value)}
-                      placeholder="Phone Number"
-                      className="p-3 border border-gray-300 rounded-md"
-                      disabled={isReadOnly}
-                    />
-                  </div>
+                  <select
+                    value={jobsiteContactId}
+                    onChange={(e) => {
+                      const selectedContact = contacts.find(c => c.id === e.target.value);
+                      if (selectedContact) {
+                        setJobsiteContactId(e.target.value);
+                        setQuoteRequest(prev => ({
+                          ...prev,
+                          jobsiteContact: {
+                            name: selectedContact.name,
+                            phone: selectedContact.phone
+                          }
+                        }));
+                      }
+                    }}
+                    className="w-full p-3 border border-gray-300 rounded-md"
+                    disabled={isReadOnly}
+                  >
+                    <option value="">Select Contact</option>
+                    {contacts.map(contact => (
+                      <option key={contact.id} value={contact.id}>
+                        {contact.name} ({contact.phone}){contact.type === 'first' ? ' (First Contact)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                  {jobsiteContactId && (
+                    <div className="mt-1 text-sm text-gray-600">
+                      Selected: {contacts.find(c => c.id === jobsiteContactId)?.name || ''}
+                    </div>
+                  )}
                 </div>
 
                 {/* Customer Number */}
