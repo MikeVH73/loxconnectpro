@@ -35,8 +35,11 @@ interface QuoteRequest {
   totalValueCurrency?: string;
   customer?: string; // customer id
   customerName?: string;
+  startDate?: any;
+  endDate?: any;
 }
 
+// Prefer business period dates when available
 const yearFromDate = (d?: any) => {
   try {
     const date = d?.toDate?.() || (typeof d === 'string' ? new Date(d) : d) || new Date();
@@ -95,9 +98,15 @@ export default function AnalyticsPage() {
 
   const years = useMemo(() => {
     const s = new Set<number>();
-    data.forEach(qr => s.add(yearFromDate(qr.createdAt)));
+    data.forEach(qr => {
+      if (qr.startDate) s.add(yearFromDate(qr.startDate));
+      if (qr.endDate) s.add(yearFromDate(qr.endDate));
+      if (!qr.startDate && !qr.endDate) s.add(yearFromDate(qr.createdAt));
+    });
     const list = Array.from(s).sort((a,b)=>b-a);
-    if (!list.includes(new Date().getFullYear())) list.unshift(new Date().getFullYear());
+    // Always include current year for convenience
+    const current = new Date().getFullYear();
+    if (!list.includes(current)) list.unshift(current);
     return list;
   }, [data]);
 
@@ -106,7 +115,12 @@ export default function AnalyticsPage() {
     const involvedAll = filterInvolved.length === 0 || filterInvolved.includes('all');
     const customersAll = filterCustomers.length === 0 || filterCustomers.includes('all');
     return data
-      .filter(qr => yearFromDate(qr.createdAt) === year)
+      .filter(qr => {
+        const y = qr.startDate ? yearFromDate(qr.startDate)
+                : qr.endDate ? yearFromDate(qr.endDate)
+                : yearFromDate(qr.createdAt);
+        return y === year;
+      })
       .filter(qr => creatorAll ? true : filterCreator.includes(qr.creatorCountry))
       .filter(qr => involvedAll ? true : filterInvolved.includes(qr.involvedCountry))
       .filter(qr => {
@@ -188,10 +202,11 @@ export default function AnalyticsPage() {
 
   return (
     <div className="p-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-[#e40115] mb-2">Analytics</h1>
+      </div>
       <div className="mb-1 text-xs text-gray-500">Hold Ctrl/Cmd to multi-select</div>
-        <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-bold text-[#e40115]">Analytics</h1>
-        <div className="flex flex-wrap items-end gap-2 text-sm">
+      <div className="flex flex-wrap items-end gap-2 text-sm mb-4">
           {userProfile?.role==='superAdmin' && (
             <label className="flex items-center gap-1"><input type="checkbox" checked={roleScope==='all'} onChange={(e)=>setRoleScope(e.target.checked?'all':'my')} /> Show all countries</label>
           )}
@@ -217,7 +232,6 @@ export default function AnalyticsPage() {
           >
             Clear
           </button>
-        </div>
       </div>
 
       {/* Compare years */}
