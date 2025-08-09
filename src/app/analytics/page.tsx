@@ -4,6 +4,7 @@ import { collection, getDocs, query, orderBy, Firestore } from "firebase/firesto
 import { db } from "../../firebaseClient";
 import { useAuth } from "../AuthProvider";
 import dynamic from "next/dynamic";
+import ComparisonBlock from "./ComparisonBlock";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -188,31 +189,31 @@ export default function AnalyticsPage() {
   return (
     <div className="p-6">
       <div className="mb-1 text-xs text-gray-500">Hold Ctrl/Cmd to multi-select</div>
-      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-bold text-[#e40115]">Analytics</h1>
-        <div className="flex flex-wrap items-center gap-2 text-sm">
+        <div className="flex flex-wrap items-end gap-2 text-sm">
           {userProfile?.role==='superAdmin' && (
             <label className="flex items-center gap-1"><input type="checkbox" checked={roleScope==='all'} onChange={(e)=>setRoleScope(e.target.checked?'all':'my')} /> Show all countries</label>
           )}
-          <select value={year} onChange={(e)=>setYear(parseInt(e.target.value))} className="border rounded px-2 py-1">
+          <select value={year} onChange={(e)=>setYear(parseInt(e.target.value))} className="border rounded px-2 h-8">
             {years.map(y => (<option key={y} value={y}>{y}</option>))}
           </select>
-          <select multiple size={Math.min(6, creatorCountries.length)} value={filterCreator} onChange={(e)=>handleMultiChange(e, setFilterCreator)} className="border rounded px-2 py-1 min-w-[220px]">
+          <select multiple size={6} value={filterCreator} onChange={(e)=>handleMultiChange(e, setFilterCreator)} className="border rounded px-2 min-w-[220px]">
             {creatorCountries.map(c => (<option key={c} value={c}>{c==='all'?'creator: all':c}</option>))}
           </select>
-          <select multiple size={Math.min(6, involvedCountries.length)} value={filterInvolved} onChange={(e)=>handleMultiChange(e, setFilterInvolved)} className="border rounded px-2 py-1 min-w-[220px]">
+          <select multiple size={6} value={filterInvolved} onChange={(e)=>handleMultiChange(e, setFilterInvolved)} className="border rounded px-2 min-w-[220px]">
             {involvedCountries.map(c => (<option key={c} value={c}>{c==='all'?'involved: all':c}</option>))}
           </select>
           <div className="flex flex-col gap-1">
-            <input value={customerSearch} onChange={(e)=>setCustomerSearch(e.target.value)} placeholder="Search customers" className="border rounded px-2 py-1 min-w-[240px]" />
-            <select multiple size={Math.min(6, customerOptions.length)} value={filterCustomers} onChange={(e)=>handleMultiChange(e, setFilterCustomers)} className="border rounded px-2 py-1 min-w-[240px]">
+            <input value={customerSearch} onChange={(e)=>setCustomerSearch(e.target.value)} placeholder="Search customers" className="border rounded px-2 h-8 min-w-[260px]" />
+            <select multiple size={6} value={filterCustomers} onChange={(e)=>handleMultiChange(e, setFilterCustomers)} className="border rounded px-2 min-w-[260px]">
             {customerOptions.map(id => (<option key={id} value={id}>{customerLabel(id)}</option>))}
             </select>
           </div>
           <button
-            onClick={()=>{ setFilterCreator([]); setFilterInvolved([]); setFilterCustomers([]); }}
+            onClick={()=>{ setFilterCreator([]); setFilterInvolved([]); setFilterCustomers([]); setCustomerSearch(""); }}
             className="px-3 py-1 border rounded text-gray-700 hover:bg-gray-100"
-            title="Clear selected countries"
+            title="Clear selected filters"
           >
             Clear
           </button>
