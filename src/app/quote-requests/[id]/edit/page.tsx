@@ -275,7 +275,26 @@ export default function EditQuoteRequest() {
         updatedBy: user?.email || ""
       };
 
-      await updateDoc(quoteRequestRef, updateData);
+      // Remove undefined values so Firestore doesn't reject
+      const stripUndefined = (val: any): any => {
+        if (val === undefined) return undefined;
+        if (Array.isArray(val)) {
+          const arr = val.map(stripUndefined).filter((v) => v !== undefined);
+          return arr;
+        }
+        if (val && typeof val === 'object') {
+          const out: any = {};
+          Object.keys(val).forEach((k) => {
+            const v = stripUndefined((val as any)[k]);
+            if (v !== undefined) out[k] = v;
+          });
+          return out;
+        }
+        return val;
+      };
+      const sanitizedUpdateData = stripUndefined(updateData);
+
+      await updateDoc(quoteRequestRef, sanitizedUpdateData);
       console.log('[SAVE] Save successful!');
 
       // Create modification record for all changes except jobsiteContactId
@@ -1348,6 +1367,8 @@ export default function EditQuoteRequest() {
             />
         </div>
       </div>
+      {/* Modal */}
+      <TotalValueRequiredModal open={showTotalValueModal} onClose={() => setShowTotalValueModal(false)} />
     </div>
   );
 }
