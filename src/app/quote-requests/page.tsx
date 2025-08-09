@@ -68,6 +68,7 @@ interface QuoteRequest {
   assignedUserId?: string;
   assignedUserName?: string;
   startDate?: string;
+  endDate?: string;
 }
 
 const QuoteRequestsPage = () => {
@@ -91,6 +92,8 @@ const QuoteRequestsPage = () => {
   const [filterInvolvedCountries, setFilterInvolvedCountries] = useState<string[]>([]);
   const [filterStartFrom, setFilterStartFrom] = useState<string>("");
   const [filterStartTo, setFilterStartTo] = useState<string>("");
+  const [filterEndFrom, setFilterEndFrom] = useState<string>("");
+  const [filterEndTo, setFilterEndTo] = useState<string>("");
   const [filterCustomers, setFilterCustomers] = useState<string[]>([]);
   const [filterHandledBy, setFilterHandledBy] = useState<string[]>([]);
   const [filterProduct, setFilterProduct] = useState<string>("");
@@ -238,6 +241,22 @@ const QuoteRequestsPage = () => {
             }
           }
 
+          // End date range filter
+          if (filterEndFrom || filterEndTo) {
+            const endDate = (qr as any).endDate as string | undefined;
+            if (!endDate) {
+              return false;
+            }
+            try {
+              const end = new Date(endDate);
+              if (isNaN(end.getTime())) return false;
+              if (filterEndFrom && end < new Date(filterEndFrom)) return false;
+              if (filterEndTo && end > new Date(filterEndTo)) return false;
+            } catch {
+              return false;
+            }
+          }
+
           // Customer filter
           if (filterCustomers.length > 0 && !filterCustomers.includes(qr.customer)) return false;
 
@@ -270,7 +289,7 @@ const QuoteRequestsPage = () => {
     };
 
     fetchData();
-  }, [userProfile, db, showAllCountries, search, filterLabels, filterCreatorCountries, filterInvolvedCountries, filterStartFrom, filterStartTo, filterCustomers, filterHandledBy, filterProduct]);
+  }, [userProfile, db, showAllCountries, search, filterLabels, filterCreatorCountries, filterInvolvedCountries, filterStartFrom, filterStartTo, filterEndFrom, filterEndTo, filterCustomers, filterHandledBy, filterProduct]);
 
   const getCustomerName = (id: string | undefined): string => {
     if (!id) return 'Unknown Customer';
@@ -359,6 +378,8 @@ const QuoteRequestsPage = () => {
     setFilterInvolvedCountries([]);
     setFilterStartFrom("");
     setFilterStartTo("");
+    setFilterEndFrom("");
+    setFilterEndTo("");
     setFilterCustomers([]);
     setFilterHandledBy([]);
     setFilterProduct("");
@@ -454,11 +475,12 @@ const QuoteRequestsPage = () => {
       {/* Advanced Filters */}
       {filtersOpen && (
         <div className="mb-6 bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {/* Labels */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Labels</label>
-              <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
+          {/* Row: Labels full width */}
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              <span className="border-l-4 border-[#e40115] pl-2">Labels</span>
+            </label>
+            <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
                 {labels.map(l => (
                   <label key={l.id} className={`px-3 py-1 text-sm rounded-full cursor-pointer transition-colors ${
                     filterLabels.includes(l.id) 
@@ -480,131 +502,161 @@ const QuoteRequestsPage = () => {
                   </label>
                 ))}
               </div>
+          </div>
+
+          {/* Two columns layout */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Left Column */}
+            <div className="space-y-4">
+              {/* Customer - tall */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <span className="border-l-4 border-[#e40115] pl-2">Customer</span>
+                </label>
+                <select
+                  multiple
+                  value={filterCustomers}
+                  onChange={(e) => {
+                    const selected = Array.from(e.target.selectedOptions, option => option.value);
+                    setFilterCustomers(selected);
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#e40115] focus:border-transparent h-56"
+                >
+                  {customers.map(customer => (
+                    <option key={customer.id} value={customer.id}>{customer.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Creator Country */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Creator Country</label>
+                <select
+                  multiple
+                  value={filterCreatorCountries}
+                  onChange={(e) => {
+                    const selected = Array.from(e.target.selectedOptions, option => option.value);
+                    setFilterCreatorCountries(selected);
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#e40115] focus:border-transparent"
+                  size={6}
+                >
+                  {uniqueCountries.map(country => (
+                    <option key={country} value={country}>{country}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Involved Country */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Involved Country</label>
+                <select
+                  multiple
+                  value={filterInvolvedCountries}
+                  onChange={(e) => {
+                    const selected = Array.from(e.target.selectedOptions, option => option.value);
+                    setFilterInvolvedCountries(selected);
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#e40115] focus:border-transparent"
+                  size={6}
+                >
+                  {uniqueCountries.map(country => (
+                    <option key={country} value={country}>{country}</option>
+                  ))}
+                </select>
+              </div>
             </div>
 
-            {/* Creator Country */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Creator Country</label>
-              <select
-                multiple
-                value={filterCreatorCountries}
-                onChange={(e) => {
-                  const selected = Array.from(e.target.selectedOptions, option => option.value);
-                  setFilterCreatorCountries(selected);
-                }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#e40115] focus:border-transparent"
-                size={4}
-              >
-                {uniqueCountries.map(country => (
-                  <option key={country} value={country}>{country}</option>
-                ))}
-              </select>
-            </div>
+            {/* Right Column */}
+            <div className="space-y-4">
+              {/* Handled By - tall */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <span className="border-l-4 border-[#e40115] pl-2">Handled By</span>
+                </label>
+                <select
+                  multiple
+                  value={filterHandledBy}
+                  onChange={(e) => {
+                    const selected = Array.from(e.target.selectedOptions, option => option.value);
+                    setFilterHandledBy(selected);
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#e40115] focus:border-transparent h-56"
+                >
+                  {users.map(user => (
+                    <option key={user.id} value={user.id}>
+                      {user.displayName || user.name || user.email}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-            {/* Involved Country */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Involved Country</label>
-              <select
-                multiple
-                value={filterInvolvedCountries}
-                onChange={(e) => {
-                  const selected = Array.from(e.target.selectedOptions, option => option.value);
-                  setFilterInvolvedCountries(selected);
-                }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#e40115] focus:border-transparent"
-                size={4}
-              >
-                {uniqueCountries.map(country => (
-                  <option key={country} value={country}>{country}</option>
-                ))}
-              </select>
-            </div>
+              {/* Dates */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Start Date From</label>
+                  <input 
+                    type="date" 
+                    value={filterStartFrom} 
+                    onChange={(e) => setFilterStartFrom(e.target.value)} 
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#e40115] focus:border-transparent" 
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Start Date To</label>
+                  <input 
+                    type="date" 
+                    value={filterStartTo} 
+                    onChange={(e) => setFilterStartTo(e.target.value)} 
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#e40115] focus:border-transparent" 
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">End Date From</label>
+                  <input 
+                    type="date" 
+                    value={filterEndFrom} 
+                    onChange={(e) => setFilterEndFrom(e.target.value)} 
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#e40115] focus:border-transparent" 
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">End Date To</label>
+                  <input 
+                    type="date" 
+                    value={filterEndTo} 
+                    onChange={(e) => setFilterEndTo(e.target.value)} 
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#e40115] focus:border-transparent" 
+                  />
+                </div>
+              </div>
 
-            {/* Start Date range */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Start Date From</label>
-              <input 
-                type="date" 
-                value={filterStartFrom} 
-                onChange={(e) => setFilterStartFrom(e.target.value)} 
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#e40115] focus:border-transparent" 
-              />
+              {/* Products */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Products</label>
+                <input
+                  type="text"
+                  placeholder="Search cat-class or description"
+                  value={filterProduct}
+                  onChange={(e) => setFilterProduct(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#e40115] focus:border-transparent"
+                />
+              </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Start Date To</label>
-              <input 
-                type="date" 
-                value={filterStartTo} 
-                onChange={(e) => setFilterStartTo(e.target.value)} 
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#e40115] focus:border-transparent" 
-              />
-            </div>
-
-            {/* Customer */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Customer</label>
-              <select
-                multiple
-                value={filterCustomers}
-                onChange={(e) => {
-                  const selected = Array.from(e.target.selectedOptions, option => option.value);
-                  setFilterCustomers(selected);
-                }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#e40115] focus:border-transparent"
-                size={8}
-              >
-                {customers.map(customer => (
-                  <option key={customer.id} value={customer.id}>{customer.name}</option>
-                ))}
-              </select>
-                      </div>
-
-            {/* Handled By */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Handled By</label>
-              <select
-                multiple
-                value={filterHandledBy}
-                onChange={(e) => {
-                  const selected = Array.from(e.target.selectedOptions, option => option.value);
-                  setFilterHandledBy(selected);
-                }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#e40115] focus:border-transparent"
-                size={8}
-              >
-                {users.map(user => (
-                  <option key={user.id} value={user.id}>
-                    {user.displayName || user.name || user.email}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Products */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Products</label>
-              <input
-                type="text"
-                placeholder="Search cat-class or description"
-                value={filterProduct}
-                onChange={(e) => setFilterProduct(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#e40115] focus:border-transparent"
-              />
-            </div>
-                          </div>
+          </div>
 
           {/* Filter Actions */}
           <div className="mt-6 flex justify-between items-center pt-4 border-t border-gray-200">
             <div className="text-sm text-gray-600">
               {quoteRequests.length} quote request{quoteRequests.length !== 1 ? 's' : ''} found
-                        </div>
+            </div>
             <button 
               className="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors" 
               onClick={clearAllFilters}
             >
               Clear All Filters
             </button>
-                    </div>
+          </div>
         </div>
       )}
 
@@ -629,7 +681,7 @@ const QuoteRequestsPage = () => {
             <div className="text-sm">
               {search || filterLabels.length > 0 || filterCreatorCountries.length > 0 || 
                filterInvolvedCountries.length > 0 || filterStartFrom || filterStartTo || 
-               filterCustomers.length > 0 || filterHandledBy.length > 0 || filterProduct
+               filterEndFrom || filterEndTo || filterCustomers.length > 0 || filterHandledBy.length > 0 || filterProduct
                 ? "Try adjusting your search or filters"
                 : "Create your first quote request to get started"
               }
