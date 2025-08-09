@@ -144,6 +144,14 @@ export default function AnalyticsPage() {
     return list;
   }, [data]);
 
+  // Keep yearB valid if year options change
+  useEffect(() => {
+    if (years.length === 0) return;
+    if (!years.includes(yearB)) {
+      setYearB(years[0]);
+    }
+  }, [years, yearB]);
+
   const filtered = useMemo(() => {
     const creatorAll = filterCreator.length === 0 || filterCreator.includes('all');
     const involvedAll = filterInvolved.length === 0 || filterInvolved.includes('all');
@@ -272,11 +280,11 @@ export default function AnalyticsPage() {
           <div className="flex items-center gap-2">
             <span>Year A:</span>
             <select value={year} onChange={(e)=>setYear(parseInt(e.target.value))} className="border rounded px-2 py-1">
-              {years.map(y => (<option key={y} value={y}>{y}</option>))}
+              {years.map(y => (<option key={`A-${y}`} value={y}>{y}</option>))}
             </select>
             <span>Year B:</span>
             <select value={yearB} onChange={(e)=>setYearB(parseInt(e.target.value))} className="border rounded px-2 py-1">
-              {years.map(y => (<option key={y} value={y}>{y}</option>))}
+              {years.map(y => (<option key={`B-${y}`} value={y}>{y}</option>))}
             </select>
           </div>
         )}
