@@ -87,6 +87,8 @@ interface QuoteRequest {
   totalValueLocal?: number;
   totalValueCurrency?: string; // ISO like EUR, DKK
   totalValueRateToEUR?: number; // multiplier from local to EUR
+  rateSource?: string;
+  rateDate?: string; // YYYY-MM-DD
 }
 
 const statuses = ["New", "In Progress", "Snoozed", "Won", "Lost", "Cancelled"];
@@ -151,6 +153,7 @@ export default function EditQuoteRequest() {
   const { customers: fetchedCustomers } = useCustomers();
   const [originalData, setOriginalData] = useState<QuoteRequestWithDynamicKeys | null>(null);
   const [showTotalValueModal, setShowTotalValueModal] = useState(false);
+  const [rateDirection, setRateDirection] = useState<'LOCAL_TO_EUR' | 'EUR_TO_LOCAL'>('LOCAL_TO_EUR');
 
   // Helper function to get customer name from ID
   const getCustomerName = (customerId: string) => {
@@ -229,7 +232,9 @@ export default function EditQuoteRequest() {
             totalValueEUR: typeof data.totalValueEUR === 'number' ? data.totalValueEUR : undefined,
             totalValueLocal: typeof data.totalValueLocal === 'number' ? data.totalValueLocal : undefined,
             totalValueCurrency: data.totalValueCurrency || undefined,
-            totalValueRateToEUR: typeof data.totalValueRateToEUR === 'number' ? data.totalValueRateToEUR : undefined
+            totalValueRateToEUR: typeof data.totalValueRateToEUR === 'number' ? data.totalValueRateToEUR : undefined,
+            rateSource: data.rateSource || undefined,
+            rateDate: data.rateDate || undefined
           } as QuoteRequestWithDynamicKeys);
           setOriginalData(data as QuoteRequestWithDynamicKeys); // Store original data for comparison
         } else {
@@ -308,6 +313,9 @@ export default function EditQuoteRequest() {
       // Check for total value changes
       if (originalData.totalValueEUR !== quoteRequest.totalValueEUR) {
         changes.push(`Total value (EUR) set to ${quoteRequest.totalValueEUR ?? 'Not set'}`);
+      }
+      if (originalData.totalValueCurrency !== quoteRequest.totalValueCurrency) {
+        changes.push(`Total value currency set to ${quoteRequest.totalValueCurrency || 'Not set'}`);
       }
 
         // Check for title changes
@@ -785,18 +793,31 @@ export default function EditQuoteRequest() {
   const userCountry = userProfile?.businessUnit || (userProfile?.countries && userProfile.countries[0]) || '';
   const defaultCurrencyByCountry: Record<string, string> = {
     Denmark: 'DKK',
+    'Loxcall Denmark': 'DKK',
     Sweden: 'SEK',
+    'Loxcall Sweden': 'SEK',
     Norway: 'NOK',
+    'Loxcall Norway': 'NOK',
     Switzerland: 'CHF',
+    'Loxcall Switzerland': 'CHF',
     UK: 'GBP',
+    'Loxcall UK': 'GBP',
     Poland: 'PLN',
+    'Loxcall Poland': 'PLN',
     Netherlands: 'EUR',
+    'Loxcall Netherlands': 'EUR',
     France: 'EUR',
+    'Loxcall France': 'EUR',
     Germany: 'EUR',
+    'Loxcall Germany': 'EUR',
     Spain: 'EUR',
+    'Loxcall Spain': 'EUR',
     Italy: 'EUR',
+    'Loxcall Italy': 'EUR',
     Austria: 'EUR',
+    'Loxcall Austria': 'EUR',
     Belgium: 'EUR',
+    'Loxcall Belgium': 'EUR',
   };
 
   // If currency not set, derive from involved country
@@ -816,6 +837,39 @@ export default function EditQuoteRequest() {
       setQuoteRequest(prev => ({ ...prev, totalValueEUR: eur }));
     }
   }, [quoteRequest.totalValueLocal, quoteRequest.totalValueRateToEUR]);
+
+  // Helper to set currency quickly
+  const useInvolvedCurrency = () => {
+    const cur = defaultCurrencyByCountry[quoteRequest.involvedCountry] || 'EUR';
+    handleInputChange('totalValueCurrency', cur);
+  };
+  const useCreatorCurrency = () => {
+    const cur = defaultCurrencyByCountry[quoteRequest.creatorCountry] || 'EUR';
+    handleInputChange('totalValueCurrency', cur);
+  };
+
+  // Fetch rate from API (daily cached)
+  const fetchRate = async () => {
+    try {
+      const from = rateDirection === 'LOCAL_TO_EUR' ? (quoteRequest.totalValueCurrency || 'EUR') : 'EUR';
+      const to = rateDirection === 'LOCAL_TO_EUR' ? 'EUR' : (quoteRequest.totalValueCurrency || 'EUR');
+      const res = await fetch(`/api/fx?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
+      const data = await res.json();
+      if (res.ok && data?.rate) {
+        const rate = Number(data.rate);
+        if (rateDirection === 'LOCAL_TO_EUR') {
+          handleInputChange('totalValueRateToEUR', rate);
+        } else {
+          // Convert to canonical Local->EUR
+          handleInputChange('totalValueRateToEUR', rate > 0 ? 1 / rate : undefined);
+        }
+        handleInputChange('rateSource', data.source || 'exchangerate.host');
+        handleInputChange('rateDate', data.date || undefined);
+      }
+    } catch (e) {
+      console.error('Failed to fetch rate', e);
+    }
+  };
 
   if (loading) {
     return <LoadingSpinner />;
@@ -1331,19 +1385,53 @@ export default function EditQuoteRequest() {
                           disabled={isReadOnly}
                         />
                       </div>
+                      <div className="mt-2 flex gap-2">
+                        <button type="button" onClick={useInvolvedCurrency} className="text-xs px-2 py-1 bg-gray-100 rounded hover:bg-gray-200" disabled={isReadOnly}>Use Involved</button>
+                        <button type="button" onClick={useCreatorCurrency} className="text-xs px-2 py-1 bg-gray-100 rounded hover:bg-gray-200" disabled={isReadOnly}>Use Creator</button>
+                      </div>
                       <div className="mt-2">
-                        <label className="block text-xs text-gray-600 mb-1">Rate to EUR (Local × Rate = EUR)</label>
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.0001"
-                          value={quoteRequest.totalValueRateToEUR ?? ''}
-                          onChange={(e) => handleInputChange('totalValueRateToEUR', e.target.value === '' ? undefined : parseFloat(e.target.value))}
-                          className="w-full p-3 border border-gray-300 rounded-md"
-                          placeholder="e.g. 0.13 for DKK→EUR"
-                          disabled={isReadOnly}
-                        />
-                        <p className="mt-1 text-xs text-gray-500">Fill EUR directly or provide local amount and the conversion rate. EUR is required when setting status to Won/Lost/Cancelled.</p>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="text-xs text-gray-600">Rate</label>
+                          <div className="flex items-center gap-2 text-xs">
+                            <label className="inline-flex items-center gap-1">
+                              <input type="radio" className="accent-[#e40115]" checked={rateDirection==='LOCAL_TO_EUR'} onChange={() => setRateDirection('LOCAL_TO_EUR')} />
+                              Local → EUR
+                            </label>
+                            <label className="inline-flex items-center gap-1">
+                              <input type="radio" className="accent-[#e40115]" checked={rateDirection==='EUR_TO_LOCAL'} onChange={() => setRateDirection('EUR_TO_LOCAL')} />
+                              EUR → Local
+                            </label>
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.0001"
+                            value={(() => {
+                              const r = quoteRequest.totalValueRateToEUR;
+                              if (!r) return '' as any;
+                              return rateDirection==='LOCAL_TO_EUR' ? r : (r>0 ? (1/r).toFixed(6) : '');
+                            })()}
+                            onChange={(e) => {
+                              const val = e.target.value === '' ? undefined : parseFloat(e.target.value);
+                              if (val === undefined) { handleInputChange('totalValueRateToEUR', undefined); return; }
+                              if (rateDirection==='LOCAL_TO_EUR') {
+                                handleInputChange('totalValueRateToEUR', val);
+                              } else {
+                                handleInputChange('totalValueRateToEUR', val>0 ? 1/val : undefined);
+                              }
+                            }}
+                            className="w-full p-3 border border-gray-300 rounded-md"
+                            placeholder="e.g. 0.1339 or 7.4682"
+                            disabled={isReadOnly}
+                          />
+                          <button type="button" onClick={fetchRate} className="px-3 py-2 text-sm bg-gray-100 rounded hover:bg-gray-200 whitespace-nowrap" disabled={isReadOnly}>Fetch rate</button>
+                        </div>
+                        {quoteRequest.rateDate && (
+                          <p className="mt-1 text-[11px] text-gray-500">Source: {quoteRequest.rateSource || 'exchangerate.host'} • {quoteRequest.rateDate}</p>
+                        )}
+                        <p className="mt-1 text-xs text-gray-500">Fill EUR directly or provide local amount and the conversion rate (any direction). EUR is required when setting status to Won/Lost/Cancelled.</p>
                       </div>
                     </div>
                   </div>
