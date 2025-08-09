@@ -274,6 +274,41 @@ export default function AnalyticsPage() {
     return map;
   };
 
+  // Conversion funnel for the selected year and filters
+  const funnel = useMemo(() => {
+    const created = filtered.length;
+    const quoted = filtered.filter(q => (q.totalValueEUR || 0) > 0).length;
+    const wonItems = filtered.filter(q => (q.status || '').toLowerCase() === 'won');
+    const won = wonItems.length;
+    const wonEUR = wonItems.reduce((s,q)=> s + (q.totalValueEUR || 0), 0);
+    // Approximate cycle time: createdAt -> updatedAt for won items (if available)
+    const days = wonItems
+      .map(q => {
+        const c = parseDateValue(q.createdAt)?.getTime();
+        const u = parseDateValue((q as any).updatedAt)?.getTime();
+        if (!c || !u) return null;
+        return Math.max(0, Math.round((u - c) / (1000*60*60*24)));
+      })
+      .filter((n): n is number => typeof n === 'number');
+    const avgDaysToWin = days.length ? Math.round(days.reduce((a,b)=>a+b,0) / days.length) : null;
+    return { created, quoted, won, wonEUR, conversion: created ? Math.round((won/created)*100) : 0, avgDaysToWin };
+  }, [filtered]);
+
+  // Conversion by country pair (creator -> involved)
+  const pairFunnel = useMemo(() => {
+    const map = new Map<string, { label: string; created: number; quoted: number; won: number }>();
+    filtered.forEach(q => {
+      const key = `${q.creatorCountry} -> ${q.involvedCountry}`;
+      if (!map.has(key)) map.set(key, { label: key, created: 0, quoted: 0, won: 0 });
+      const row = map.get(key)!;
+      row.created += 1;
+      if ((q.totalValueEUR || 0) > 0) row.quoted += 1;
+      if ((q.status || '').toLowerCase() === 'won') row.won += 1;
+    });
+    const rows = Array.from(map.values()).sort((a,b)=> (b.won - a.won) || (b.created - a.created)).slice(0, 10);
+    return rows;
+  }, [filtered]);
+
   return (
     <div className="p-6">
       <div className="flex items-center justify-between">
@@ -402,6 +437,66 @@ export default function AnalyticsPage() {
               />
               </div>
             </div>
+          </div>
+
+          {/* Conversion Funnel */}
+          <div className="p-4 bg-white rounded shadow">
+            <div className="text-sm text-gray-700 mb-3">Conversion Funnel — {year}</div>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-center">
+              <div className="bg-gray-50 rounded p-3">
+                <div className="text-xs text-gray-500">Created</div>
+                <div className="text-xl font-semibold">{funnel.created}</div>
+              </div>
+              <div className="bg-gray-50 rounded p-3">
+                <div className="text-xs text-gray-500">Quoted</div>
+                <div className="text-xl font-semibold">{funnel.quoted}</div>
+              </div>
+              <div className="bg-gray-50 rounded p-3">
+                <div className="text-xs text-gray-500">Won</div>
+                <div className="text-xl font-semibold">{funnel.won}</div>
+              </div>
+              <div className="bg-gray-50 rounded p-3">
+                <div className="text-xs text-gray-500">Conversion</div>
+                <div className="text-xl font-semibold">{funnel.conversion}%</div>
+              </div>
+              <div className="bg-gray-50 rounded p-3">
+                <div className="text-xs text-gray-500">Won EUR</div>
+                <div className="text-xl font-semibold">EUR {Math.round(funnel.wonEUR).toLocaleString()}</div>
+                {funnel.avgDaysToWin !== null && (
+                  <div className="text-xs text-gray-500 mt-1">Avg days to win: {funnel.avgDaysToWin}</div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* By country pair - top 10 */}
+          <div className="p-4 bg-white rounded shadow overflow-auto">
+            <div className="text-sm text-gray-700 mb-3">Top country pairs by wins — {year}</div>
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="text-left border-b">
+                  <th className="py-2 pr-4">Country Pair</th>
+                  <th className="py-2 pr-4">Created</th>
+                  <th className="py-2 pr-4">Quoted</th>
+                  <th className="py-2 pr-4">Won</th>
+                  <th className="py-2 pr-4">Conversion %</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pairFunnel.map(r => (
+                  <tr key={r.label} className="border-b last:border-0">
+                    <td className="py-2 pr-4">{r.label}</td>
+                    <td className="py-2 pr-4">{r.created}</td>
+                    <td className="py-2 pr-4">{r.quoted}</td>
+                    <td className="py-2 pr-4">{r.won}</td>
+                    <td className="py-2 pr-4">{r.created ? Math.round((r.won / r.created)*100) : 0}%</td>
+                  </tr>
+                ))}
+                {pairFunnel.length===0 && (
+                  <tr><td colSpan={5} className="py-3 text-gray-500">No data for selected filters</td></tr>
+                )}
+              </tbody>
+            </table>
           </div>
 
           {compareEnabled && (
