@@ -155,6 +155,7 @@ export default function EditQuoteRequest() {
   const [originalData, setOriginalData] = useState<QuoteRequestWithDynamicKeys | null>(null);
   const [showTotalValueModal, setShowTotalValueModal] = useState(false);
   const [rateDirection, setRateDirection] = useState<'LOCAL_TO_EUR' | 'EUR_TO_LOCAL'>('LOCAL_TO_EUR');
+  const [calculatorDirty, setCalculatorDirty] = useState(false);
 
   // Helper function to get customer name from ID
   const getCustomerName = (customerId: string) => {
@@ -310,6 +311,7 @@ export default function EditQuoteRequest() {
 
       await updateDoc(quoteRequestRef, sanitizedUpdateData);
       console.log('[SAVE] Save successful!');
+      setCalculatorDirty(false);
 
       // Create modification record for all changes except jobsiteContactId
       if (originalData) {
@@ -540,6 +542,19 @@ export default function EditQuoteRequest() {
       ...prev,
       [field]: value
     }));
+
+    // Mark calculator changes as dirty to prompt manual save
+    if ([
+      'totalValueEUR',
+      'totalValueLocal',
+      'totalValueCurrency',
+      'totalValueRateToEUR',
+      'rateSource',
+      'rateDate',
+      'usedLocalCurrency'
+    ].includes(field)) {
+      setCalculatorDirty(true);
+    }
   };
 
   const handleAddProduct = () => {
@@ -890,6 +905,7 @@ export default function EditQuoteRequest() {
     handleInputChange('rateSource', null);
     handleInputChange('rateDate', null);
     handleInputChange('usedLocalCurrency', false);
+    setCalculatorDirty(true);
   };
 
   // Fetch rate from API (daily cached)
@@ -917,6 +933,7 @@ export default function EditQuoteRequest() {
           const local = parseFloat((eur / storedRate).toFixed(2));
           handleInputChange('totalValueLocal', local);
         }
+        setCalculatorDirty(true);
       }
     } catch (e) {
       console.error('Failed to fetch rate', e);
@@ -1412,6 +1429,12 @@ export default function EditQuoteRequest() {
                         placeholder="e.g. 12500.00"
                         disabled={isReadOnly}
                       />
+                      {calculatorDirty && (
+                        <div className="mt-2 p-2 rounded bg-yellow-50 border border-yellow-200 text-yellow-800 text-xs flex items-center justify-between">
+                          <span>Calculator changed. Click "Save Changes" to persist.</span>
+                          <button onClick={() => saveChanges(false)} disabled={saving} className="ml-3 px-2 py-1 bg-yellow-600 text-white rounded hover:bg-yellow-700 disabled:opacity-50">Save now</button>
+                        </div>
+                      )}
                     </div>
                     <div>
                       <label className="block text-xs text-gray-600 mb-1">Local Currency Amount</label>
@@ -1535,4 +1558,17 @@ function TotalValueRequiredModal({ open, onClose }: { open: boolean; onClose: ()
       </div>
     </div>
   );
+}
+
+// Warn when leaving page with unsaved calculator changes
+if (typeof window !== 'undefined') {
+  window.onbeforeunload = (e: BeforeUnloadEvent) => {
+    try {
+      const hasDirty = (window as any).__calculatorDirty;
+      if (hasDirty) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    } catch {}
+  };
 }
