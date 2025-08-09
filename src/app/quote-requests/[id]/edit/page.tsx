@@ -839,23 +839,28 @@ export default function EditQuoteRequest() {
 
   // Auto-calc EUR from local when both local and rate are provided
   useEffect(() => {
+    if (rateDirection !== 'LOCAL_TO_EUR') return;
     const local = quoteRequest.totalValueLocal;
     const rate = quoteRequest.totalValueRateToEUR;
-    if (typeof local === 'number' && local > 0 && typeof rate === 'number' && rate > 0) {
+    if (typeof local === 'number' && local >= 0 && typeof rate === 'number' && rate > 0) {
       const eur = parseFloat((local * rate).toFixed(2));
-      setQuoteRequest(prev => ({ ...prev, totalValueEUR: eur }));
+      if (quoteRequest.totalValueEUR !== eur) {
+        setQuoteRequest(prev => ({ ...prev, totalValueEUR: eur }));
+      }
     }
-  }, [quoteRequest.totalValueLocal, quoteRequest.totalValueRateToEUR]);
+  }, [quoteRequest.totalValueLocal, quoteRequest.totalValueRateToEUR, rateDirection]);
 
   // Auto-calc Local from EUR when we have EUR and a rate (stored as Local->EUR)
   useEffect(() => {
+    if (rateDirection !== 'EUR_TO_LOCAL') return;
     const eur = quoteRequest.totalValueEUR;
     const rate = quoteRequest.totalValueRateToEUR;
     const currency = quoteRequest.totalValueCurrency || 'EUR';
-    const localIsMissing = quoteRequest.totalValueLocal == null || quoteRequest.totalValueLocal === 0;
-    if (currency !== 'EUR' && typeof eur === 'number' && eur > 0 && typeof rate === 'number' && rate > 0 && localIsMissing) {
+    if (currency !== 'EUR' && typeof eur === 'number' && eur >= 0 && typeof rate === 'number' && rate > 0) {
       const local = parseFloat((eur / rate).toFixed(2));
-      setQuoteRequest(prev => ({ ...prev, totalValueLocal: local }));
+      if (quoteRequest.totalValueLocal !== local) {
+        setQuoteRequest(prev => ({ ...prev, totalValueLocal: local }));
+      }
     }
   }, [quoteRequest.totalValueEUR, quoteRequest.totalValueRateToEUR, quoteRequest.totalValueCurrency, rateDirection]);
 
@@ -908,7 +913,7 @@ export default function EditQuoteRequest() {
         // If EUR is present and currency is non-EUR, compute local amount
         const eur = quoteRequest.totalValueEUR;
         const storedRate = rateDirection === 'LOCAL_TO_EUR' ? rate : (rate > 0 ? 1 / rate : undefined);
-        if ((quoteRequest.totalValueCurrency || 'EUR') !== 'EUR' && typeof eur === 'number' && storedRate && storedRate > 0) {
+        if (rateDirection === 'EUR_TO_LOCAL' && (quoteRequest.totalValueCurrency || 'EUR') !== 'EUR' && typeof eur === 'number' && storedRate && storedRate > 0) {
           const local = parseFloat((eur / storedRate).toFixed(2));
           handleInputChange('totalValueLocal', local);
         }
@@ -1471,7 +1476,7 @@ export default function EditQuoteRequest() {
                               // If EUR exists and currency non-EUR, update local too
                               const eur = quoteRequest.totalValueEUR;
                               const stored = rateDirection==='LOCAL_TO_EUR' ? val : (val && val>0 ? 1/val : undefined);
-                              if ((quoteRequest.totalValueCurrency||'EUR')!=='EUR' && typeof eur === 'number' && stored && stored>0) {
+                              if (rateDirection==='EUR_TO_LOCAL' && (quoteRequest.totalValueCurrency||'EUR')!=='EUR' && typeof eur === 'number' && stored && stored>0) {
                                 const local = parseFloat((eur / stored).toFixed(2));
                                 handleInputChange('totalValueLocal', local);
                               }
