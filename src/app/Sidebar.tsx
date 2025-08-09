@@ -16,6 +16,7 @@ const navItems = [
   { label: "Users", href: "/users" },
   { label: "Notifications", href: "/notifications" },
   { label: "Modifications", href: "/modifications" },
+  { label: "Analytics", href: "/analytics" },
   { label: "Profile", href: "/users/profile" },
 ];
 
