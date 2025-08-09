@@ -29,6 +29,7 @@ export default function ArchivedPage() {
   const [deletingQuoteRequest, setDeletingQuoteRequest] = useState<string | null>(null);
   const { userProfile, user, loading: authLoading } = useAuth();
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [deleteQuery, setDeleteQuery] = useState('test');
 
   useEffect(() => {
     const fetchData = async () => {
@@ -71,12 +72,26 @@ export default function ArchivedPage() {
 
   const handleBulkDeleteTests = async () => {
     if (userProfile?.role !== 'superAdmin') return;
-    const confirm = window.confirm("Delete all archived quote requests with 'test' in the title? This cannot be undone.");
+    const confirm = window.confirm(`Delete all archived quote requests matching "${deleteQuery}" in the title? This cannot be undone.`);
     if (!confirm) return;
     try {
       setBulkDeleting(true);
-      const lowerIncludesTest = (s: string) => (s || '').toLowerCase().includes('test');
-      const targets = quoteRequests.filter(qr => lowerIncludesTest(qr.title));
+      let matcher: (s: string) => boolean;
+      try {
+        // treat input as regex if enclosed with /.../ else as case-insensitive substring
+        if (deleteQuery.startsWith('/') && deleteQuery.endsWith('/')) {
+          const body = deleteQuery.slice(1, -1);
+          const rx = new RegExp(body, 'i');
+          matcher = (s: string) => rx.test(s || '');
+        } else {
+          const needle = (deleteQuery || '').toLowerCase();
+          matcher = (s: string) => (s || '').toLowerCase().includes(needle);
+        }
+      } catch {
+        const needle = (deleteQuery || '').toLowerCase();
+        matcher = (s: string) => (s || '').toLowerCase().includes(needle);
+      }
+      const targets = quoteRequests.filter(qr => matcher(qr.title));
       for (const qr of targets) {
         await deleteDoc(doc(db, 'quoteRequests', qr.id));
       }
@@ -178,9 +193,18 @@ export default function ArchivedPage() {
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-bold text-[#e40115]">Archived</h1>
         {userProfile?.role === 'superAdmin' && (
-          <button onClick={handleBulkDeleteTests} disabled={bulkDeleting} className="px-3 py-2 text-sm bg-[#e40115] text-white rounded hover:bg-red-700 disabled:opacity-50">
-            {bulkDeleting ? 'Deleting…' : "Delete 'Test' Archived"}
-          </button>
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={deleteQuery}
+              onChange={(e) => setDeleteQuery(e.target.value)}
+              placeholder="Keyword or /regex/"
+              className="px-2 py-1 border rounded"
+            />
+            <button onClick={handleBulkDeleteTests} disabled={bulkDeleting} className="px-3 py-2 text-sm bg-[#e40115] text-white rounded hover:bg-red-700 disabled:opacity-50">
+              {bulkDeleting ? 'Deleting…' : 'Delete Archived'}
+            </button>
+          </div>
         )}
       </div>
       {loading ? (
