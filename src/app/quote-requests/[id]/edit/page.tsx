@@ -311,7 +311,9 @@ export default function EditQuoteRequest() {
 
       await updateDoc(quoteRequestRef, sanitizedUpdateData);
       console.log('[SAVE] Save successful!');
-      setCalculatorDirty(false);
+      if (!isAutoSave) {
+        setCalculatorDirty(false);
+      }
 
       // Create modification record for all changes except jobsiteContactId
       if (originalData) {
@@ -554,6 +556,23 @@ export default function EditQuoteRequest() {
       'usedLocalCurrency'
     ].includes(field)) {
       setCalculatorDirty(true);
+    }
+
+    // Smart direction switching
+    if (field === 'totalValueLocal' && value !== undefined && value !== null) {
+      setRateDirection('LOCAL_TO_EUR');
+    }
+    if (field === 'totalValueEUR' && (quoteRequest.totalValueCurrency || 'EUR') !== 'EUR') {
+      setRateDirection('EUR_TO_LOCAL');
+    }
+    if (field === 'totalValueCurrency') {
+      const newCur = value as string;
+      if (newCur && newCur !== 'EUR') {
+        const hasLocal = !!quoteRequest.totalValueLocal;
+        const hasEur = !!quoteRequest.totalValueEUR;
+        if (hasEur && !hasLocal) setRateDirection('EUR_TO_LOCAL');
+        if (hasLocal && !hasEur) setRateDirection('LOCAL_TO_EUR');
+      }
     }
   };
 
@@ -884,6 +903,23 @@ export default function EditQuoteRequest() {
     const used = !!(quoteRequest.totalValueLocal && quoteRequest.totalValueLocal > 0 && (quoteRequest.totalValueCurrency || 'EUR') !== 'EUR');
     setQuoteRequest(prev => ({ ...prev, usedLocalCurrency: used }));
   }, [quoteRequest.totalValueLocal, quoteRequest.totalValueCurrency]);
+
+  // Warn when leaving page with unsaved calculator changes and keep flag in sync
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    (window as any).__calculatorDirty = calculatorDirty;
+    const handler = (e: BeforeUnloadEvent) => {
+      try {
+        const hasDirty = (window as any).__calculatorDirty;
+        if (hasDirty) {
+          e.preventDefault();
+          e.returnValue = '';
+        }
+      } catch {}
+    };
+    window.addEventListener('beforeunload', handler as any);
+    return () => window.removeEventListener('beforeunload', handler as any);
+  }, [calculatorDirty]);
 
   // Helper to set currency quickly
   const useInvolvedCurrency = () => {
@@ -1558,17 +1594,4 @@ function TotalValueRequiredModal({ open, onClose }: { open: boolean; onClose: ()
       </div>
     </div>
   );
-}
-
-// Warn when leaving page with unsaved calculator changes
-if (typeof window !== 'undefined') {
-  window.onbeforeunload = (e: BeforeUnloadEvent) => {
-    try {
-      const hasDirty = (window as any).__calculatorDirty;
-      if (hasDirty) {
-        e.preventDefault();
-        e.returnValue = '';
-      }
-    } catch {}
-  };
 }
