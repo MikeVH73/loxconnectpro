@@ -83,6 +83,10 @@ interface QuoteRequest {
   planned: boolean;
   assignedUserId?: string;
   assignedUserName?: string;
+  totalValueEUR?: number;
+  totalValueLocal?: number;
+  totalValueCurrency?: string; // ISO like EUR, DKK
+  totalValueRateToEUR?: number; // multiplier from local to EUR
 }
 
 const statuses = ["New", "In Progress", "Snoozed", "Won", "Lost", "Cancelled"];
@@ -146,6 +150,7 @@ export default function EditQuoteRequest() {
   const { messages, loading: messagesLoading, error: messagesError, sendMessage } = useMessages(id);
   const { customers: fetchedCustomers } = useCustomers();
   const [originalData, setOriginalData] = useState<QuoteRequestWithDynamicKeys | null>(null);
+  const [showTotalValueModal, setShowTotalValueModal] = useState(false);
 
   // Helper function to get customer name from ID
   const getCustomerName = (customerId: string) => {
@@ -220,7 +225,11 @@ export default function EditQuoteRequest() {
             problems: data.problems || false,
             planned: data.planned || false,
             assignedUserId: data.assignedUserId || '',
-            assignedUserName: data.assignedUserName || ''
+            assignedUserName: data.assignedUserName || '',
+            totalValueEUR: typeof data.totalValueEUR === 'number' ? data.totalValueEUR : undefined,
+            totalValueLocal: typeof data.totalValueLocal === 'number' ? data.totalValueLocal : undefined,
+            totalValueCurrency: data.totalValueCurrency || undefined,
+            totalValueRateToEUR: typeof data.totalValueRateToEUR === 'number' ? data.totalValueRateToEUR : undefined
           } as QuoteRequestWithDynamicKeys);
           setOriginalData(data as QuoteRequestWithDynamicKeys); // Store original data for comparison
         } else {
@@ -271,23 +280,27 @@ export default function EditQuoteRequest() {
 
       // Create modification record for all changes except jobsiteContactId
       if (originalData) {
-        const changes = [];
-        
-        // Check for status changes
+      const changes = [];
+      
+      // Check for status changes
         if (originalData.status !== quoteRequest.status) {
-          changes.push(`Status changed to ${quoteRequest.status}`);
-        }
+        changes.push(`Status changed to ${quoteRequest.status}`);
+      }
+      // Check for total value changes
+      if (originalData.totalValueEUR !== quoteRequest.totalValueEUR) {
+        changes.push(`Total value (EUR) set to ${quoteRequest.totalValueEUR ?? 'Not set'}`);
+      }
 
         // Check for title changes
         if (originalData.title !== quoteRequest.title) {
           changes.push(`Title changed from "${originalData.title}" to "${quoteRequest.title}"`);
         }
 
-        // Check for country changes
+      // Check for country changes
         if (originalData.involvedCountry !== quoteRequest.involvedCountry) {
-          changes.push(`Involved country changed from ${originalData.involvedCountry} to ${quoteRequest.involvedCountry}`);
-        }
-        
+        changes.push(`Involved country changed from ${originalData.involvedCountry} to ${quoteRequest.involvedCountry}`);
+      }
+      
         // Check for flag changes (labels) - only notify if they were actually changed
         const labelFields = ['waitingForAnswer', 'urgent', 'problems', 'planned'] as const;
         labelFields.forEach(field => {
@@ -298,17 +311,17 @@ export default function EditQuoteRequest() {
             changes.push(`${labelName} label ${(quoteRequest as any)[field] ? 'added' : 'removed'}`);
           }
         });
-
-        // Check for product changes
+      
+      // Check for product changes
         if (JSON.stringify(originalData.products) !== JSON.stringify(quoteRequest.products)) {
           changes.push('Products updated');
-        }
-
-        // Check for date changes
-        if (originalData.startDate !== quoteRequest.startDate) {
+      }
+      
+      // Check for date changes
+      if (originalData.startDate !== quoteRequest.startDate) {
           changes.push(`Start date changed from ${originalData.startDate} to ${quoteRequest.startDate}`);
-        }
-        if (originalData.endDate !== quoteRequest.endDate) {
+      }
+      if (originalData.endDate !== quoteRequest.endDate) {
           const oldEndDate = originalData.endDate || 'Not set';
           const newEndDate = quoteRequest.endDate || 'Not set';
           changes.push(`End date changed from ${oldEndDate} to ${newEndDate}`);
@@ -347,15 +360,15 @@ export default function EditQuoteRequest() {
             ? quoteRequest.involvedCountry 
             : quoteRequest.creatorCountry;
 
-          await createNotification({
-            quoteRequestId: id,
-            quoteRequestTitle: quoteRequest.title,
-            sender: user?.email || '',
+              await createNotification({
+                quoteRequestId: id,
+                quoteRequestTitle: quoteRequest.title,
+                sender: user?.email || '',
             senderCountry: userProfile?.businessUnit || '',
             targetCountry,
-            content: changes.join(', '),
-            notificationType: 'property_change'
-          });
+                content: changes.join(', '),
+                notificationType: 'property_change'
+              });
 
           // Create recent activity entry
           await createRecentActivity({
@@ -377,7 +390,7 @@ export default function EditQuoteRequest() {
         setSaving(false);
       } else {
         setSaving(false);
-      }
+    }
     }
   }, [quoteRequest, saving, db, id, user?.email, userProfile?.businessUnit]);
 
@@ -421,7 +434,11 @@ export default function EditQuoteRequest() {
         notes: quoteRequest.notes || [],
         attachments: quoteRequest.attachments || [],
         assignedUserId: quoteRequest.assignedUserId || '',
-        assignedUserName: quoteRequest.assignedUserName || ''
+        assignedUserName: quoteRequest.assignedUserName || '',
+        totalValueEUR: quoteRequest.totalValueEUR ?? null,
+        totalValueLocal: quoteRequest.totalValueLocal ?? null,
+        totalValueCurrency: quoteRequest.totalValueCurrency || '',
+        totalValueRateToEUR: quoteRequest.totalValueRateToEUR ?? null
       });
       previousQuoteRequest.current = initialState;
       return;
@@ -450,7 +467,11 @@ export default function EditQuoteRequest() {
       notes: quoteRequest.notes || [],
       attachments: quoteRequest.attachments || [],
       assignedUserId: quoteRequest.assignedUserId || '',
-      assignedUserName: quoteRequest.assignedUserName || ''
+      assignedUserName: quoteRequest.assignedUserName || '',
+      totalValueEUR: quoteRequest.totalValueEUR ?? null,
+      totalValueLocal: quoteRequest.totalValueLocal ?? null,
+      totalValueCurrency: quoteRequest.totalValueCurrency || '',
+      totalValueRateToEUR: quoteRequest.totalValueRateToEUR ?? null
     });
 
     // Only save if data changed
@@ -469,6 +490,16 @@ export default function EditQuoteRequest() {
   }, [debouncedSave]);
 
   const handleInputChange = (field: string, value: any) => {
+    // Prevent final statuses without EUR total
+    const finalStatuses = ["Won", "Lost", "Cancelled"];
+    if (field === 'status' && finalStatuses.includes(value)) {
+      const hasEUR = !!(quoteRequest.totalValueEUR && quoteRequest.totalValueEUR > 0);
+      if (!hasEUR) {
+        setShowTotalValueModal(true);
+        return; // do not update status
+      }
+    }
+
     setQuoteRequest(prev => ({
       ...prev,
       [field]: value
@@ -495,11 +526,11 @@ export default function EditQuoteRequest() {
     const note = {
       text: newNote,
       user: user?.email || "",
-      dateTime: new Date()
+        dateTime: new Date()
     };
     
     setQuoteRequest(prev => ({
-      ...prev,
+        ...prev,
       notes: [...(prev.notes || []), note]
     }));
     
@@ -733,6 +764,39 @@ export default function EditQuoteRequest() {
 
   // Get the user's business unit for notifications
   const userCountry = userProfile?.businessUnit || (userProfile?.countries && userProfile.countries[0]) || '';
+  const defaultCurrencyByCountry: Record<string, string> = {
+    Denmark: 'DKK',
+    Sweden: 'SEK',
+    Norway: 'NOK',
+    Switzerland: 'CHF',
+    UK: 'GBP',
+    Poland: 'PLN',
+    Netherlands: 'EUR',
+    France: 'EUR',
+    Germany: 'EUR',
+    Spain: 'EUR',
+    Italy: 'EUR',
+    Austria: 'EUR',
+    Belgium: 'EUR',
+  };
+
+  // If currency not set, derive from involved country
+  useEffect(() => {
+    if (!quoteRequest.totalValueCurrency && quoteRequest.involvedCountry) {
+      const cur = defaultCurrencyByCountry[quoteRequest.involvedCountry] || 'EUR';
+      setQuoteRequest(prev => ({ ...prev, totalValueCurrency: cur }));
+    }
+  }, [quoteRequest.involvedCountry, quoteRequest.totalValueCurrency]);
+
+  // Auto-calc EUR from local when both local and rate are provided
+  useEffect(() => {
+    const local = quoteRequest.totalValueLocal;
+    const rate = quoteRequest.totalValueRateToEUR;
+    if (typeof local === 'number' && local > 0 && typeof rate === 'number' && rate > 0) {
+      const eur = parseFloat((local * rate).toFixed(2));
+      setQuoteRequest(prev => ({ ...prev, totalValueEUR: eur }));
+    }
+  }, [quoteRequest.totalValueLocal, quoteRequest.totalValueRateToEUR]);
 
   if (loading) {
     return <LoadingSpinner />;
@@ -1127,7 +1191,7 @@ export default function EditQuoteRequest() {
                       }
                     }}
                     className="w-full p-3 border border-gray-300 rounded-md"
-                    disabled={isReadOnly}
+                      disabled={isReadOnly}
                   >
                     <option value="">Select Contact</option>
                     {contacts.map(contact => (
@@ -1139,7 +1203,7 @@ export default function EditQuoteRequest() {
                   {jobsiteContactId && (
                     <div className="mt-1 text-sm text-gray-600">
                       Selected: {contacts.find(c => c.id === jobsiteContactId)?.name || ''}
-                    </div>
+                  </div>
                   )}
                 </div>
 
@@ -1206,6 +1270,65 @@ export default function EditQuoteRequest() {
                     );
                   })()}
                 </div>
+
+                {/* Total Value */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Total Value</label>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs text-gray-600 mb-1">Total Value (EUR)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={quoteRequest.totalValueEUR ?? ''}
+                        onChange={(e) => handleInputChange('totalValueEUR', e.target.value === '' ? undefined : parseFloat(e.target.value))}
+                        className="w-full p-3 border border-gray-300 rounded-md"
+                        placeholder="e.g. 12500.00"
+                        disabled={isReadOnly}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-600 mb-1">Local Currency Amount</label>
+                      <div className="flex gap-2">
+                        <select
+                          value={quoteRequest.totalValueCurrency || 'EUR'}
+                          onChange={(e) => handleInputChange('totalValueCurrency', e.target.value)}
+                          className="p-3 border border-gray-300 rounded-md w-28"
+                          disabled={isReadOnly}
+                        >
+                          {['EUR','DKK','SEK','NOK','CHF','GBP','PLN'].map(cur => (
+                            <option key={cur} value={cur}>{cur}</option>
+                          ))}
+                        </select>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={quoteRequest.totalValueLocal ?? ''}
+                          onChange={(e) => handleInputChange('totalValueLocal', e.target.value === '' ? undefined : parseFloat(e.target.value))}
+                          className="flex-1 p-3 border border-gray-300 rounded-md"
+                          placeholder="e.g. 93000.00"
+                          disabled={isReadOnly}
+                        />
+                      </div>
+                      <div className="mt-2">
+                        <label className="block text-xs text-gray-600 mb-1">Rate to EUR (Local × Rate = EUR)</label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.0001"
+                          value={quoteRequest.totalValueRateToEUR ?? ''}
+                          onChange={(e) => handleInputChange('totalValueRateToEUR', e.target.value === '' ? undefined : parseFloat(e.target.value))}
+                          className="w-full p-3 border border-gray-300 rounded-md"
+                          placeholder="e.g. 0.13 for DKK→EUR"
+                          disabled={isReadOnly}
+                        />
+                        <p className="mt-1 text-xs text-gray-500">Fill EUR directly or provide local amount and the conversion rate. EUR is required when setting status to Won/Lost/Cancelled.</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -1223,6 +1346,22 @@ export default function EditQuoteRequest() {
             error={messagesError}
               readOnly={isReadOnly}
             />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Simple modal requiring total value
+function TotalValueRequiredModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-6 max-w-md w-full shadow">
+        <h3 className="text-lg font-semibold text-gray-900 mb-2">Total Value required</h3>
+        <p className="text-sm text-gray-700 mb-4">Please fill in the Total Value in EUR before setting the status to Won, Lost, or Cancelled.</p>
+        <div className="flex justify-end gap-2">
+          <button onClick={onClose} className="px-4 py-2 bg-[#e40115] text-white rounded hover:bg-red-700">OK</button>
         </div>
       </div>
     </div>
