@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '../AuthProvider';
-import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, Firestore } from 'firebase/firestore';
+import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, Firestore, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../firebaseClient';
 import dynamic from 'next/dynamic';
 
@@ -76,15 +76,15 @@ function LabelsPage() {
         // Update existing label
         await updateDoc(doc(db as Firestore, "labels", editingLabel.id), {
           name: labelName.trim(),
-          updatedAt: new Date()
+          updatedAt: serverTimestamp()
         });
         setSuccess("Label updated successfully!");
       } else {
         // Create new label
         await addDoc(collection(db as Firestore, "labels"), {
           name: labelName.trim(),
-          createdAt: new Date(),
-          updatedAt: new Date()
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
         });
         setSuccess("Label created successfully!");
       }
@@ -215,7 +215,7 @@ function LabelsPage() {
 
   if (!isClient) {
     return <LoadingSpinner />;
-  }
+    }
 
   if (!isSuperAdmin) {
     return (
@@ -225,7 +225,7 @@ function LabelsPage() {
         </div>
       </div>
     );
-  }
+    }
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -297,10 +297,10 @@ function LabelsPage() {
                         {label.name}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {label.createdAt ? new Date(label.createdAt).toLocaleDateString() : 'N/A'}
+                        {label.createdAt ? new Date((label.createdAt as any).seconds ? (label.createdAt as any).seconds*1000 : label.createdAt).toLocaleDateString() : 'N/A'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {label.updatedAt ? new Date(label.updatedAt).toLocaleDateString() : 'N/A'}
+                        {label.updatedAt ? new Date((label.updatedAt as any).seconds ? (label.updatedAt as any).seconds*1000 : label.updatedAt).toLocaleDateString() : 'N/A'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <button
@@ -367,7 +367,7 @@ function LabelsPage() {
       )}
     </div>
   );
-}
+} 
 
 // Export with no SSR
 export default dynamic(() => Promise.resolve(LabelsPage), {

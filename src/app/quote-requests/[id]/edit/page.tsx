@@ -1186,7 +1186,7 @@ export default function EditQuoteRequest() {
                           value={product.catClass}
                           onChange={(e) => handleInputChange(`products.${index}.catClass`, e.target.value)}
                           placeholder="Product Code"
-                          className="col-span-4 p-2 border border-gray-300 rounded"
+                          className="col-span-3 p-2 border border-gray-300 rounded"
                         />
                         {
                           <button
@@ -1216,7 +1216,7 @@ export default function EditQuoteRequest() {
                           value={product.description}
                           onChange={(e) => handleInputChange(`products.${index}.description`, e.target.value)}
                           placeholder="Description"
-                          className="col-span-5 p-2 border border-gray-300 rounded"
+                          className="col-span-6 p-2 border border-gray-300 rounded"
                         />
                         <input
                           type="number"
