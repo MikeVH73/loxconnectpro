@@ -140,10 +140,10 @@ const QuoteRequestsPage = () => {
         ]);
 
         const customersArr = custSnap.docs.map(doc => ({
-          id: doc.id, 
-          ...doc.data() 
+        id: doc.id, 
+        ...doc.data() 
         })) as Customer[];
-        setCustomers(customersArr);
+      setCustomers(customersArr);
 
         const usersArr = usersSnap.docs.map(doc => ({
           id: doc.id,
@@ -265,7 +265,7 @@ const QuoteRequestsPage = () => {
         console.error("Error fetching data:", error);
         setError("Failed to load quote requests");
       } finally {
-        setLoading(false);
+      setLoading(false);
       }
     };
 
@@ -320,7 +320,7 @@ const QuoteRequestsPage = () => {
       if (result.success) {
         // Remove the quote request from the local state
         setQuoteRequests(prev => prev.filter(qr => qr.id !== showDeleteConfirm));
-        setShowDeleteConfirm(null);
+      setShowDeleteConfirm(null);
       } else {
         alert(result.error || 'Failed to delete quote request');
       }
@@ -424,12 +424,12 @@ const QuoteRequestsPage = () => {
           >
             {filtersOpen ? 'Hide Filters' : 'Advanced Filters'}
           </button>
-          <Link
-            href="/quote-requests/new"
-            className="bg-[#e40115] text-white px-4 py-2 rounded hover:bg-red-700 transition"
-          >
-            + New Quote Request
-          </Link>
+        <Link
+          href="/quote-requests/new"
+          className="bg-[#e40115] text-white px-4 py-2 rounded hover:bg-red-700 transition"
+        >
+          + New Quote Request
+        </Link>
         </div>
       </div>
 
@@ -447,9 +447,9 @@ const QuoteRequestsPage = () => {
             <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
-          </div>
-        </div>
-      </div>
+                    </div>
+                  </div>
+                </div>
 
       {/* Advanced Filters */}
       {filtersOpen && (
@@ -551,13 +551,13 @@ const QuoteRequestsPage = () => {
                   setFilterCustomers(selected);
                 }}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#e40115] focus:border-transparent"
-                size={4}
+                size={8}
               >
                 {customers.map(customer => (
                   <option key={customer.id} value={customer.id}>{customer.name}</option>
                 ))}
               </select>
-            </div>
+                      </div>
 
             {/* Handled By */}
             <div>
@@ -570,7 +570,7 @@ const QuoteRequestsPage = () => {
                   setFilterHandledBy(selected);
                 }}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#e40115] focus:border-transparent"
-                size={4}
+                size={8}
               >
                 {users.map(user => (
                   <option key={user.id} value={user.id}>
@@ -591,20 +591,20 @@ const QuoteRequestsPage = () => {
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#e40115] focus:border-transparent"
               />
             </div>
-          </div>
+                          </div>
 
           {/* Filter Actions */}
           <div className="mt-6 flex justify-between items-center pt-4 border-t border-gray-200">
             <div className="text-sm text-gray-600">
               {quoteRequests.length} quote request{quoteRequests.length !== 1 ? 's' : ''} found
-            </div>
+                        </div>
             <button 
               className="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors" 
               onClick={clearAllFilters}
             >
               Clear All Filters
             </button>
-          </div>
+                    </div>
         </div>
       )}
 
