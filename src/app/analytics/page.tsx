@@ -39,12 +39,43 @@ interface QuoteRequest {
   endDate?: any;
 }
 
-// Prefer business period dates when available
-const yearFromDate = (d?: any) => {
+// Robust date parsing for Firestore Timestamp, ISO strings, and "DD-MMM-YYYY"
+const parseDateValue = (value: any): Date | null => {
+  if (!value) return null;
   try {
-    const date = d?.toDate?.() || (typeof d === 'string' ? new Date(d) : d) || new Date();
-    return date.getFullYear();
-  } catch { return new Date().getFullYear(); }
+    if (typeof value.toDate === 'function') return value.toDate();
+  } catch {}
+  if (typeof value === 'number') {
+    const d = new Date(value);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  if (typeof value === 'string') {
+    let d = new Date(value);
+    if (!isNaN(d.getTime())) return d;
+    const m = value.match(/^(\d{1,2})[-\s]([A-Za-z]{3})[-\s](\d{4})$/);
+    if (m) {
+      const day = parseInt(m[1], 10);
+      const monStr = m[2].toLowerCase();
+      const year = parseInt(m[3], 10);
+      const monthIndex: Record<string, number> = { jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11 };
+      const mi = monthIndex[monStr as keyof typeof monthIndex];
+      if (mi !== undefined) {
+        d = new Date(Date.UTC(year, mi, day));
+        return isNaN(d.getTime()) ? null : d;
+      }
+    }
+  }
+  if (value instanceof Date) return value;
+  return null;
+};
+
+const yearFromDate = (d?: any): number | null => {
+  const parsed = parseDateValue(d);
+  return parsed ? parsed.getUTCFullYear() : null;
+};
+
+const preferYearForQuote = (qr: any): number | null => {
+  return yearFromDate(qr.startDate) ?? yearFromDate(qr.endDate) ?? yearFromDate(qr.createdAt);
 };
 
 export default function AnalyticsPage() {
@@ -99,9 +130,12 @@ export default function AnalyticsPage() {
   const years = useMemo(() => {
     const s = new Set<number>();
     data.forEach(qr => {
-      if (qr.startDate) s.add(yearFromDate(qr.startDate));
-      if (qr.endDate) s.add(yearFromDate(qr.endDate));
-      if (!qr.startDate && !qr.endDate) s.add(yearFromDate(qr.createdAt));
+      const y1 = yearFromDate(qr.startDate);
+      const y2 = yearFromDate(qr.endDate);
+      const y3 = yearFromDate(qr.createdAt);
+      if (y1) s.add(y1);
+      if (y2) s.add(y2);
+      if (!y1 && !y2 && y3) s.add(y3);
     });
     const list = Array.from(s).sort((a,b)=>b-a);
     // Always include current year for convenience
@@ -115,12 +149,7 @@ export default function AnalyticsPage() {
     const involvedAll = filterInvolved.length === 0 || filterInvolved.includes('all');
     const customersAll = filterCustomers.length === 0 || filterCustomers.includes('all');
     return data
-      .filter(qr => {
-        const y = qr.startDate ? yearFromDate(qr.startDate)
-                : qr.endDate ? yearFromDate(qr.endDate)
-                : yearFromDate(qr.createdAt);
-        return y === year;
-      })
+      .filter(qr => preferYearForQuote(qr) === year)
       .filter(qr => creatorAll ? true : filterCreator.includes(qr.creatorCountry))
       .filter(qr => involvedAll ? true : filterInvolved.includes(qr.involvedCountry))
       .filter(qr => {

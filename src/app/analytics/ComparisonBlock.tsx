@@ -25,11 +25,38 @@ type QuoteRequest = {
   customerName?: string;
 };
 
-function yearFromDate(d?: any) {
+const parseDateValue = (value: any): Date | null => {
+  if (!value) return null;
   try {
-    const date = d?.toDate?.() || (typeof d === 'string' ? new Date(d) : d) || new Date();
-    return date.getFullYear();
-  } catch { return new Date().getFullYear(); }
+    if (typeof value.toDate === 'function') return value.toDate();
+  } catch {}
+  if (typeof value === 'number') {
+    const d = new Date(value);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  if (typeof value === 'string') {
+    let d = new Date(value);
+    if (!isNaN(d.getTime())) return d;
+    const m = value.match(/^(\d{1,2})[-\s]([A-Za-z]{3})[-\s](\d{4})$/);
+    if (m) {
+      const day = parseInt(m[1], 10);
+      const monStr = m[2].toLowerCase();
+      const year = parseInt(m[3], 10);
+      const monthIndex: Record<string, number> = { jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11 };
+      const mi = monthIndex[monStr as keyof typeof monthIndex];
+      if (mi !== undefined) {
+        d = new Date(Date.UTC(year, mi, day));
+        return isNaN(d.getTime()) ? null : d;
+      }
+    }
+  }
+  if (value instanceof Date) return value;
+  return null;
+};
+
+function yearFromDate(d?: any) {
+  const parsed = parseDateValue(d);
+  return parsed ? parsed.getUTCFullYear() : new Date().getUTCFullYear();
 }
 
 function monthIndex(d?: any) {
