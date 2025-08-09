@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { collection, getDocs, query, orderBy, deleteDoc, doc } from "firebase/firestore";
+import { collection, getDocs, query, orderBy, deleteDoc, doc, where } from "firebase/firestore";
 import { db } from "../../firebaseClient";
 import Link from "next/link";
 import { Chip } from "@mui/material";
@@ -28,6 +28,7 @@ export default function ArchivedPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
   const [deletingQuoteRequest, setDeletingQuoteRequest] = useState<string | null>(null);
   const { userProfile, user, loading: authLoading } = useAuth();
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -67,6 +68,35 @@ export default function ArchivedPage() {
     fetchLabels();
     fetchCustomers();
   }, [userProfile]);
+
+  const handleBulkDeleteTests = async () => {
+    if (userProfile?.role !== 'superAdmin') return;
+    const confirm = window.confirm("Delete all archived quote requests with 'test' in the title? This cannot be undone.");
+    if (!confirm) return;
+    try {
+      setBulkDeleting(true);
+      const lowerIncludesTest = (s: string) => (s || '').toLowerCase().includes('test');
+      const targets = quoteRequests.filter(qr => lowerIncludesTest(qr.title));
+      for (const qr of targets) {
+        await deleteDoc(doc(db, 'quoteRequests', qr.id));
+      }
+      // Refresh list
+      const q = query(collection(db, "quoteRequests"), orderBy("createdAt", "desc"));
+      const snapshot = await getDocs(q);
+      let all = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as QuoteRequest)).filter(qr => ["Won","Lost","Cancelled"].includes(qr.status));
+      if (userProfile?.role !== 'superAdmin' && (userProfile?.countries || []).length > 0) {
+        const userCountries = userProfile?.countries || [];
+        all = all.filter(qr => userCountries.includes(qr.creatorCountry) || userCountries.includes(qr.involvedCountry));
+      }
+      setQuoteRequests(all);
+      alert(`Deleted ${targets.length} archived requests containing 'test'.`);
+    } catch (e) {
+      console.error('Bulk delete failed', e);
+      alert('Bulk delete failed');
+    } finally {
+      setBulkDeleting(false);
+    }
+  };
 
   const getLabelName = (id: string) => labels.find(l => l.id === id)?.name || id;
   const getCustomerName = (id: string) => customers.find(c => c.id === id)?.name || id;
@@ -144,12 +174,19 @@ export default function ArchivedPage() {
    }
 
   return (
-    <div className="p-8">
-      <h1 className="text-2xl font-bold text-[#e40115] mb-4">Archived Quote Requests</h1>
+    <div className="p-6">
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-2xl font-bold text-[#e40115]">Archived</h1>
+        {userProfile?.role === 'superAdmin' && (
+          <button onClick={handleBulkDeleteTests} disabled={bulkDeleting} className="px-3 py-2 text-sm bg-[#e40115] text-white rounded hover:bg-red-700 disabled:opacity-50">
+            {bulkDeleting ? 'Deleting…' : "Delete 'Test' Archived"}
+          </button>
+        )}
+      </div>
       {loading ? (
-        <div>Loading...</div>
+        <div className="text-center py-20 text-gray-500">Loading archived quote requests...</div>
       ) : quoteRequests.length === 0 ? (
-        <div>No archived quote requests found.</div>
+        <div className="text-center py-20 text-gray-500">No archived requests found</div>
       ) : (
         <div className="overflow-x-auto">
           <table className="min-w-full bg-white rounded shadow">
