@@ -164,12 +164,20 @@ export default function AnalyticsPage() {
           <select value={year} onChange={(e)=>setYear(parseInt(e.target.value))} className="border rounded px-2 py-1">
             {years.map(y => (<option key={y} value={y}>{y}</option>))}
           </select>
-          <select multiple size={Math.min(8, creatorCountries.length)} value={filterCreator} onChange={(e)=>handleMultiChange(e, setFilterCreator)} className="border rounded px-2 py-1 min-w-[220px]">
+          <select multiple size={Math.min(6, creatorCountries.length)} value={filterCreator} onChange={(e)=>handleMultiChange(e, setFilterCreator)} className="border rounded px-2 py-1 min-w-[220px]">
             {creatorCountries.map(c => (<option key={c} value={c}>{c==='all'?'creator: all':c}</option>))}
           </select>
-          <select multiple size={Math.min(8, involvedCountries.length)} value={filterInvolved} onChange={(e)=>handleMultiChange(e, setFilterInvolved)} className="border rounded px-2 py-1 min-w-[220px]">
+          <select multiple size={Math.min(6, involvedCountries.length)} value={filterInvolved} onChange={(e)=>handleMultiChange(e, setFilterInvolved)} className="border rounded px-2 py-1 min-w-[220px]">
             {involvedCountries.map(c => (<option key={c} value={c}>{c==='all'?'involved: all':c}</option>))}
           </select>
+          <button
+            onClick={()=>{ setFilterCreator([]); setFilterInvolved([]); }}
+            className="px-3 py-1 border rounded text-gray-700 hover:bg-gray-100"
+            title="Clear selected countries"
+          >
+            Clear
+          </button>
+          <span className="text-xs text-gray-500 ml-1">Hold Ctrl/Cmd to multi-select</span>
         </div>
       </div>
 
