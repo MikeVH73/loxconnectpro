@@ -230,12 +230,11 @@ export default function AnalyticsPage() {
       const key = `${qr.creatorCountry}->${qr.involvedCountry}`;
       if (!map.has(key)) map.set(key, { creator: qr.creatorCountry, involved: qr.involvedCountry, total: 0, won: 0, lost: 0, cancelled: 0, wonEUR: 0, lostEUR: 0, cancelledEUR: 0 });
       const row = map.get(key)!;
-      row.total += 1;
       const s = qr.status?.toLowerCase();
       const eur = qr.totalValueEUR || 0;
-      if (s==='won') { row.won += 1; row.wonEUR += eur; }
-      else if (s==='lost') { row.lost += 1; row.lostEUR += eur; }
-      else if (s==='cancelled') { row.cancelled += 1; row.cancelledEUR += eur; }
+      if (s==='won') { row.won += 1; row.wonEUR += eur; row.total += 1; }
+      else if (s==='lost') { row.lost += 1; row.lostEUR += eur; row.total += 1; }
+      else if (s==='cancelled') { row.cancelled += 1; row.cancelledEUR += eur; row.total += 1; }
     });
     return Array.from(map.values()).sort((a,b) => (b.wonEUR - a.wonEUR) || (b.won - a.won));
   }, [filtered]);
@@ -351,7 +350,7 @@ export default function AnalyticsPage() {
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <div className="p-4 bg-white rounded shadow">
-              <div className="text-sm text-gray-700 mb-2">By Month (counts)</div>
+              <div className="text-sm text-gray-700 mb-2">By Month (counts) — {year}</div>
               <div className="h-72">
               <Bar
                 data={{
@@ -367,7 +366,7 @@ export default function AnalyticsPage() {
               </div>
             </div>
             <div className="p-4 bg-white rounded shadow">
-              <div className="text-sm text-gray-700 mb-2">Distribution (counts)</div>
+              <div className="text-sm text-gray-700 mb-2">Distribution (counts) — {year}</div>
               <div className="h-72">
               <Pie
                 data={{
@@ -384,7 +383,7 @@ export default function AnalyticsPage() {
               </div>
             </div>
             <div className="p-4 bg-white rounded shadow">
-              <div className="text-sm text-gray-700 mb-2">Distribution (EUR)</div>
+              <div className="text-sm text-gray-700 mb-2">Distribution (EUR) — {year}</div>
               <div className="h-72">
               <Pie
                 data={{
