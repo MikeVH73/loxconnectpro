@@ -1223,7 +1223,7 @@ export default function EditQuoteRequest() {
                           value={product.quantity}
                           onChange={(e) => handleInputChange(`products.${index}.quantity`, parseInt(e.target.value))}
                           placeholder="Qty"
-                          className="col-span-1 p-2 border border-gray-300 rounded"
+                          className="col-span-1 p-2 border border-gray-300 rounded w-24"
                           min="1"
                         />
                         {

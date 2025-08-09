@@ -161,7 +161,7 @@ export default function AnalyticsPage() {
     const creatorAll = filterCreator.length === 0 || filterCreator.includes('all');
     const involvedAll = filterInvolved.length === 0 || filterInvolved.includes('all');
     const customersAll = filterCustomers.length === 0 || filterCustomers.includes('all');
-    return data
+    const arr = data
       .filter(qr => preferYearForQuote(qr) === year)
       .filter(qr => creatorAll ? true : filterCreator.includes(qr.creatorCountry))
       .filter(qr => involvedAll ? true : filterInvolved.includes(qr.involvedCountry))
@@ -171,6 +171,7 @@ export default function AnalyticsPage() {
         const name = (qr as any).customerName;
         return (id && filterCustomers.includes(id)) || (name && filterCustomers.includes(name));
       });
+    return arr;
   }, [data, year, filterCreator, filterInvolved, filterCustomers]);
 
   const totals = useMemo(() => {
@@ -314,6 +315,12 @@ export default function AnalyticsPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-[#e40115] mb-2">Analytics</h1>
       </div>
+      {/* Debug counters to validate totals vs dashboard (visible only to superAdmin) */}
+      {userProfile?.role==='superAdmin' && (
+        <div className="mb-2 text-xs text-gray-500">
+          Debug: loaded {data.length} visible QRs; year {year}: {filtered.length} items; creator filter: {filterCreator.join(',')||'all'}; involved filter: {filterInvolved.join(',')||'all'}
+        </div>
+      )}
       <div className="mb-1 text-xs text-gray-500">Hold Ctrl/Cmd to multi-select</div>
       <div className="flex flex-wrap items-end gap-2 text-sm mb-4">
           {userProfile?.role==='superAdmin' && (
