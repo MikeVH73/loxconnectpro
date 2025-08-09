@@ -2,13 +2,22 @@ import { collection, addDoc, getDocs, serverTimestamp } from "firebase/firestore
 import { db } from "../../firebaseClient";
 
 const initialCountries = [
-  "Netherlands",
-  "France", 
-  "Germany",
-  "UK",
-  "Belgium",
-  "Sweden",
-  "Switzerland"
+  "Loxcall Netherlands",
+  "Loxcall France",
+  "Loxcall Germany",
+  "Loxcall UK",
+  "Loxcall Belgium",
+  "Loxcall Sweden",
+  "Loxcall Switzerland",
+  "Loxcall Spain",
+  "Loxcall Italy",
+  "Loxcall Luxembourg",
+  "Loxcall Ireland",
+  "Loxcall Portugal",
+  "Loxcall Denmark",
+  "Loxcall Norway",
+  "Loxcall Poland",
+  "Loxcall Austria",
 ];
 
 export const seedCountries = async () => {

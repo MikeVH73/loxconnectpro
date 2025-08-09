@@ -46,8 +46,8 @@ export default function AnalyticsPage() {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<QuoteRequest[]>([]);
   const [year, setYear] = useState<number>(new Date().getFullYear());
-  const [filterCreator, setFilterCreator] = useState<string>("all");
-  const [filterInvolved, setFilterInvolved] = useState<string>("all");
+  const [filterCreator, setFilterCreator] = useState<string[]>([]);
+  const [filterInvolved, setFilterInvolved] = useState<string[]>([]);
   const [roleScope, setRoleScope] = useState<'my'|'all'>('my');
 
   useEffect(() => {
@@ -82,10 +82,12 @@ export default function AnalyticsPage() {
   }, [data]);
 
   const filtered = useMemo(() => {
+    const creatorAll = filterCreator.length === 0 || filterCreator.includes('all');
+    const involvedAll = filterInvolved.length === 0 || filterInvolved.includes('all');
     return data
       .filter(qr => yearFromDate(qr.createdAt) === year)
-      .filter(qr => filterCreator==='all' ? true : qr.creatorCountry===filterCreator)
-      .filter(qr => filterInvolved==='all' ? true : qr.involvedCountry===filterInvolved);
+      .filter(qr => creatorAll ? true : filterCreator.includes(qr.creatorCountry))
+      .filter(qr => involvedAll ? true : filterInvolved.includes(qr.involvedCountry));
   }, [data, year, filterCreator, filterInvolved]);
 
   const totals = useMemo(() => {
@@ -109,6 +111,11 @@ export default function AnalyticsPage() {
     data.forEach(qr => { s.add(qr.involvedCountry); });
     return ['all', ...Array.from(s).sort()];
   }, [data]);
+
+  const handleMultiChange = (e: React.ChangeEvent<HTMLSelectElement>, setter: (v: string[]) => void) => {
+    const selected = Array.from(e.target.selectedOptions).map(o => o.value);
+    setter(selected);
+  };
 
   // Monthly bar data (counts per month by status)
   const monthly = useMemo(() => {
@@ -157,10 +164,10 @@ export default function AnalyticsPage() {
           <select value={year} onChange={(e)=>setYear(parseInt(e.target.value))} className="border rounded px-2 py-1">
             {years.map(y => (<option key={y} value={y}>{y}</option>))}
           </select>
-          <select value={filterCreator} onChange={(e)=>setFilterCreator(e.target.value)} className="border rounded px-2 py-1">
+          <select multiple size={Math.min(8, creatorCountries.length)} value={filterCreator} onChange={(e)=>handleMultiChange(e, setFilterCreator)} className="border rounded px-2 py-1 min-w-[220px]">
             {creatorCountries.map(c => (<option key={c} value={c}>{c==='all'?'creator: all':c}</option>))}
           </select>
-          <select value={filterInvolved} onChange={(e)=>setFilterInvolved(e.target.value)} className="border rounded px-2 py-1">
+          <select multiple size={Math.min(8, involvedCountries.length)} value={filterInvolved} onChange={(e)=>handleMultiChange(e, setFilterInvolved)} className="border rounded px-2 py-1 min-w-[220px]">
             {involvedCountries.map(c => (<option key={c} value={c}>{c==='all'?'involved: all':c}</option>))}
           </select>
         </div>
