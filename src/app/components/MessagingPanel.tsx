@@ -209,7 +209,7 @@ export default function MessagingPanel({
                     {message.sender === currentUser ? 'You' : message.senderCountry}
               </div>
               <div className="break-words">{message.text}</div>
-                  {message.files && message.files.length > 0 && (
+                  {Array.isArray(message.files) && message.files.length > 0 && (
                 <div className="mt-2 space-y-1">
                   {message.files.map((file, index) => (
                         <div key={index} className="flex items-center text-sm">

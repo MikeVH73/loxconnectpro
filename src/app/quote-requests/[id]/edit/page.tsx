@@ -159,6 +159,7 @@ export default function EditQuoteRequest() {
   const [calculatorDirty, setCalculatorDirty] = useState(false);
   // Quick Add product modal state
   const [quickAdd, setQuickAdd] = useState<{ index: number; code: string } | null>(null);
+  const [quickAddCode, setQuickAddCode] = useState<string>("");
   const [quickAddDesc, setQuickAddDesc] = useState<string>("");
 
   // Helper function to get customer name from ID
@@ -1200,6 +1201,7 @@ export default function EditQuoteRequest() {
                                 if (!confirmAdd) return;
                                 // Open Quick Add inline modal
                                 setQuickAdd({ index, code });
+                                setQuickAddCode(code);
                               }
                             }}
                             className="col-span-1 text-blue-600 underline text-xs"
@@ -1610,7 +1612,7 @@ export default function EditQuoteRequest() {
             <h3 className="text-lg font-semibold">Add product to catalog</h3>
             <div>
               <label className="block text-sm mb-1">Cat-Class</label>
-              <input value={quickAdd.code} disabled className="w-full border rounded px-3 py-2 bg-gray-100" />
+              <input value={quickAddCode || quickAdd.code} onChange={e=>setQuickAddCode(e.target.value)} className="w-full border rounded px-3 py-2" />
             </div>
             <div>
               <label className="block text-sm mb-1">Description</label>
@@ -1620,7 +1622,7 @@ export default function EditQuoteRequest() {
               <button onClick={()=>{ setQuickAdd(null); setQuickAddDesc(''); }} className="px-3 py-2 border rounded">Cancel</button>
               <button onClick={async()=>{
                 try {
-                  const code = normalizeCode(quickAdd.code);
+                  const code = normalizeCode(quickAddCode || quickAdd.code);
                   if (!code || !quickAddDesc.trim()) return;
                   const { upsertProduct } = await import('../../../utils/products');
                   await upsertProduct({ catClass: code, description: quickAddDesc.trim(), active: true });
@@ -1628,6 +1630,7 @@ export default function EditQuoteRequest() {
                   handleInputChange(`products.${quickAdd.index}.description`, quickAddDesc.trim());
                   setQuickAdd(null);
                   setQuickAddDesc('');
+                  setQuickAddCode('');
                 } catch (e:any) {
                   alert(e?.message || 'Failed to add product');
                 }
