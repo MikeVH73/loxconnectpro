@@ -214,7 +214,7 @@ export default function EditQuoteRequest() {
           setQuoteRequest({
             id: quoteDoc.id,
             title: data.title || '',
-            products: data.products || [],
+            products: Array.isArray(data.products) ? data.products : [],
             creatorCountry: data.creatorCountry || '',
             involvedCountry: data.involvedCountry || '',
             startDate: data.startDate || '',
@@ -1179,14 +1179,14 @@ export default function EditQuoteRequest() {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Products</label>
                   <div className="space-y-2">
-                    {quoteRequest.products.map((product, index) => (
+                    {(Array.isArray(quoteRequest.products) ? quoteRequest.products : []).map((product, index) => (
                       <div key={index} className="grid grid-cols-12 gap-2 items-center">
                         <input
                           type="text"
                           value={product.catClass}
                           onChange={(e) => handleInputChange(`products.${index}.catClass`, e.target.value)}
                           placeholder="Product Code"
-                          className="col-span-2 p-2 border border-gray-300 rounded"
+                          className="col-span-4 p-2 border border-gray-300 rounded"
                         />
                         {
                           <button
@@ -1216,14 +1216,14 @@ export default function EditQuoteRequest() {
                           value={product.description}
                           onChange={(e) => handleInputChange(`products.${index}.description`, e.target.value)}
                           placeholder="Description"
-                          className="col-span-6 p-2 border border-gray-300 rounded"
+                          className="col-span-5 p-2 border border-gray-300 rounded"
                         />
                         <input
                           type="number"
                           value={product.quantity}
                           onChange={(e) => handleInputChange(`products.${index}.quantity`, parseInt(e.target.value))}
                           placeholder="Qty"
-                          className="col-span-2 p-2 border border-gray-300 rounded"
+                          className="col-span-1 p-2 border border-gray-300 rounded"
                           min="1"
                         />
                         {
