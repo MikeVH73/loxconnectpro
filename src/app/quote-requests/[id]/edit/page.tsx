@@ -302,7 +302,7 @@ export default function EditQuoteRequest() {
       };
       const sanitizedUpdateData = stripUndefined(updateData);
       // Convert nulls for calculator fields into deleteField() so previous values are removed
-      const nullableFields = ['totalValueLocal','totalValueRateToEUR','rateSource','rateDate'];
+      const nullableFields = ['totalValueLocal','totalValueRateToEUR','rateSource','rateDate','totalValueEUR'];
       nullableFields.forEach((key) => {
         if ((quoteRequest as any)[key] === null) {
           (sanitizedUpdateData as any)[key] = deleteField();
@@ -940,6 +940,7 @@ export default function EditQuoteRequest() {
     handleInputChange('totalValueRateToEUR', null);
     handleInputChange('rateSource', null);
     handleInputChange('rateDate', null);
+    handleInputChange('totalValueEUR', null);
     handleInputChange('usedLocalCurrency', false);
     setCalculatorDirty(true);
   };
