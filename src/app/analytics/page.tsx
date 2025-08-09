@@ -46,7 +46,8 @@ export default function AnalyticsPage() {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<QuoteRequest[]>([]);
   const [year, setYear] = useState<number>(new Date().getFullYear());
-  const [countryFilter, setCountryFilter] = useState<string>("all");
+  const [filterCreator, setFilterCreator] = useState<string>("all");
+  const [filterInvolved, setFilterInvolved] = useState<string>("all");
   const [roleScope, setRoleScope] = useState<'my'|'all'>('my');
 
   useEffect(() => {
@@ -81,9 +82,11 @@ export default function AnalyticsPage() {
   }, [data]);
 
   const filtered = useMemo(() => {
-    return data.filter(qr => yearFromDate(qr.createdAt) === year)
-      .filter(qr => countryFilter==='all' ? true : (qr.creatorCountry===countryFilter || qr.involvedCountry===countryFilter));
-  }, [data, year, countryFilter]);
+    return data
+      .filter(qr => yearFromDate(qr.createdAt) === year)
+      .filter(qr => filterCreator==='all' ? true : qr.creatorCountry===filterCreator)
+      .filter(qr => filterInvolved==='all' ? true : qr.involvedCountry===filterInvolved);
+  }, [data, year, filterCreator, filterInvolved]);
 
   const totals = useMemo(() => {
     const agg = { won:0, lost:0, cancelled:0, totalWonEUR:0, totalLostEUR:0, totalCancelledEUR:0 } as any;
@@ -96,9 +99,14 @@ export default function AnalyticsPage() {
     return agg;
   }, [filtered]);
 
-  const countries = useMemo(() => {
+  const creatorCountries = useMemo(() => {
     const s = new Set<string>();
-    data.forEach(qr => { s.add(qr.creatorCountry); s.add(qr.involvedCountry); });
+    data.forEach(qr => { s.add(qr.creatorCountry); });
+    return ['all', ...Array.from(s).sort()];
+  }, [data]);
+  const involvedCountries = useMemo(() => {
+    const s = new Set<string>();
+    data.forEach(qr => { s.add(qr.involvedCountry); });
     return ['all', ...Array.from(s).sort()];
   }, [data]);
 
@@ -142,15 +150,18 @@ export default function AnalyticsPage() {
     <div className="p-6">
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-bold text-[#e40115]">Analytics</h1>
-        <div className="flex items-center gap-2 text-sm">
+        <div className="flex flex-wrap items-center gap-2 text-sm">
           {userProfile?.role==='superAdmin' && (
             <label className="flex items-center gap-1"><input type="checkbox" checked={roleScope==='all'} onChange={(e)=>setRoleScope(e.target.checked?'all':'my')} /> Show all countries</label>
           )}
           <select value={year} onChange={(e)=>setYear(parseInt(e.target.value))} className="border rounded px-2 py-1">
             {years.map(y => (<option key={y} value={y}>{y}</option>))}
           </select>
-          <select value={countryFilter} onChange={(e)=>setCountryFilter(e.target.value)} className="border rounded px-2 py-1">
-            {countries.map(c => (<option key={c} value={c}>{c}</option>))}
+          <select value={filterCreator} onChange={(e)=>setFilterCreator(e.target.value)} className="border rounded px-2 py-1">
+            {creatorCountries.map(c => (<option key={c} value={c}>{c==='all'?'creator: all':c}</option>))}
+          </select>
+          <select value={filterInvolved} onChange={(e)=>setFilterInvolved(e.target.value)} className="border rounded px-2 py-1">
+            {involvedCountries.map(c => (<option key={c} value={c}>{c==='all'?'involved: all':c}</option>))}
           </select>
         </div>
       </div>
@@ -177,9 +188,10 @@ export default function AnalyticsPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <div className="p-4 bg-white rounded shadow">
               <div className="text-sm text-gray-700 mb-2">By Month (counts)</div>
+              <div className="h-72">
               <Bar
                 data={{
                   labels: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],
@@ -189,11 +201,13 @@ export default function AnalyticsPage() {
                     { label: 'Cancelled', data: monthly.cancelled, backgroundColor: 'rgba(234,179,8,0.6)' },
                   ]
                 }}
-                options={{ responsive: true, plugins: { legend: { position: 'bottom' } } }}
+                options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }}
               />
+              </div>
             </div>
             <div className="p-4 bg-white rounded shadow">
               <div className="text-sm text-gray-700 mb-2">Distribution (counts)</div>
+              <div className="h-72">
               <Pie
                 data={{
                   labels: ['Won','Lost','Cancelled'],
@@ -204,8 +218,28 @@ export default function AnalyticsPage() {
                     borderColor: ['#16a34a','#dc2626','#ca8a04']
                   }]
                 }}
-                options={{ responsive: true, plugins: { legend: { position: 'bottom' } } }}
+                options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }}
               />
+              </div>
+            </div>
+            <div className="p-4 bg-white rounded shadow">
+              <div className="text-sm text-gray-700 mb-2">Distribution (EUR)</div>
+              <div className="h-72">
+              <Pie
+                data={{
+                  labels: ['Won EUR','Lost EUR','Cancelled EUR'],
+                  datasets: [{
+                    label: 'EUR',
+                    data: [totals.totalWonEUR, totals.totalLostEUR, totals.totalCancelledEUR],
+                    backgroundColor: ['rgba(34,197,94,0.6)','rgba(239,68,68,0.6)','rgba(234,179,8,0.6)'],
+                    borderColor: ['#16a34a','#dc2626','#ca8a04']
+                  }]
+                }}
+                options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } },
+                  scales: {}
+                }}
+              />
+              </div>
             </div>
           </div>
 
