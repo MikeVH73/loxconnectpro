@@ -3,6 +3,24 @@ import { useEffect, useMemo, useState } from "react";
 import { collection, getDocs, query, orderBy, Firestore } from "firebase/firestore";
 import { db } from "../../firebaseClient";
 import { useAuth } from "../AuthProvider";
+import dynamic from "next/dynamic";
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title as ChartTitle,
+  Tooltip,
+  Legend,
+  ArcElement,
+} from 'chart.js';
+
+// Register Chart.js components once
+ChartJS.register(CategoryScale, LinearScale, BarElement, ChartTitle, Tooltip, Legend, ArcElement);
+
+// Dynamically import charts to avoid SSR issues
+const Bar = dynamic(() => import('react-chartjs-2').then(m => m.Bar), { ssr: false });
+const Pie = dynamic(() => import('react-chartjs-2').then(m => m.Pie), { ssr: false });
 
 interface QuoteRequest {
   id: string;
@@ -68,12 +86,12 @@ export default function AnalyticsPage() {
   }, [data, year, countryFilter]);
 
   const totals = useMemo(() => {
-    const agg = { won:0, lost:0, cancelled:0, totalWonEUR:0 } as any;
+    const agg = { won:0, lost:0, cancelled:0, totalWonEUR:0, totalLostEUR:0, totalCancelledEUR:0 } as any;
     filtered.forEach(qr => {
       const status = qr.status?.toLowerCase();
       if (status==='won') { agg.won++; agg.totalWonEUR += qr.totalValueEUR || 0; }
-      if (status==='lost') agg.lost++;
-      if (status==='cancelled') agg.cancelled++;
+      if (status==='lost') { agg.lost++; agg.totalLostEUR += qr.totalValueEUR || 0; }
+      if (status==='cancelled') { agg.cancelled++; agg.totalCancelledEUR += qr.totalValueEUR || 0; }
     });
     return agg;
   }, [filtered]);
@@ -83,6 +101,42 @@ export default function AnalyticsPage() {
     data.forEach(qr => { s.add(qr.creatorCountry); s.add(qr.involvedCountry); });
     return ['all', ...Array.from(s).sort()];
   }, [data]);
+
+  // Monthly bar data (counts per month by status)
+  const monthly = useMemo(() => {
+    const base = () => Array.from({ length: 12 }, () => 0);
+    const won = base();
+    const lost = base();
+    const cancelled = base();
+    filtered.forEach(qr => {
+      const created = qr.createdAt?.toDate?.() || (typeof qr.createdAt === 'string' ? new Date(qr.createdAt) : qr.createdAt);
+      const d = created instanceof Date ? created : new Date();
+      const m = d.getMonth();
+      const s = qr.status?.toLowerCase();
+      if (s === 'won') won[m] += 1;
+      else if (s === 'lost') lost[m] += 1;
+      else if (s === 'cancelled') cancelled[m] += 1;
+    });
+    return { won, lost, cancelled };
+  }, [filtered]);
+
+  // Pair table: KPIs between creatorCountry and involvedCountry
+  type PairKey = string; // `${creator}->${involved}`
+  const pairRows = useMemo(() => {
+    const map = new Map<PairKey, { creator: string; involved: string; total: number; won: number; lost: number; cancelled: number; wonEUR: number; lostEUR: number; cancelledEUR: number }>();
+    filtered.forEach(qr => {
+      const key = `${qr.creatorCountry}->${qr.involvedCountry}`;
+      if (!map.has(key)) map.set(key, { creator: qr.creatorCountry, involved: qr.involvedCountry, total: 0, won: 0, lost: 0, cancelled: 0, wonEUR: 0, lostEUR: 0, cancelledEUR: 0 });
+      const row = map.get(key)!;
+      row.total += 1;
+      const s = qr.status?.toLowerCase();
+      const eur = qr.totalValueEUR || 0;
+      if (s==='won') { row.won += 1; row.wonEUR += eur; }
+      else if (s==='lost') { row.lost += 1; row.lostEUR += eur; }
+      else if (s==='cancelled') { row.cancelled += 1; row.cancelledEUR += eur; }
+    });
+    return Array.from(map.values()).sort((a,b) => (b.wonEUR - a.wonEUR) || (b.won - a.won));
+  }, [filtered]);
 
   return (
     <div className="p-6">
@@ -114,25 +168,88 @@ export default function AnalyticsPage() {
             <div className="p-4 bg-white rounded shadow">
               <div className="text-sm text-gray-500">Lost</div>
               <div className="text-2xl font-semibold">{totals.lost}</div>
+              <div className="text-sm text-gray-500">EUR {totals.totalLostEUR.toLocaleString(undefined,{maximumFractionDigits:0})}</div>
             </div>
             <div className="p-4 bg-white rounded shadow">
               <div className="text-sm text-gray-500">Cancelled</div>
               <div className="text-2xl font-semibold">{totals.cancelled}</div>
+              <div className="text-sm text-gray-500">EUR {totals.totalCancelledEUR.toLocaleString(undefined,{maximumFractionDigits:0})}</div>
             </div>
           </div>
 
-          <div className="p-4 bg-white rounded shadow">
-            <div className="text-sm text-gray-700 mb-2">Notes</div>
-            <ul className="text-sm text-gray-600 list-disc pl-5 space-y-1">
-              <li>Analytics are based on EUR totals if available; many existing Quote Requests may not have a total yet. This view updates automatically as values are added.</li>
-              <li>Filters: year (default current), optional country scope, optional show-all for superAdmin.</li>
-              <li>Next steps: add charts (stacked bars by month, pie charts by status/country) and a map view.</li>
-            </ul>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="p-4 bg-white rounded shadow">
+              <div className="text-sm text-gray-700 mb-2">By Month (counts)</div>
+              <Bar
+                data={{
+                  labels: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],
+                  datasets: [
+                    { label: 'Won', data: monthly.won, backgroundColor: 'rgba(34,197,94,0.6)' },
+                    { label: 'Lost', data: monthly.lost, backgroundColor: 'rgba(239,68,68,0.6)' },
+                    { label: 'Cancelled', data: monthly.cancelled, backgroundColor: 'rgba(234,179,8,0.6)' },
+                  ]
+                }}
+                options={{ responsive: true, plugins: { legend: { position: 'bottom' } } }}
+              />
+            </div>
+            <div className="p-4 bg-white rounded shadow">
+              <div className="text-sm text-gray-700 mb-2">Distribution (counts)</div>
+              <Pie
+                data={{
+                  labels: ['Won','Lost','Cancelled'],
+                  datasets: [{
+                    label: 'Count',
+                    data: [totals.won, totals.lost, totals.cancelled],
+                    backgroundColor: ['rgba(34,197,94,0.6)','rgba(239,68,68,0.6)','rgba(234,179,8,0.6)'],
+                    borderColor: ['#16a34a','#dc2626','#ca8a04']
+                  }]
+                }}
+                options={{ responsive: true, plugins: { legend: { position: 'bottom' } } }}
+              />
+            </div>
+          </div>
+
+          <div className="p-4 bg-white rounded shadow overflow-auto">
+            <div className="text-sm text-gray-700 mb-3">KPIs between creatorCountry → involvedCountry</div>
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="text-left border-b">
+                  <th className="py-2 pr-4">Creator</th>
+                  <th className="py-2 pr-4">Involved</th>
+                  <th className="py-2 pr-4"># Total</th>
+                  <th className="py-2 pr-4"># Won</th>
+                  <th className="py-2 pr-4"># Lost</th>
+                  <th className="py-2 pr-4"># Cancelled</th>
+                  <th className="py-2 pr-4">EUR Won</th>
+                  <th className="py-2 pr-4">EUR Lost</th>
+                  <th className="py-2 pr-4">EUR Cancelled</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pairRows.map(r => (
+                  <tr key={`${r.creator}->${r.involved}`} className="border-b last:border-0">
+                    <td className="py-2 pr-4">{r.creator}</td>
+                    <td className="py-2 pr-4">{r.involved}</td>
+                    <td className="py-2 pr-4">{r.total}</td>
+                    <td className="py-2 pr-4">{r.won}</td>
+                    <td className="py-2 pr-4">{r.lost}</td>
+                    <td className="py-2 pr-4">{r.cancelled}</td>
+                    <td className="py-2 pr-4">{Math.round(r.wonEUR).toLocaleString()}</td>
+                    <td className="py-2 pr-4">{Math.round(r.lostEUR).toLocaleString()}</td>
+                    <td className="py-2 pr-4">{Math.round(r.cancelledEUR).toLocaleString()}</td>
+                  </tr>
+                ))}
+                {pairRows.length===0 && (
+                  <tr><td colSpan={9} className="py-3 text-gray-500">No data for selected filters</td></tr>
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
     </div>
   );
 }
+
 
 
