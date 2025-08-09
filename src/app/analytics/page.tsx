@@ -54,6 +54,7 @@ export default function AnalyticsPage() {
   const [filterInvolved, setFilterInvolved] = useState<string[]>([]);
   const [filterCustomers, setFilterCustomers] = useState<string[]>([]);
   const [customers, setCustomers] = useState<{ id: string; name: string }[]>([]);
+  const [customerSearch, setCustomerSearch] = useState<string>("");
   const [roleScope, setRoleScope] = useState<'my'|'all'>('my');
 
   useEffect(() => {
@@ -142,7 +143,10 @@ export default function AnalyticsPage() {
     setter(selected);
   };
 
-  const customerOptions = useMemo(() => ['all', ...customers.map(c => c.id)], [customers]);
+  const customerOptions = useMemo(() => {
+    const list = customers.filter(c => c.name.toLowerCase().includes(customerSearch.toLowerCase()));
+    return ['all', ...list.map(c => c.id)];
+  }, [customers, customerSearch]);
   const customerLabel = (id: string) => id === 'all' ? 'customer: all' : (customers.find(c => c.id === id)?.name || id);
 
   // Monthly bar data (counts per month by status)
@@ -199,9 +203,12 @@ export default function AnalyticsPage() {
           <select multiple size={Math.min(6, involvedCountries.length)} value={filterInvolved} onChange={(e)=>handleMultiChange(e, setFilterInvolved)} className="border rounded px-2 py-1 min-w-[220px]">
             {involvedCountries.map(c => (<option key={c} value={c}>{c==='all'?'involved: all':c}</option>))}
           </select>
-          <select multiple size={Math.min(6, customerOptions.length)} value={filterCustomers} onChange={(e)=>handleMultiChange(e, setFilterCustomers)} className="border rounded px-2 py-1 min-w-[240px]">
+          <div className="flex flex-col gap-1">
+            <input value={customerSearch} onChange={(e)=>setCustomerSearch(e.target.value)} placeholder="Search customers" className="border rounded px-2 py-1 min-w-[240px]" />
+            <select multiple size={Math.min(6, customerOptions.length)} value={filterCustomers} onChange={(e)=>handleMultiChange(e, setFilterCustomers)} className="border rounded px-2 py-1 min-w-[240px]">
             {customerOptions.map(id => (<option key={id} value={id}>{customerLabel(id)}</option>))}
-          </select>
+            </select>
+          </div>
           <button
             onClick={()=>{ setFilterCreator([]); setFilterInvolved([]); setFilterCustomers([]); }}
             className="px-3 py-1 border rounded text-gray-700 hover:bg-gray-100"
