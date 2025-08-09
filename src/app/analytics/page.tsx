@@ -78,6 +78,11 @@ const preferYearForQuote = (qr: any): number | null => {
   return yearFromDate(qr.startDate) ?? yearFromDate(qr.endDate) ?? yearFromDate(qr.createdAt);
 };
 
+const monthFromQuote = (qr: any): number => {
+  const d = parseDateValue(qr.startDate) || parseDateValue(qr.endDate) || parseDateValue(qr.createdAt) || new Date();
+  return d.getUTCMonth();
+};
+
 export default function AnalyticsPage() {
   const { userProfile } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -208,9 +213,7 @@ export default function AnalyticsPage() {
     const lost = base();
     const cancelled = base();
     filtered.forEach(qr => {
-      const created = qr.createdAt?.toDate?.() || (typeof qr.createdAt === 'string' ? new Date(qr.createdAt) : qr.createdAt);
-      const d = created instanceof Date ? created : new Date();
-      const m = d.getMonth();
+      const m = monthFromQuote(qr);
       const s = qr.status?.toLowerCase();
       if (s === 'won') won[m] += 1;
       else if (s === 'lost') lost[m] += 1;

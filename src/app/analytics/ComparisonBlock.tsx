@@ -59,9 +59,9 @@ function yearFromDate(d?: any) {
   return parsed ? parsed.getUTCFullYear() : new Date().getUTCFullYear();
 }
 
-function monthIndex(d?: any) {
-  const date = d?.toDate?.() || (typeof d === 'string' ? new Date(d) : d) || new Date();
-  return date.getMonth();
+function monthIndexFromQuote(qr: any) {
+  const d = parseDateValue(qr.startDate) || parseDateValue(qr.endDate) || parseDateValue(qr.createdAt) || new Date();
+  return d.getUTCMonth();
 }
 
 export default function ComparisonBlock({
@@ -117,7 +117,7 @@ export default function ComparisonBlock({
     const lost = Array.from({length:12},()=>0);
     const cancelled = Array.from({length:12},()=>0);
     items.forEach(qr => {
-      const m = monthIndex(qr.createdAt);
+      const m = monthIndexFromQuote(qr);
       const s = qr.status?.toLowerCase();
       if (s==='won') won[m] += 1; else if (s==='lost') lost[m] += 1; else if (s==='cancelled') cancelled[m] += 1;
     });
