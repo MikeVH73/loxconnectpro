@@ -84,7 +84,7 @@ export default function ComparisonBlock({
     const involvedAll = filterInvolved.length === 0 || filterInvolved.includes('all');
     const customersAll = filterCustomers.length === 0 || filterCustomers.includes('all');
     return data
-      .filter(qr => yearFromDate(qr.createdAt) === year)
+      .filter(qr => (yearFromDate(qr.startDate) ?? yearFromDate(qr.endDate) ?? yearFromDate(qr.createdAt)) === year)
       .filter(qr => creatorAll ? true : filterCreator.includes(qr.creatorCountry))
       .filter(qr => involvedAll ? true : filterInvolved.includes(qr.involvedCountry))
       .filter(qr => {
