@@ -117,6 +117,9 @@ const NewQuoteRequestPage = () => {
   const [success, setSuccess] = useState("");
   const [attachments, setAttachments] = useState<FileData[]>([]);
   const [customerNumber, setCustomerNumber] = useState("");
+  // Quick Add product modal state
+  const [quickAdd, setQuickAdd] = useState<{ index: number; code: string } | null>(null);
+  const [quickAddDesc, setQuickAddDesc] = useState<string>("");
 
   useEffect(() => {
     // Simple initialization check
@@ -451,7 +454,9 @@ const NewQuoteRequestPage = () => {
                     newProducts[idx].description = p.description;
                     setProducts(newProducts);
                   } else {
-                    alert('Product not found in catalog');
+                    const confirmAdd = confirm('Product not found. Add to catalog?');
+                    if (!confirmAdd) return;
+                    setQuickAdd({ index: idx, code });
                   }
                 }}
                 className="text-blue-600 underline text-xs self-center"
@@ -698,6 +703,41 @@ const NewQuoteRequestPage = () => {
                   Add Contact
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Quick Add Product Modal */}
+      {quickAdd && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded p-4 w-full max-w-md space-y-3">
+            <h3 className="text-lg font-semibold">Add product to catalog</h3>
+            <div>
+              <label className="block text-sm mb-1">Cat-Class</label>
+              <input value={quickAdd.code} disabled className="w-full border rounded px-3 py-2 bg-gray-100" />
+            </div>
+            <div>
+              <label className="block text-sm mb-1">Description</label>
+              <input value={quickAddDesc} onChange={e=>setQuickAddDesc(e.target.value)} className="w-full border rounded px-3 py-2" />
+            </div>
+            <div className="flex justify-end gap-2">
+              <button onClick={()=>{ setQuickAdd(null); setQuickAddDesc(''); }} className="px-3 py-2 border rounded">Cancel</button>
+              <button onClick={async()=>{
+                try {
+                  const code = normalizeCode(quickAdd.code);
+                  if (!code || !quickAddDesc.trim()) return;
+                  const { upsertProduct } = await import('../../utils/products');
+                  await upsertProduct({ catClass: code, description: quickAddDesc.trim(), active: true });
+                  const newProducts = [...products];
+                  newProducts[quickAdd.index].catClass = code;
+                  newProducts[quickAdd.index].description = quickAddDesc.trim();
+                  setProducts(newProducts);
+                  setQuickAdd(null);
+                  setQuickAddDesc('');
+                } catch (e:any) {
+                  alert(e?.message || 'Failed to add product');
+                }
+              }} className="px-3 py-2 bg-[#e40115] text-white rounded">Save</button>
             </div>
           </div>
         </div>

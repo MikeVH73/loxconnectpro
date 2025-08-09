@@ -35,6 +35,12 @@ export async function getProductByCode(code: string): Promise<Product | null> {
   return null;
 }
 
+export async function findDuplicateByCode(code: string): Promise<Product | null> {
+  const cat = normalizeCode(code);
+  if (!cat) return null;
+  return await getProductByCode(cat);
+}
+
 export async function listProducts(): Promise<Product[]> {
   if (!db) return [];
   const productsRef = collection(db as Firestore, 'products');
@@ -52,6 +58,11 @@ export async function upsertProduct(p: Product): Promise<string> {
     aliases: (p.aliases || []).map(normalizeCode),
     updatedAt: serverTimestamp(),
   } as any;
+  // Duplicate protection
+  const existing = await getProductByCode(payload.catClass);
+  if (existing && existing.id !== p.id) {
+    throw new Error(`Product with code ${payload.catClass} already exists`);
+  }
   if (p.id) {
     await updateDoc(doc(db as Firestore, 'products', p.id), payload);
     return p.id;

@@ -157,6 +157,9 @@ export default function EditQuoteRequest() {
   const [showTotalValueModal, setShowTotalValueModal] = useState(false);
   const [rateDirection, setRateDirection] = useState<'LOCAL_TO_EUR' | 'EUR_TO_LOCAL'>('LOCAL_TO_EUR');
   const [calculatorDirty, setCalculatorDirty] = useState(false);
+  // Quick Add product modal state
+  const [quickAdd, setQuickAdd] = useState<{ index: number; code: string } | null>(null);
+  const [quickAddDesc, setQuickAddDesc] = useState<string>("");
 
   // Helper function to get customer name from ID
   const getCustomerName = (customerId: string) => {
@@ -1193,7 +1196,10 @@ export default function EditQuoteRequest() {
                                 handleInputChange(`products.${index}.catClass`, p.catClass);
                                 handleInputChange(`products.${index}.description`, p.description);
                               } else {
-                                alert('Product not found in catalog');
+                                const confirmAdd = confirm('Product not found. Add to catalog?');
+                                if (!confirmAdd) return;
+                                // Open Quick Add inline modal
+                                setQuickAdd({ index, code });
                               }
                             }}
                             className="col-span-1 text-blue-600 underline text-xs"
@@ -1597,6 +1603,39 @@ export default function EditQuoteRequest() {
       </div>
       {/* Modal */}
       <TotalValueRequiredModal open={showTotalValueModal} onClose={() => setShowTotalValueModal(false)} />
+      {/* Quick Add Product Modal */}
+      {quickAdd && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded p-4 w-full max-w-md space-y-3">
+            <h3 className="text-lg font-semibold">Add product to catalog</h3>
+            <div>
+              <label className="block text-sm mb-1">Cat-Class</label>
+              <input value={quickAdd.code} disabled className="w-full border rounded px-3 py-2 bg-gray-100" />
+            </div>
+            <div>
+              <label className="block text-sm mb-1">Description</label>
+              <input value={quickAddDesc} onChange={e=>setQuickAddDesc(e.target.value)} className="w-full border rounded px-3 py-2" />
+            </div>
+            <div className="flex justify-end gap-2">
+              <button onClick={()=>{ setQuickAdd(null); setQuickAddDesc(''); }} className="px-3 py-2 border rounded">Cancel</button>
+              <button onClick={async()=>{
+                try {
+                  const code = normalizeCode(quickAdd.code);
+                  if (!code || !quickAddDesc.trim()) return;
+                  const { upsertProduct } = await import('../../../utils/products');
+                  await upsertProduct({ catClass: code, description: quickAddDesc.trim(), active: true });
+                  handleInputChange(`products.${quickAdd.index}.catClass`, code);
+                  handleInputChange(`products.${quickAdd.index}.description`, quickAddDesc.trim());
+                  setQuickAdd(null);
+                  setQuickAddDesc('');
+                } catch (e:any) {
+                  alert(e?.message || 'Failed to add product');
+                }
+              }} className="px-3 py-2 bg-[#e40115] text-white rounded">Save</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
