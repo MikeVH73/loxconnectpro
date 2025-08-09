@@ -847,6 +847,18 @@ export default function EditQuoteRequest() {
     }
   }, [quoteRequest.totalValueLocal, quoteRequest.totalValueRateToEUR]);
 
+  // Auto-calc Local from EUR when we have EUR and a rate (stored as Local->EUR)
+  useEffect(() => {
+    const eur = quoteRequest.totalValueEUR;
+    const rate = quoteRequest.totalValueRateToEUR;
+    const currency = quoteRequest.totalValueCurrency || 'EUR';
+    const localIsMissing = quoteRequest.totalValueLocal == null || quoteRequest.totalValueLocal === 0;
+    if (currency !== 'EUR' && typeof eur === 'number' && eur > 0 && typeof rate === 'number' && rate > 0 && localIsMissing) {
+      const local = parseFloat((eur / rate).toFixed(2));
+      setQuoteRequest(prev => ({ ...prev, totalValueLocal: local }));
+    }
+  }, [quoteRequest.totalValueEUR, quoteRequest.totalValueRateToEUR, quoteRequest.totalValueCurrency, rateDirection]);
+
   // Track whether local currency is actually used for Analytics filters later
   useEffect(() => {
     const used = !!(quoteRequest.totalValueLocal && quoteRequest.totalValueLocal > 0 && (quoteRequest.totalValueCurrency || 'EUR') !== 'EUR');
@@ -892,6 +904,14 @@ export default function EditQuoteRequest() {
         }
         handleInputChange('rateSource', data.source || 'exchangerate.host');
         handleInputChange('rateDate', data.date || undefined);
+
+        // If EUR is present and currency is non-EUR, compute local amount
+        const eur = quoteRequest.totalValueEUR;
+        const storedRate = rateDirection === 'LOCAL_TO_EUR' ? rate : (rate > 0 ? 1 / rate : undefined);
+        if ((quoteRequest.totalValueCurrency || 'EUR') !== 'EUR' && typeof eur === 'number' && storedRate && storedRate > 0) {
+          const local = parseFloat((eur / storedRate).toFixed(2));
+          handleInputChange('totalValueLocal', local);
+        }
       }
     } catch (e) {
       console.error('Failed to fetch rate', e);
@@ -1447,6 +1467,13 @@ export default function EditQuoteRequest() {
                                 handleInputChange('totalValueRateToEUR', val);
                               } else {
                                 handleInputChange('totalValueRateToEUR', val>0 ? 1/val : undefined);
+                              }
+                              // If EUR exists and currency non-EUR, update local too
+                              const eur = quoteRequest.totalValueEUR;
+                              const stored = rateDirection==='LOCAL_TO_EUR' ? val : (val && val>0 ? 1/val : undefined);
+                              if ((quoteRequest.totalValueCurrency||'EUR')!=='EUR' && typeof eur === 'number' && stored && stored>0) {
+                                const local = parseFloat((eur / stored).toFixed(2));
+                                handleInputChange('totalValueLocal', local);
                               }
                             }}
                             className="w-full p-3 border border-gray-300 rounded-md"
