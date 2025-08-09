@@ -32,6 +32,8 @@ interface QuoteRequest {
   updatedAt?: any;
   totalValueEUR?: number;
   totalValueCurrency?: string;
+  customer?: string; // customer id
+  customerName?: string;
 }
 
 const yearFromDate = (d?: any) => {
@@ -46,8 +48,12 @@ export default function AnalyticsPage() {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<QuoteRequest[]>([]);
   const [year, setYear] = useState<number>(new Date().getFullYear());
+  const [compareEnabled, setCompareEnabled] = useState<boolean>(false);
+  const [yearB, setYearB] = useState<number>(new Date().getFullYear() - 1);
   const [filterCreator, setFilterCreator] = useState<string[]>([]);
   const [filterInvolved, setFilterInvolved] = useState<string[]>([]);
+  const [filterCustomers, setFilterCustomers] = useState<string[]>([]);
+  const [customers, setCustomers] = useState<{ id: string; name: string }[]>([]);
   const [roleScope, setRoleScope] = useState<'my'|'all'>('my');
 
   useEffect(() => {
@@ -73,6 +79,18 @@ export default function AnalyticsPage() {
     load();
   }, [userProfile, roleScope]);
 
+  // Load customers for filter
+  useEffect(() => {
+    const loadCustomers = async () => {
+      if (!db) return;
+      const snap = await getDocs(collection(db as Firestore, 'customers'));
+      const list = snap.docs.map(d => ({ id: d.id, name: (d.data() as any).name || 'Unnamed'}));
+      list.sort((a,b)=>a.name.localeCompare(b.name));
+      setCustomers(list);
+    };
+    loadCustomers();
+  }, []);
+
   const years = useMemo(() => {
     const s = new Set<number>();
     data.forEach(qr => s.add(yearFromDate(qr.createdAt)));
@@ -84,11 +102,18 @@ export default function AnalyticsPage() {
   const filtered = useMemo(() => {
     const creatorAll = filterCreator.length === 0 || filterCreator.includes('all');
     const involvedAll = filterInvolved.length === 0 || filterInvolved.includes('all');
+    const customersAll = filterCustomers.length === 0 || filterCustomers.includes('all');
     return data
       .filter(qr => yearFromDate(qr.createdAt) === year)
       .filter(qr => creatorAll ? true : filterCreator.includes(qr.creatorCountry))
-      .filter(qr => involvedAll ? true : filterInvolved.includes(qr.involvedCountry));
-  }, [data, year, filterCreator, filterInvolved]);
+      .filter(qr => involvedAll ? true : filterInvolved.includes(qr.involvedCountry))
+      .filter(qr => {
+        if (customersAll) return true;
+        const id = qr.customer;
+        const name = (qr as any).customerName;
+        return (id && filterCustomers.includes(id)) || (name && filterCustomers.includes(name));
+      });
+  }, [data, year, filterCreator, filterInvolved, filterCustomers]);
 
   const totals = useMemo(() => {
     const agg = { won:0, lost:0, cancelled:0, totalWonEUR:0, totalLostEUR:0, totalCancelledEUR:0 } as any;
@@ -116,6 +141,9 @@ export default function AnalyticsPage() {
     const selected = Array.from(e.target.selectedOptions).map(o => o.value);
     setter(selected);
   };
+
+  const customerOptions = useMemo(() => ['all', ...customers.map(c => c.id)], [customers]);
+  const customerLabel = (id: string) => id === 'all' ? 'customer: all' : (customers.find(c => c.id === id)?.name || id);
 
   // Monthly bar data (counts per month by status)
   const monthly = useMemo(() => {
@@ -155,6 +183,7 @@ export default function AnalyticsPage() {
 
   return (
     <div className="p-6">
+      <div className="mb-1 text-xs text-gray-500">Hold Ctrl/Cmd to multi-select</div>
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-bold text-[#e40115]">Analytics</h1>
         <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -170,15 +199,36 @@ export default function AnalyticsPage() {
           <select multiple size={Math.min(6, involvedCountries.length)} value={filterInvolved} onChange={(e)=>handleMultiChange(e, setFilterInvolved)} className="border rounded px-2 py-1 min-w-[220px]">
             {involvedCountries.map(c => (<option key={c} value={c}>{c==='all'?'involved: all':c}</option>))}
           </select>
+          <select multiple size={Math.min(6, customerOptions.length)} value={filterCustomers} onChange={(e)=>handleMultiChange(e, setFilterCustomers)} className="border rounded px-2 py-1 min-w-[240px]">
+            {customerOptions.map(id => (<option key={id} value={id}>{customerLabel(id)}</option>))}
+          </select>
           <button
-            onClick={()=>{ setFilterCreator([]); setFilterInvolved([]); }}
+            onClick={()=>{ setFilterCreator([]); setFilterInvolved([]); setFilterCustomers([]); }}
             className="px-3 py-1 border rounded text-gray-700 hover:bg-gray-100"
             title="Clear selected countries"
           >
             Clear
           </button>
-          <span className="text-xs text-gray-500 ml-1">Hold Ctrl/Cmd to multi-select</span>
         </div>
+      </div>
+
+      {/* Compare years */}
+      <div className="flex items-center gap-3 mb-4 text-sm">
+        <label className="flex items-center gap-2">
+          <input type="checkbox" checked={compareEnabled} onChange={(e)=>setCompareEnabled(e.target.checked)} /> Compare years
+        </label>
+        {compareEnabled && (
+          <div className="flex items-center gap-2">
+            <span>Year A:</span>
+            <select value={year} onChange={(e)=>setYear(parseInt(e.target.value))} className="border rounded px-2 py-1">
+              {years.map(y => (<option key={y} value={y}>{y}</option>))}
+            </select>
+            <span>Year B:</span>
+            <select value={yearB} onChange={(e)=>setYearB(parseInt(e.target.value))} className="border rounded px-2 py-1">
+              {years.map(y => (<option key={y} value={y}>{y}</option>))}
+            </select>
+          </div>
+        )}
       </div>
 
       {loading ? (
@@ -257,6 +307,19 @@ export default function AnalyticsPage() {
               </div>
             </div>
           </div>
+
+          {compareEnabled && (
+            <div className="p-4 bg-white rounded shadow">
+              <ComparisonBlock
+                data={data}
+                yearA={year}
+                yearB={yearB}
+                filterCreator={filterCreator}
+                filterInvolved={filterInvolved}
+                filterCustomers={filterCustomers}
+              />
+            </div>
+          )}
 
           <div className="p-4 bg-white rounded shadow overflow-auto">
             <div className="text-sm text-gray-700 mb-3">KPIs between creatorCountry → involvedCountry</div>
