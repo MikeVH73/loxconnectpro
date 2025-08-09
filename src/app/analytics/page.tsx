@@ -260,8 +260,9 @@ export default function AnalyticsPage() {
   const computeCustomerStats = (items: QuoteRequest[]): Map<string, CustStat> => {
     const map = new Map<string, CustStat>();
     items.forEach(qr => {
-      const id = (qr.customer as string) || (qr as any).customerName || 'unknown';
-      const name = (qr as any).customerName || customers.find(c => c.id === qr.customer)?.name || String(id);
+      const normalizedName = ((qr as any).customerName || '').trim().toLowerCase().replace(/\s+/g,' ');
+      const id = (qr.customer as string) || normalizedName || 'unknown';
+      const name = customers.find(c => c.id === qr.customer)?.name || (qr as any).customerName || 'Unknown';
       if (!map.has(id)) map.set(id, { id, name, won:0, lost:0, cancelled:0, wonEUR:0, lostEUR:0, cancelledEUR:0 });
       const stat = map.get(id)!;
       const eur = qr.totalValueEUR || 0;

@@ -32,7 +32,7 @@ export default function Sidebar() {
   }
 
   // Only show restricted items if not Employee
-  const restrictedLabels = ["Labels", "Countries", "Users", "Modifications"];
+  const restrictedLabels = ["Labels", "Countries", "Users", "Modifications", "Scan Customers"];
   const filteredNavItems = navItems.filter(item => {
     if (restrictedLabels.includes(item.label)) {
       return userProfile?.role !== "Employee";
