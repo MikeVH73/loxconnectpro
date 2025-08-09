@@ -134,7 +134,9 @@ export default function EditQuoteRequest() {
   const params = useParams();
   const id = params?.id as string;
   const { user, userProfile } = useAuth();
-  const isReadOnly = userProfile?.role === "Employee";
+  // Employees can edit quote request details; specific restrictions (like handler assignment)
+  // are enforced separately via canAssign logic below.
+  const isReadOnly = false;
   const [quoteRequest, setQuoteRequest] = useState<QuoteRequestWithDynamicKeys>({} as QuoteRequestWithDynamicKeys);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -1184,10 +1186,9 @@ export default function EditQuoteRequest() {
                           value={product.catClass}
                           onChange={(e) => handleInputChange(`products.${index}.catClass`, e.target.value)}
                           placeholder="Product Code"
-                          className="col-span-3 p-2 border border-gray-300 rounded"
-                          disabled={isReadOnly}
+                          className="col-span-2 p-2 border border-gray-300 rounded"
                         />
-                        {!isReadOnly && (
+                        {
                           <button
                             onClick={async () => {
                               const code = normalizeCode(quoteRequest.products[index].catClass);
@@ -1209,25 +1210,23 @@ export default function EditQuoteRequest() {
                           >
                             Lookup
                           </button>
-                        )}
+                        }
                         <input
                           type="text"
                           value={product.description}
                           onChange={(e) => handleInputChange(`products.${index}.description`, e.target.value)}
                           placeholder="Description"
-                          className="col-span-5 p-2 border border-gray-300 rounded"
-                          disabled={isReadOnly}
+                          className="col-span-6 p-2 border border-gray-300 rounded"
                         />
                         <input
                           type="number"
                           value={product.quantity}
                           onChange={(e) => handleInputChange(`products.${index}.quantity`, parseInt(e.target.value))}
                           placeholder="Qty"
-                          className="col-span-3 p-2 border border-gray-300 rounded"
-                          disabled={isReadOnly}
+                          className="col-span-2 p-2 border border-gray-300 rounded"
                           min="1"
                         />
-                        {!isReadOnly && (
+                        {
                           <button
                             onClick={() => handleRemoveProduct(index)}
                             className="col-span-1 text-red-500 hover:text-red-700 p-2"
@@ -1237,7 +1236,7 @@ export default function EditQuoteRequest() {
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                             </svg>
                           </button>
-                        )}
+                        }
                       </div>
                     ))}
                     {!isReadOnly && (
