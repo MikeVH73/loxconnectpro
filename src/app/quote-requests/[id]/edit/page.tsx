@@ -2,7 +2,7 @@
 
 import { useEffect, useState, Suspense, useCallback, useMemo, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { doc, getDoc, updateDoc, collection, getDocs, query, where, serverTimestamp, addDoc, Firestore } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, collection, getDocs, query, where, serverTimestamp, addDoc, Firestore, deleteField } from 'firebase/firestore';
 import { db } from '@/firebaseClient';
 import { useAuth } from '../../../AuthProvider';
 import FileUpload from '../../../components/FileUpload';
@@ -289,7 +289,7 @@ export default function EditQuoteRequest() {
           const arr = val.map(stripUndefined).filter((v) => v !== undefined);
           return arr;
         }
-        if (val && typeof val === 'object') {
+        if (val && typeof val === 'object' && !(val instanceof Date)) {
           const out: any = {};
           Object.keys(val).forEach((k) => {
             const v = stripUndefined((val as any)[k]);
@@ -300,6 +300,13 @@ export default function EditQuoteRequest() {
         return val;
       };
       const sanitizedUpdateData = stripUndefined(updateData);
+      // Convert nulls for calculator fields into deleteField() so previous values are removed
+      const nullableFields = ['totalValueLocal','totalValueRateToEUR','rateSource','rateDate'];
+      nullableFields.forEach((key) => {
+        if ((quoteRequest as any)[key] === null) {
+          (sanitizedUpdateData as any)[key] = deleteField();
+        }
+      });
 
       await updateDoc(quoteRequestRef, sanitizedUpdateData);
       console.log('[SAVE] Save successful!');
@@ -860,10 +867,11 @@ export default function EditQuoteRequest() {
   const resetCalculator = () => {
     setRateDirection('LOCAL_TO_EUR');
     handleInputChange('totalValueCurrency', 'EUR');
-    handleInputChange('totalValueLocal', undefined);
-    handleInputChange('totalValueRateToEUR', undefined);
-    handleInputChange('rateSource', undefined);
-    handleInputChange('rateDate', undefined);
+    // Use nulls so saveChanges deletes these fields in Firestore
+    handleInputChange('totalValueLocal', null);
+    handleInputChange('totalValueRateToEUR', null);
+    handleInputChange('rateSource', null);
+    handleInputChange('rateDate', null);
     handleInputChange('usedLocalCurrency', false);
   };
 
