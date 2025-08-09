@@ -89,6 +89,7 @@ interface QuoteRequest {
   totalValueRateToEUR?: number; // multiplier from local to EUR
   rateSource?: string;
   rateDate?: string; // YYYY-MM-DD
+  usedLocalCurrency?: boolean;
 }
 
 const statuses = ["New", "In Progress", "Snoozed", "Won", "Lost", "Cancelled"];
@@ -234,7 +235,8 @@ export default function EditQuoteRequest() {
             totalValueCurrency: data.totalValueCurrency || undefined,
             totalValueRateToEUR: typeof data.totalValueRateToEUR === 'number' ? data.totalValueRateToEUR : undefined,
             rateSource: data.rateSource || undefined,
-            rateDate: data.rateDate || undefined
+            rateDate: data.rateDate || undefined,
+            usedLocalCurrency: data.usedLocalCurrency || false
           } as QuoteRequestWithDynamicKeys);
           setOriginalData(data as QuoteRequestWithDynamicKeys); // Store original data for comparison
         } else {
@@ -838,6 +840,12 @@ export default function EditQuoteRequest() {
     }
   }, [quoteRequest.totalValueLocal, quoteRequest.totalValueRateToEUR]);
 
+  // Track whether local currency is actually used for Analytics filters later
+  useEffect(() => {
+    const used = !!(quoteRequest.totalValueLocal && quoteRequest.totalValueLocal > 0 && (quoteRequest.totalValueCurrency || 'EUR') !== 'EUR');
+    setQuoteRequest(prev => ({ ...prev, usedLocalCurrency: used }));
+  }, [quoteRequest.totalValueLocal, quoteRequest.totalValueCurrency]);
+
   // Helper to set currency quickly
   const useInvolvedCurrency = () => {
     const cur = defaultCurrencyByCountry[quoteRequest.involvedCountry] || 'EUR';
@@ -846,6 +854,17 @@ export default function EditQuoteRequest() {
   const useCreatorCurrency = () => {
     const cur = defaultCurrencyByCountry[quoteRequest.creatorCountry] || 'EUR';
     handleInputChange('totalValueCurrency', cur);
+  };
+
+  // Reset calculator to allow plain EUR entry
+  const resetCalculator = () => {
+    setRateDirection('LOCAL_TO_EUR');
+    handleInputChange('totalValueCurrency', 'EUR');
+    handleInputChange('totalValueLocal', undefined);
+    handleInputChange('totalValueRateToEUR', undefined);
+    handleInputChange('rateSource', undefined);
+    handleInputChange('rateDate', undefined);
+    handleInputChange('usedLocalCurrency', false);
   };
 
   // Fetch rate from API (daily cached)
@@ -1427,6 +1446,7 @@ export default function EditQuoteRequest() {
                             disabled={isReadOnly}
                           />
                           <button type="button" onClick={fetchRate} className="px-3 py-2 text-sm bg-gray-100 rounded hover:bg-gray-200 whitespace-nowrap" disabled={isReadOnly}>Fetch rate</button>
+                          <button type="button" onClick={resetCalculator} className="px-3 py-2 text-sm bg-[#e40115] text-white rounded hover:bg-red-700 whitespace-nowrap" disabled={isReadOnly}>Reset</button>
                         </div>
                         {quoteRequest.rateDate && (
                           <p className="mt-1 text-[11px] text-gray-500">Source: {quoteRequest.rateSource || 'exchangerate.host'} • {quoteRequest.rateDate}</p>
