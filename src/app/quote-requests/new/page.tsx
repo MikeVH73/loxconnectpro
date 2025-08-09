@@ -29,6 +29,7 @@ import { moveFilesToQuoteRequest } from "../../utils/fileUtils";
 import { useMessages } from '@/app/hooks/useMessages';
 import { debounce } from "lodash";
 import { useCustomers } from "../../hooks/useCustomers";
+import { getProductByCode, normalizeCode } from "../../utils/products";
 
 // Type definitions
 interface Jobsite {
@@ -438,6 +439,23 @@ const NewQuoteRequestPage = () => {
                 placeholder="Cat. Class"
                 className="block w-1/4 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
               />
+              <button
+                type="button"
+                onClick={async () => {
+                  const code = normalizeCode(products[idx].catClass);
+                  if (!code) return;
+                  const p = await getProductByCode(code);
+                  if (p) {
+                    const newProducts = [...products];
+                    newProducts[idx].catClass = p.catClass;
+                    newProducts[idx].description = p.description;
+                    setProducts(newProducts);
+                  } else {
+                    alert('Product not found in catalog');
+                  }
+                }}
+                className="text-blue-600 underline text-xs self-center"
+              >Lookup</button>
               <input
                 type="text"
                 value={product.description}

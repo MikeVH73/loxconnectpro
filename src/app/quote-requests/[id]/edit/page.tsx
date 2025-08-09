@@ -17,6 +17,7 @@ import { debounce } from 'lodash';
 import Script from 'next/script';
 import { createNotification, createRecentActivity } from "../../../utils/notifications";
 import dynamic from 'next/dynamic';
+import { getProductByCode, normalizeCode } from '../../../utils/products';
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 
@@ -334,7 +335,7 @@ export default function EditQuoteRequest() {
         // Check for title changes
         if (originalData.title !== quoteRequest.title) {
           changes.push(`Title changed from "${originalData.title}" to "${quoteRequest.title}"`);
-        }
+      }
 
       // Check for country changes
         if (originalData.involvedCountry !== quoteRequest.involvedCountry) {
@@ -541,8 +542,8 @@ export default function EditQuoteRequest() {
     }
 
     setQuoteRequest(prev => ({
-      ...prev,
-      [field]: value
+        ...prev,
+        [field]: value
     }));
 
     // Mark calculator changes as dirty to prompt manual save
@@ -1182,6 +1183,25 @@ export default function EditQuoteRequest() {
                           className="col-span-3 p-2 border border-gray-300 rounded"
                           disabled={isReadOnly}
                         />
+                        {!isReadOnly && (
+                          <button
+                            onClick={async () => {
+                              const code = normalizeCode(quoteRequest.products[index].catClass);
+                              if (!code) return;
+                              const p = await getProductByCode(code);
+                              if (p) {
+                                handleInputChange(`products.${index}.catClass`, p.catClass);
+                                handleInputChange(`products.${index}.description`, p.description);
+                              } else {
+                                alert('Product not found in catalog');
+                              }
+                            }}
+                            className="col-span-1 text-blue-600 underline text-xs"
+                            title="Lookup description"
+                          >
+                            Lookup
+                          </button>
+                        )}
                         <input
                           type="text"
                           value={product.description}
@@ -1445,10 +1465,10 @@ export default function EditQuoteRequest() {
                         </span>
                       </label>
                     ))}
-                  </div>
+              </div>
                     );
                   })()}
-                </div>
+            </div>
 
                 {/* Total Value */}
                 <div>
