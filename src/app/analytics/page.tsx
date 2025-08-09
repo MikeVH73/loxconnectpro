@@ -240,6 +240,40 @@ export default function AnalyticsPage() {
     return Array.from(map.values()).sort((a,b) => (b.wonEUR - a.wonEUR) || (b.won - a.won));
   }, [filtered]);
 
+  // Helpers for customer-by-year comparison
+  const applyFiltersForYear = (targetYear: number) => {
+    const creatorAll = filterCreator.length === 0 || filterCreator.includes('all');
+    const involvedAll = filterInvolved.length === 0 || filterInvolved.includes('all');
+    const customersAll = filterCustomers.length === 0 || filterCustomers.includes('all');
+    return data
+      .filter(qr => preferYearForQuote(qr) === targetYear)
+      .filter(qr => creatorAll ? true : filterCreator.includes(qr.creatorCountry))
+      .filter(qr => involvedAll ? true : filterInvolved.includes(qr.involvedCountry))
+      .filter(qr => {
+        if (customersAll) return true;
+        const id = qr.customer;
+        const name = (qr as any).customerName;
+        return (id && filterCustomers.includes(id)) || (name && filterCustomers.includes(name));
+      });
+  };
+
+  type CustStat = { id: string; name: string; won: number; lost: number; cancelled: number; wonEUR: number; lostEUR: number; cancelledEUR: number };
+  const computeCustomerStats = (items: QuoteRequest[]): Map<string, CustStat> => {
+    const map = new Map<string, CustStat>();
+    items.forEach(qr => {
+      const id = (qr.customer as string) || (qr as any).customerName || 'unknown';
+      const name = (qr as any).customerName || customers.find(c => c.id === qr.customer)?.name || String(id);
+      if (!map.has(id)) map.set(id, { id, name, won:0, lost:0, cancelled:0, wonEUR:0, lostEUR:0, cancelledEUR:0 });
+      const stat = map.get(id)!;
+      const eur = qr.totalValueEUR || 0;
+      const s = qr.status?.toLowerCase();
+      if (s==='won') { stat.won++; stat.wonEUR += eur; }
+      else if (s==='lost') { stat.lost++; stat.lostEUR += eur; }
+      else if (s==='cancelled') { stat.cancelled++; stat.cancelledEUR += eur; }
+    });
+    return map;
+  };
+
   return (
     <div className="p-6">
       <div className="flex items-center justify-between">
@@ -369,6 +403,56 @@ export default function AnalyticsPage() {
               </div>
             </div>
           </div>
+
+          {compareEnabled && (
+            <div className="p-4 bg-white rounded shadow overflow-auto">
+              <div className="text-sm text-gray-700 mb-3">Customers comparison (Year {year} vs Year {yearB})</div>
+              {(() => {
+                const aItems = applyFiltersForYear(year);
+                const bItems = applyFiltersForYear(yearB);
+                const a = computeCustomerStats(aItems);
+                const b = computeCustomerStats(bItems);
+                const allKeys = Array.from(new Set<string>([...a.keys(), ...b.keys()]));
+                allKeys.sort((k1, k2) => (a.get(k2)?.wonEUR || 0) - (a.get(k1)?.wonEUR || 0));
+                return (
+                  <table className="min-w-full text-sm">
+                    <thead>
+                      <tr className="text-left border-b">
+                        <th className="py-2 pr-4">Customer</th>
+                        <th className="py-2 pr-4">{year} Won (EUR)</th>
+                        <th className="py-2 pr-4">{year} Lost (EUR)</th>
+                        <th className="py-2 pr-4">{year} Cancelled (EUR)</th>
+                        <th className="py-2 pr-4">{yearB} Won (EUR)</th>
+                        <th className="py-2 pr-4">{yearB} Lost (EUR)</th>
+                        <th className="py-2 pr-4">{yearB} Cancelled (EUR)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {allKeys.map(k => {
+                        const sa = a.get(k); const sb = b.get(k);
+                        const name = sa?.name || sb?.name || k;
+                        const fmt = (n?: number) => Math.round(n || 0).toLocaleString();
+                        return (
+                          <tr key={k} className="border-b last:border-0">
+                            <td className="py-2 pr-4">{name}</td>
+                            <td className="py-2 pr-4">{fmt(sa?.wonEUR)}</td>
+                            <td className="py-2 pr-4">{fmt(sa?.lostEUR)}</td>
+                            <td className="py-2 pr-4">{fmt(sa?.cancelledEUR)}</td>
+                            <td className="py-2 pr-4">{fmt(sb?.wonEUR)}</td>
+                            <td className="py-2 pr-4">{fmt(sb?.lostEUR)}</td>
+                            <td className="py-2 pr-4">{fmt(sb?.cancelledEUR)}</td>
+                          </tr>
+                        );
+                      })}
+                      {allKeys.length===0 && (
+                        <tr><td colSpan={7} className="py-3 text-gray-500">No matching customers for selected filters</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                );
+              })()}
+            </div>
+          )}
 
           {compareEnabled && (
             <div className="p-4 bg-white rounded shadow">
