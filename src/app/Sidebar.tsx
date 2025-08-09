@@ -11,6 +11,7 @@ const navItems = [
   { label: "Quote Requests", href: "/quote-requests" },
   { label: "Archived", href: "/archived" },
   { label: "Customers", href: "/customers" },
+  { label: "Scan Customers", href: "/customers/scan" },
   { label: "Labels", href: "/labels" },
   { label: "Countries", href: "/countries" },
   { label: "Users", href: "/users" },
