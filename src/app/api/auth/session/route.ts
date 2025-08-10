@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAdminAuth } from '@/lib/firebaseAdmin';
+import { getAdminAuth } from '../../../../lib/firebaseAdmin';
+export const runtime = 'nodejs';
 
 function getExpiresMs(): number {
   const env = process.env.SESSION_MAX_AGE_MS;
