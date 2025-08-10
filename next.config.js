@@ -14,11 +14,17 @@ const nextConfig = {
     NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: process.env?.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '',
   },
   webpack: (config) => {
+    const path = require('path');
     config.resolve.fallback = {
       ...config.resolve.fallback,
       fs: false,
       net: false,
       tls: false,
+    };
+    // Ensure '@' alias resolves to 'src' for both TS paths and webpack
+    config.resolve.alias = {
+      ...(config.resolve.alias || {}),
+      '@': path.resolve(__dirname, 'src'),
     };
     return config;
   },
