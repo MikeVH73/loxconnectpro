@@ -2,6 +2,8 @@ import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { getFirestore, Firestore, initializeFirestore, CACHE_SIZE_UNLIMITED, enableIndexedDbPersistence } from 'firebase/firestore';
 import { getAuth, Auth } from 'firebase/auth';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
+// App Check imports are optional; guarded by feature flag
+// We keep them in a dynamic import to avoid affecting SSR bundling
 
 // Initialize Firebase only on the client side
 let app: FirebaseApp | undefined;
@@ -44,6 +46,26 @@ function initializeFirebase() {
       app = initializeApp(firebaseConfig);
     } else {
       app = getApp();
+    }
+
+    // Optional: Initialize App Check (feature-flagged, non-breaking)
+    // Set NEXT_PUBLIC_ENABLE_APP_CHECK=true and NEXT_PUBLIC_RECAPTCHA_KEY in env to enable
+    const enableAppCheck = (typeof process !== 'undefined') && (process as any)?.env?.NEXT_PUBLIC_ENABLE_APP_CHECK === 'true';
+    const recaptchaKey = (typeof process !== 'undefined') && (process as any)?.env?.NEXT_PUBLIC_RECAPTCHA_KEY;
+    if (enableAppCheck && app && recaptchaKey) {
+      // dynamic import to avoid hard dependency when disabled
+      import('firebase/app-check').then(({ initializeAppCheck, ReCaptchaEnterpriseProvider }) => {
+        try {
+          initializeAppCheck(app as any, {
+            provider: new ReCaptchaEnterpriseProvider(recaptchaKey as string),
+            isTokenAutoRefreshEnabled: true,
+          });
+        } catch (e) {
+          console.warn('App Check initialization failed (continuing without it):', e);
+        }
+      }).catch(() => {
+        // no-op
+      });
     }
 
     // Initialize Firestore with settings
