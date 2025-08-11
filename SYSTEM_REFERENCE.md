@@ -192,7 +192,7 @@ interface QuoteRequest {
 - **Auto-save**: Debounced changes to Firestore
 - **Real-time Updates**: Live status and label changes
 - **Product Management**: Add/remove products with catClass field
-- **Product Layout**: 12-column grid with proper spacing (Code: 3 cols, Description: 6 cols, Quantity: 2 cols, Delete: 1 col)
+- **Product Layout**: Compact row — `Code | Lookup | Description | Qty | Delete` — with safe spacing at 100% zoom
 - **File Attachments**: Upload/download with progress using FileUpload component
 - **Customer Consistency**: Uses customer IDs throughout
 - **Attachment Interface**: Proper FileData interface with id, uploadedAt, uploadedBy fields
@@ -325,6 +325,18 @@ const firebaseConfig = {
 2. **GitHub Push**: Automatic trigger to Vercel
 3. **Vercel Build**: Automatic deployment to production
 4. **Environment Variables**: Properly configured in Vercel dashboard
+
+### **Security Hardening (Current State)**
+- **Session Cookies**: After login the client calls `POST /api/auth/session` to mint an HttpOnly `__session` cookie; logout uses `DELETE /api/auth/session` followed by Firebase `signOut`.
+- **Edge Gating (feature‑flagged)**: `NEXT_PUBLIC_ENABLE_EDGE_AUTH=true` enables middleware redirects to `/login` when `__session` is missing (keep OFF until verified).
+- **Firebase App Check**: Client initialized with reCAPTCHA Enterprise.
+  - Env: `NEXT_PUBLIC_ENABLE_APP_CHECK=true`, `NEXT_PUBLIC_RECAPTCHA_KEY=<site_key>`
+  - Optional debug: `NEXT_PUBLIC_ENABLE_APP_CHECK_DEBUG=true` logs token events in Console
+  - Enforce in Firebase Console → App Check → APIs once Verified > 90% consistently
+- **Auth Blocking Functions (planned/enabled per env)**:
+  - `beforeCreate`: optional domain/allowlist gate
+  - `beforeSignIn`: requires `emailVerified`; optional MFA enforcement flag
+- **MFA (TOTP)**: Enrollment UI at `/users/security` (Authenticator app). Enforcement via blocking function when enabled.
 
 ## 🔄 **DATA FLOW & STATE MANAGEMENT**
 
