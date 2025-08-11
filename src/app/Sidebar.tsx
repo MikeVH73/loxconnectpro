@@ -21,6 +21,7 @@ const navItems = [
   { label: "Modifications", href: "/modifications" },
   { label: "Analytics", href: "/analytics" },
   { label: "Profile", href: "/users/profile" },
+  { label: "Security", href: "/users/security" },
 ];
 
 export default function Sidebar() {
