@@ -37,7 +37,17 @@ export default function ArchivedPage() {
       const q = query(collection(db, "quoteRequests"), orderBy("createdAt", "desc"));
       const snapshot = await getDocs(q);
       let allRequests = snapshot.docs
-        .map(doc => ({ id: doc.id, ...doc.data() } as QuoteRequest))
+        .map(doc => {
+          const data = doc.data() as any;
+          return {
+            id: doc.id,
+            ...data,
+            // Normalize optional arrays to avoid runtime map errors
+            labels: Array.isArray(data?.labels) ? data.labels : [],
+            products: Array.isArray(data?.products) ? data.products : [],
+            notes: Array.isArray(data?.notes) ? data.notes : [],
+          } as QuoteRequest;
+        })
         .filter(qr => ["Won", "Lost", "Cancelled"].includes(qr.status));
         
       // Apply same country filtering as other pages
@@ -115,8 +125,10 @@ export default function ArchivedPage() {
 
   const getLabelName = (id: string) => labels.find(l => l.id === id)?.name || id;
   const getCustomerName = (id: string) => customers.find(c => c.id === id)?.name || id;
-  const getProductsSummary = (products: any[] = []) => products.map(p => `${p.catClass || ''} ${p.description || ''} x${p.quantity || 1}`).join('; ');
-  const getLastNote = (notes: any[] = []) => notes.length ? notes[notes.length - 1].text : '';
+  const getProductsSummary = (products: any[] = []) => (Array.isArray(products) ? products : [])
+    .map(p => `${p?.catClass || ''} ${p?.description || ''} x${p?.quantity || 1}`)
+    .join('; ');
+  const getLastNote = (notes: any[] = []) => (Array.isArray(notes) && notes.length) ? (notes[notes.length - 1]?.text || '') : '';
 
   const handleDelete = async (id: string) => {
     setShowDeleteConfirm(id);

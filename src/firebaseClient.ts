@@ -54,12 +54,27 @@ function initializeFirebase() {
     const recaptchaKey = (typeof process !== 'undefined') && (process as any)?.env?.NEXT_PUBLIC_RECAPTCHA_KEY;
     if (enableAppCheck && app && recaptchaKey) {
       // dynamic import to avoid hard dependency when disabled
-      import('firebase/app-check').then(({ initializeAppCheck, ReCaptchaEnterpriseProvider }) => {
+      import('firebase/app-check').then(async ({ initializeAppCheck, ReCaptchaEnterpriseProvider, getToken, onTokenChanged }) => {
         try {
-          initializeAppCheck(app as any, {
+          const appCheck = initializeAppCheck(app as any, {
             provider: new ReCaptchaEnterpriseProvider(recaptchaKey as string),
             isTokenAutoRefreshEnabled: true,
           });
+          // Optional debug logging when explicitly enabled
+          const debug = (typeof process !== 'undefined') && (process as any)?.env?.NEXT_PUBLIC_ENABLE_APP_CHECK_DEBUG === 'true';
+          if (debug) {
+            try {
+              const token = await getToken(appCheck, /* forceRefresh */ true);
+              // eslint-disable-next-line no-console
+              console.log('[AppCheck] initial token obtained:', !!token?.token);
+            } catch (err) {
+              console.warn('[AppCheck] getToken failed', err);
+            }
+            onTokenChanged(appCheck, (t) => {
+              // eslint-disable-next-line no-console
+              console.log('[AppCheck] token changed:', !!t?.token);
+            });
+          }
         } catch (e) {
           console.warn('App Check initialization failed (continuing without it):', e);
         }

@@ -537,6 +537,31 @@ export default function EditQuoteRequest() {
   }, [debouncedSave]);
 
   const handleInputChange = (field: string, value: any) => {
+    // Support nested updates (products.X.prop, jobsite.address)
+    if (field.startsWith('products.')) {
+      const parts = field.split('.');
+      const index = parseInt(parts[1] || '', 10);
+      const prop = parts[2];
+      if (!Number.isFinite(index) || !prop) return;
+      setQuoteRequest(prev => {
+        const prevProducts = Array.isArray(prev.products) ? prev.products : [];
+        const nextProducts = [...prevProducts];
+        const existing = nextProducts[index] || { catClass: '', description: '', quantity: 1 };
+        nextProducts[index] = { ...existing, [prop]: value } as any;
+        return { ...prev, products: nextProducts } as any;
+      });
+      return;
+    }
+
+    if (field.startsWith('jobsite.')) {
+      const [, subKey] = field.split('.');
+      if (!subKey) return;
+      setQuoteRequest(prev => ({
+        ...prev,
+        jobsite: { ...(prev.jobsite || {}), [subKey]: value },
+      } as any));
+      return;
+    }
     // Prevent final statuses without EUR total
     const finalStatuses = ["Won", "Lost", "Cancelled"];
     if (field === 'status' && finalStatuses.includes(value)) {
@@ -548,8 +573,8 @@ export default function EditQuoteRequest() {
     }
 
     setQuoteRequest(prev => ({
-        ...prev,
-        [field]: value
+      ...prev,
+      [field]: value,
     }));
 
     // Mark calculator changes as dirty to prompt manual save
@@ -1180,63 +1205,62 @@ export default function EditQuoteRequest() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">Products</label>
                   <div className="space-y-2">
                     {(Array.isArray(quoteRequest.products) ? quoteRequest.products : []).map((product, index) => (
-                      <div key={index} className="grid grid-cols-12 gap-2 items-center">
+                      <div key={index} className="flex items-center gap-2">
                         <input
                           type="text"
                           value={product.catClass}
                           onChange={(e) => handleInputChange(`products.${index}.catClass`, e.target.value)}
                           placeholder="Product Code"
-                          className="col-span-3 p-2 border border-gray-300 rounded"
+                          className="w-28 p-2 border border-gray-300 rounded"
                         />
-                        {
-                          <button
-                            onClick={async () => {
-                              const code = normalizeCode(quoteRequest.products[index].catClass);
-                              if (!code) return;
-                              const p = await getProductByCode(code);
-                              if (p) {
-                                handleInputChange(`products.${index}.catClass`, p.catClass);
-                                handleInputChange(`products.${index}.description`, p.description);
-                              } else {
-                                const confirmAdd = confirm('Product not found. Add to catalog?');
-                                if (!confirmAdd) return;
-                                // Open Quick Add inline modal
-                                setQuickAdd({ index, code });
-                                setQuickAddCode(code);
-                              }
-                            }}
-                            className="col-span-1 text-blue-600 underline text-xs"
-                            title="Lookup description"
-                          >
-                            Lookup
-                          </button>
-                        }
+                        <button
+                          onClick={async () => {
+                            const code = normalizeCode(quoteRequest.products[index].catClass);
+                            if (!code) return;
+                            const p = await getProductByCode(code);
+                            if (p) {
+                              handleInputChange(`products.${index}.catClass`, p.catClass);
+                              handleInputChange(`products.${index}.description`, p.description);
+                            } else {
+                              const confirmAdd = confirm('Product not found. Add to catalog?');
+                              if (!confirmAdd) return;
+                              setQuickAdd({ index, code });
+                              setQuickAddCode(code);
+                            }
+                          }}
+                          className="shrink-0 text-blue-600 underline text-xs"
+                          title="Lookup description"
+                        >
+                          Lookup
+                        </button>
                         <input
                           type="text"
                           value={product.description}
                           onChange={(e) => handleInputChange(`products.${index}.description`, e.target.value)}
                           placeholder="Description"
-                          className="col-span-6 p-2 border border-gray-300 rounded"
+                          className="flex-1 p-2 border border-gray-300 rounded"
                         />
                         <input
                           type="number"
-                          value={product.quantity}
-                          onChange={(e) => handleInputChange(`products.${index}.quantity`, parseInt(e.target.value))}
+                          value={Number.isFinite(product.quantity) ? product.quantity : 0}
+                          onChange={(e) => {
+                            const val = e.currentTarget.valueAsNumber;
+                            const next = Number.isFinite(val) && val >= 0 ? Math.floor(val) : 0;
+                            handleInputChange(`products.${index}.quantity`, next);
+                          }}
                           placeholder="Qty"
-                          className="col-span-1 p-2 border border-gray-300 rounded w-24"
-                          min="1"
+                          className="w-16 p-2 border border-gray-300 rounded text-right"
+                          min="0"
                         />
-                        {
-                          <button
-                            onClick={() => handleRemoveProduct(index)}
-                            className="col-span-1 text-red-500 hover:text-red-700 p-2"
-                            title="Remove product"
-                          >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                          </button>
-                        }
+                        <button
+                          onClick={() => handleRemoveProduct(index)}
+                          className="shrink-0 text-red-500 hover:text-red-700 p-2"
+                          title="Remove product"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
                       </div>
                     ))}
                     {!isReadOnly && (
