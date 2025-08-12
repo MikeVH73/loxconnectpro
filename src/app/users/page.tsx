@@ -36,8 +36,8 @@ export default function UsersPage() {
   useEffect(() => {
     const fetchUsers = async () => {
       try {
-        const usersSnap = await getDocs(collection(db, "users"));
-        const allUsers = usersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const usersSnap = await getDocs(collection(db as Firestore, "users"));
+        const allUsers = usersSnap.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) }));
         
         // If user is superAdmin, show all users
         if (userProfile?.role === "superAdmin") {
@@ -70,7 +70,7 @@ export default function UsersPage() {
   useEffect(() => {
     const fetchCountries = async () => {
       try {
-        const countriesSnap = await getDocs(collection(db, "countries"));
+        const countriesSnap = await getDocs(collection(db as Firestore, "countries"));
         const countriesData = countriesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         setCountries(countriesData);
       } catch (error) {
@@ -89,13 +89,13 @@ export default function UsersPage() {
     if (!newCountryName.trim()) return;
     
     try {
-      await addDoc(collection(db, "countries"), {
+      await addDoc(collection(db as Firestore, "countries"), {
         name: newCountryName.trim(),
         createdAt: new Date()
       });
       setNewCountryName("");
       // Refresh countries list
-      const countriesSnap = await getDocs(collection(db, "countries"));
+      const countriesSnap = await getDocs(collection(db as Firestore, "countries"));
       setCountries(countriesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     } catch (error) {
       console.error("Error creating country:", error);
@@ -122,7 +122,7 @@ export default function UsersPage() {
       setSubmitting(true);
       
       // First update the country in the countries collection
-      await updateDoc(doc(db, "countries", editingCountry.id), {
+      await updateDoc(doc(db as Firestore, "countries", editingCountry.id), {
         name: newName,
         updatedAt: new Date()
       });
@@ -135,12 +135,12 @@ export default function UsersPage() {
       setSuccess(`Country updated successfully! Migrated ${migrationResult.quoteRequests} quote requests and ${migrationResult.users} user profiles.`);
       
       // Refresh countries list
-      const countriesSnap = await getDocs(collection(db, "countries"));
+      const countriesSnap = await getDocs(collection(db as Firestore, "countries"));
       setCountries(countriesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       
       // Refresh users list to show updated data
-      const usersSnap = await getDocs(collection(db, "users"));
-      const allUsers = usersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const usersSnap = await getDocs(collection(db as Firestore, "users"));
+      const allUsers = usersSnap.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) }));
       const userCountries = userProfile?.countries || [];
       const visibleUsers = userCountries.length > 0
         ? allUsers.filter((userData: any) => {
@@ -161,9 +161,9 @@ export default function UsersPage() {
     if (!confirm("Are you sure you want to delete this country? This action cannot be undone.")) return;
     
     try {
-      await deleteDoc(doc(db, "countries", countryId));
+      await deleteDoc(doc(db as Firestore, "countries", countryId));
       // Refresh countries list
-      const countriesSnap = await getDocs(collection(db, "countries"));
+      const countriesSnap = await getDocs(collection(db as Firestore, "countries"));
       setCountries(countriesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     } catch (error) {
       console.error("Error deleting country:", error);
@@ -197,7 +197,7 @@ export default function UsersPage() {
       setError("");
       
       // Store current user info
-      const currentUser = auth.currentUser;
+      const currentUser = (auth as any)?.currentUser;
       const currentUserEmail = currentUser?.email;
       
       if (!currentUserEmail) {
@@ -207,7 +207,7 @@ export default function UsersPage() {
       
       // Create Firebase Authentication account (this will sign in the new user)
       const userCredential = await createUserWithEmailAndPassword(
-        auth, 
+        auth as any,
         newUser.email.trim(), 
         newUser.password.trim()
       );
@@ -218,7 +218,7 @@ export default function UsersPage() {
       });
       
       // Create Firestore user document with the Firebase Auth UID as document ID
-      await setDoc(doc(db, "users", userCredential.user.uid), {
+      await setDoc(doc(db as Firestore, "users", userCredential.user.uid), {
         displayName: newUser.displayName.trim(),
         name: newUser.displayName.trim(), // Add name field for compatibility
         email: newUser.email.trim(),
@@ -230,10 +230,10 @@ export default function UsersPage() {
       });
       
       // Sign out the newly created user
-      await signOut(auth);
+      await signOut(auth as any);
       
       // Re-authenticate the original admin user
-      await signInWithEmailAndPassword(auth, currentUserEmail, adminPassword);
+      await signInWithEmailAndPassword(auth as any, currentUserEmail, adminPassword);
       
       // Reset form and close modals
       setNewUser({
@@ -249,8 +249,8 @@ export default function UsersPage() {
       setSuccess(`User ${newUser.displayName} created successfully!`);
       
       // Refresh users list
-      const usersSnap = await getDocs(collection(db, "users"));
-      const allUsers = usersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const usersSnap = await getDocs(collection(db as Firestore, "users"));
+      const allUsers = usersSnap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
       const userCountries = userProfile?.countries || [];
       const visibleUsers = userCountries.length > 0
         ? allUsers.filter((userData: any) => {
@@ -281,7 +281,7 @@ export default function UsersPage() {
     if (!editingUser || !editingUser.email.trim() || !editingUser.displayName.trim()) return;
     
     try {
-      await updateDoc(doc(db, "users", editingUser.id), {
+      await updateDoc(doc(db as Firestore, "users", editingUser.id), {
         displayName: editingUser.displayName.trim(),
         email: editingUser.email.trim(),
         role: editingUser.role,
@@ -292,8 +292,8 @@ export default function UsersPage() {
       setEditingUser(null);
       
       // Refresh users list
-      const usersSnap = await getDocs(collection(db, "users"));
-      const allUsers = usersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const usersSnap = await getDocs(collection(db as Firestore, "users"));
+      const allUsers = usersSnap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
       const userCountries = userProfile?.countries || [];
       const visibleUsers = userCountries.length > 0
         ? allUsers.filter((userData: any) => {
@@ -310,10 +310,10 @@ export default function UsersPage() {
     if (!confirm("Are you sure you want to delete this user? This action cannot be undone.")) return;
     
     try {
-      await deleteDoc(doc(db, "users", userId));
+      await deleteDoc(doc(db as Firestore, "users", userId));
       
       // Refresh users list
-      const usersSnap = await getDocs(collection(db, "users"));
+      const usersSnap = await getDocs(collection(db as Firestore, "users"));
       const allUsers = usersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       const userCountries = userProfile?.countries || [];
       const visibleUsers = userCountries.length > 0
@@ -393,8 +393,7 @@ export default function UsersPage() {
         return;
       }
 
-      // Generate a temporary password
-      const tempPassword = Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-4);
+      // Reset via secure server API using Admin SDK
       
       // Store current user info for re-authentication
       const currentUser = auth.currentUser;
@@ -405,7 +404,7 @@ export default function UsersPage() {
         return;
       }
 
-      // Get admin password for re-authentication
+      // Get admin password for re-authentication (client-only step)
       const adminPassword = prompt("Please enter your admin password to reset the user's password:");
       if (!adminPassword) {
         setError("Admin password required to reset user password");
@@ -415,22 +414,22 @@ export default function UsersPage() {
       try {
         // Re-authenticate admin user
         await signInWithEmailAndPassword(auth, currentUserEmail, adminPassword);
-        
-        // Now we need to change the target user's password
-        // We'll use Firebase Admin SDK approach by storing the temp password
-        // and providing clear instructions to the user
-        
-        // Update the user profile in Firestore with temporary password
-        await updateDoc(doc(db, "users", userId), {
-          tempPassword: tempPassword,
+
+        // Call secure API to reset the target user's password
+        const res = await fetch('/api/users/reset-password', { method: 'POST', body: JSON.stringify({ uid: userId }) });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || 'Reset failed');
+
+        const tempPassword = json.tempPassword as string;
+
+        // Store audit trail only (never store passwords in Firestore)
+        await updateDoc(doc(db as Firestore, "users", userId), {
           passwordResetAt: new Date(),
           passwordResetBy: userProfile?.email || 'unknown',
           passwordResetRequired: true,
-          // Store the original password hash for reference
-          originalPasswordHash: userEmail // This will be used to identify the user
         });
 
-        setSuccess(`Temporary password created for ${userEmail}: ${tempPassword}. IMPORTANT: The user must use this exact password to login. They will be prompted to change it immediately after login.`);
+        setSuccess(`Temporary password created for ${userEmail}: ${tempPassword}. Ask the user to log in with it and change immediately.`);
         
       } catch (authError: any) {
         console.error("Authentication error:", authError);
@@ -476,7 +475,7 @@ export default function UsersPage() {
       console.log(`[Migration] Starting migration from "${oldName}" to "${newName}"`);
       
       // Update all quote requests
-      const qrSnapshot = await getDocs(collection(db, "quoteRequests"));
+      const qrSnapshot = await getDocs(collection(db as Firestore, "quoteRequests"));
       const qrUpdates = [];
       
       for (const qrDoc of qrSnapshot.docs) {
@@ -492,7 +491,7 @@ export default function UsersPage() {
       }
       
       // Update all user profiles
-      const usersSnapshot = await getDocs(collection(db, "users"));
+      const usersSnapshot = await getDocs(collection(db as Firestore, "users"));
       const userUpdates = [];
       
       for (const userDoc of usersSnapshot.docs) {
@@ -508,7 +507,7 @@ export default function UsersPage() {
           if (data.countries && data.countries.includes(oldName)) {
             updates.countries = data.countries.map((c: string) => c === oldName ? newName : c);
           }
-          userUpdates.push(updateDoc(doc(db, "users", userDoc.id), updates));
+          userUpdates.push(updateDoc(doc(db as Firestore, "users", userDoc.id), updates));
         }
       }
       
@@ -531,7 +530,7 @@ export default function UsersPage() {
       console.log("[Data Consistency] Starting comprehensive data check...");
       
       // Get all countries
-      const countriesSnap = await getDocs(collection(db, "countries"));
+      const countriesSnap = await getDocs(collection(db as Firestore, "countries"));
       const validCountries = countriesSnap.docs.map(doc => doc.data().name);
       console.log("[Data Consistency] Valid countries:", validCountries);
       
@@ -748,7 +747,7 @@ export default function UsersPage() {
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-semibold">Users List</h2>
             <div className="flex gap-2">
-              {canManageUsers && (
+            {canManageUsers && (
                 <>
                   <button
                     onClick={handleFixUserProfiles}
@@ -757,25 +756,25 @@ export default function UsersPage() {
                   >
                     {fixingProfiles ? "Fixing..." : "Fix User Profiles"}
                   </button>
-                  <button
-                    onClick={() => {
-                      // Reset form completely when opening modal
-                      setNewUser({
-                        displayName: "",
-                        email: "",
-                        password: "",
+              <button
+                onClick={() => {
+                  // Reset form completely when opening modal
+                  setNewUser({
+                    displayName: "",
+                    email: "",
+                    password: "",
                         role: "Employee",
-                        countries: [],
-                      });
-                      setError("");
-                      setShowCreateUser(true);
-                    }}
-                    className="bg-[#e40115] text-white px-4 py-2 rounded-md hover:bg-[#c7010e] transition font-semibold"
-                  >
-                    Add New User
-                  </button>
+                    countries: [],
+                  });
+                  setError("");
+                  setShowCreateUser(true);
+                }}
+                className="bg-[#e40115] text-white px-4 py-2 rounded-md hover:bg-[#c7010e] transition font-semibold"
+              >
+                Add New User
+              </button>
                 </>
-              )}
+            )}
             </div>
           </div>
           
@@ -832,6 +831,49 @@ export default function UsersPage() {
                             >
                               Edit
                             </button>
+                            {userProfile?.role === 'superAdmin' && (
+                              <>
+                                <button
+                                  onClick={async () => {
+                                    try {
+                                      const res = await fetch('/api/admin/send-verification', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ uid: userData.id })
+                                      });
+                                      const data = await res.json();
+                                      if (!res.ok) throw new Error(data?.error || 'Failed');
+                                      alert('Verification link generated and returned in response. (Email sending not configured). Copy link from console.');
+                                      console.log('Verification link for', userData.email, ':', data.link);
+                                    } catch (e: any) {
+                                      alert(e?.message || 'Failed to send verification');
+                                    }
+                                  }}
+                                  className="text-purple-600 hover:text-purple-800 font-medium text-sm"
+                                >
+                                  Send Verification Email
+                                </button>
+                                <button
+                                  onClick={async () => {
+                                    try {
+                                      const res = await fetch('/api/admin/bypass', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ uid: userData.id, enabled: true })
+                                      });
+                                      const data = await res.json();
+                                      if (!res.ok) throw new Error(data?.error || 'Failed');
+                                      alert('Granted one-time bypass. Remember to remove it after first sign-in.');
+                                    } catch (e: any) {
+                                      alert(e?.message || 'Failed to set bypass');
+                                    }
+                                  }}
+                                  className="text-orange-600 hover:text-orange-800 font-medium text-sm"
+                                >
+                                  Grant 1-time Bypass
+                                </button>
+                              </>
+                            )}
                             <button
                               onClick={() => handleDeleteUser(userData.id)}
                               className="text-red-600 hover:text-red-800 font-medium text-sm"

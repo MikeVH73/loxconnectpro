@@ -24,14 +24,19 @@ export const beforeCreate = functions.auth.user().beforeCreate(async (user, cont
 
 // beforeSignIn: enforce emailVerified and active flag in custom claims
 export const beforeSignIn = functions.auth.user().beforeSignIn(async (user, context) => {
+  const claims: any = context?.authCredential?.claims || {};
+  // One-time bypass for emergencies; admin sets this via Admin SDK and clears after use
+  if (claims?.one_time_bypass === true) {
+    return;
+  }
   if (!user.emailVerified) {
     throw new functions.auth.HttpsError('permission-denied', 'Email not verified');
   }
-  // Example: if using custom claims with an active flag
-  const active = (context?.authCredential?.claims as any)?.active;
-  if (active === false) {
+  // Optional: active flag
+  if (claims?.active === false) {
     throw new functions.auth.HttpsError('permission-denied', 'Account disabled');
   }
 });
+
 
 

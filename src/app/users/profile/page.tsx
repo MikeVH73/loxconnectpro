@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import Link from "next/link";
 import { useAuth } from "../../AuthProvider";
 import { updatePassword, EmailAuthProvider, reauthenticateWithCredential } from "firebase/auth";
 import { auth } from "../../../firebaseClient";
@@ -70,11 +71,20 @@ export default function ProfilePage() {
     return <div className="min-h-screen flex items-center justify-center">Please log in to access your profile.</div>;
   }
 
+  const effectiveName = (
+    userProfile?.name || userProfile?.displayName || user?.displayName || user?.email?.split("@")[0] || "Not set"
+  );
+
   return (
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-2xl mx-auto">
         <div className="card-modern">
           <h1 className="headline-modern text-[#e40115] mb-8">Profile Settings</h1>
+          <div className="mb-4 flex items-center justify-end">
+            <Link href="/users/security" className="text-sm text-blue-600 hover:underline">
+              Account Security
+            </Link>
+          </div>
           
           {/* User Info Section */}
           <div className="mb-8 p-6 bg-gray-50 rounded-lg">
@@ -82,7 +92,7 @@ export default function ProfilePage() {
             <div className="space-y-3">
               <div className="flex justify-between">
                 <span className="font-medium text-gray-700">Name:</span>
-                <span className="text-gray-900">{user.displayName || userProfile?.displayName || "Not set"}</span>
+                <span className="text-gray-900">{effectiveName}</span>
               </div>
               <div className="flex justify-between">
                 <span className="font-medium text-gray-700">Email:</span>
