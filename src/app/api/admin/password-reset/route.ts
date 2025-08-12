@@ -34,7 +34,13 @@ export async function POST(request: NextRequest) {
     if (!targetEmail) {
       return NextResponse.json({ ok: false, error: 'Missing email/uid' }, { status: 400 });
     }
-    const link = await auth.generatePasswordResetLink(targetEmail);
+    // Provide a continue URL to satisfy Identity Platform requirements
+    const origin = new URL(request.url).origin;
+    const continueUrl = `${origin}/login`;
+    const link = await auth.generatePasswordResetLink(targetEmail, {
+      url: continueUrl,
+      handleCodeInApp: false,
+    });
     return NextResponse.json({ ok: true, link });
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: e?.message || String(e) }, { status: 500 });
