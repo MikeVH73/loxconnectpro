@@ -888,11 +888,29 @@ export default function UsersPage() {
                             </button>
                             {(userProfile?.role === "admin" || userProfile?.role === "superAdmin") && (
                               <button
-                                onClick={() => handleCreateTemporaryPassword(
-                                  userData.id, 
-                                  userData.email, 
-                                  userData.countries || []
-                                )}
+                                onClick={async () => {
+                                  try {
+                                    setResettingPassword(userData.id);
+                                    const res = await fetch('/api/admin/password-reset', {
+                                      method: 'POST',
+                                      headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({ uid: userData.id, email: userData.email })
+                                    });
+                                    const data = await res.json();
+                                    if (!res.ok) throw new Error(data?.error || 'Failed');
+                                    const link: string = data?.link || '';
+                                    if (link) {
+                                      window.prompt('Copy password reset link for ' + (userData.email || 'user'), link);
+                                    } else {
+                                      alert('Reset link generated but not returned. Check console.');
+                                      console.log('Reset link response:', data);
+                                    }
+                                  } catch (e: any) {
+                                    alert(e?.message || 'Failed to generate reset link');
+                                  } finally {
+                                    setResettingPassword(null);
+                                  }
+                                }}
                                 disabled={resettingPassword === userData.id}
                                 className="text-green-600 hover:text-green-800 font-medium text-sm disabled:opacity-50"
                               >
