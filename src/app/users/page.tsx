@@ -839,12 +839,18 @@ export default function UsersPage() {
                                       const res = await fetch('/api/admin/send-verification', {
                                         method: 'POST',
                                         headers: { 'Content-Type': 'application/json' },
-                                        body: JSON.stringify({ uid: userData.id })
+                                        body: JSON.stringify({ uid: userData.id, email: userData.email })
                                       });
                                       const data = await res.json();
                                       if (!res.ok) throw new Error(data?.error || 'Failed');
-                                      alert('Verification link generated and returned in response. (Email sending not configured). Copy link from console.');
-                                      console.log('Verification link for', userData.email, ':', data.link);
+                                      const link: string = data?.link || '';
+                                      if (link) {
+                                        // Use prompt to make it easy to copy
+                                        window.prompt('Copy verification link for ' + (userData.email || 'user'), link);
+                                      } else {
+                                        alert('Verification link generated but not returned. Check console.');
+                                        console.log('Verification link response:', data);
+                                      }
                                     } catch (e: any) {
                                       alert(e?.message || 'Failed to send verification');
                                     }
