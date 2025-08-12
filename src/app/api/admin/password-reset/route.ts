@@ -35,8 +35,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: false, error: 'Missing email/uid' }, { status: 400 });
     }
     // Provide a continue URL to satisfy Identity Platform requirements
-    const origin = new URL(request.url).origin;
-    const continueUrl = `${origin}/login`;
+    const previewOrigin = new URL(request.url).origin;
+    const configuredBase = process.env.NEXT_PUBLIC_APP_BASE_URL || 'https://loxconnectpro.vercel.app';
+    // Use a domain that's on the Authorized domains list to avoid action link failures in previews
+    const continueUrl = `${configuredBase}/login`;
     const link = await auth.generatePasswordResetLink(targetEmail, {
       url: continueUrl,
       handleCodeInApp: false,
