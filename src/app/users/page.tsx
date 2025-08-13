@@ -848,7 +848,7 @@ export default function UsersPage() {
                             {/* 1) Edit - Dark Grey */}
                             <button
                               onClick={() => setEditingUser({...userData})}
-                              className="px-3 py-1 rounded text-sm bg-[#bbbdbe] hover:bg-[#aeb0b1] text-gray-900 inline-flex items-center gap-1"
+                              className="px-3 py-1 rounded text-sm bg-[#cccdce] hover:bg-[#bbbdbe] text-gray-900 inline-flex items-center gap-1"
                             >
                               <FiEdit /> Edit
                             </button>
@@ -879,7 +879,7 @@ export default function UsersPage() {
                                   }
                                 }}
                                 disabled={resettingPassword === userData.id}
-                                className="px-3 py-1 rounded text-sm bg-black text-white hover:opacity-90 inline-flex items-center gap-1 disabled:opacity-50"
+                                className="px-3 py-1 rounded text-sm bg-[#cccdce] hover:bg-[#bbbdbe] text-gray-900 inline-flex items-center gap-1 disabled:opacity-50"
                               >
                                 <FiKey /> {resettingPassword === userData.id ? "Creating..." : "Reset Password"}
                               </button>
@@ -973,7 +973,7 @@ export default function UsersPage() {
                                       alert(e?.message || 'Failed to set bypass');
                                     }
                                   }}
-                                  className="px-3 py-1 rounded text-sm bg-[#bbbdbe] hover:bg-[#aeb0b1] text-gray-900 inline-flex items-center gap-1"
+                                  className="px-3 py-1 rounded text-sm bg-[#cccdce] hover:bg-[#bbbdbe] text-gray-900 inline-flex items-center gap-1"
                                 >
                                   <FiShieldOff /> Grant 1-time Bypass
                                 </button>
@@ -1001,7 +1001,7 @@ export default function UsersPage() {
                                   }
                                 }}
                                 disabled={resettingPassword === userData.id}
-                                className="px-3 py-1 rounded text-sm bg-[#e40115] hover:bg-[#c7010e] text-white inline-flex items-center gap-1 disabled:opacity-50"
+                                className="px-3 py-1 rounded text-sm bg-[#cccdce] hover:bg-[#bbbdbe] text-gray-900 inline-flex items-center gap-1 disabled:opacity-50"
                               >
                                 <FiZap /> Set Temp Password
                               </button>
@@ -1009,7 +1009,7 @@ export default function UsersPage() {
                             {/* 7) Delete - Red */}
                             <button
                               onClick={() => handleDeleteUser(userData.id)}
-                              className="px-3 py-1 rounded text-sm bg-[#e40115] hover:bg-[#c7010e] text-white inline-flex items-center gap-1"
+                              className="px-3 py-1 rounded text-sm bg-[#cccdce] hover:bg-[#bbbdbe] text-gray-900 inline-flex items-center gap-1"
                             >
                               <FiTrash2 /> Delete
                             </button>

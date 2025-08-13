@@ -32,7 +32,21 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'uid or email required' }, { status: 400 });
     }
     const auth = getAdminAuth();
-    const user = uid ? await auth.getUser(uid) : await auth.getUserByEmail(email!);
+    let user: admin.auth.UserRecord;
+    if (uid) {
+      try {
+        user = await auth.getUser(uid);
+      } catch (e) {
+        // Fallback to email lookup for legacy profiles where Firestore doc id != Auth UID
+        if (email) {
+          user = await auth.getUserByEmail(email);
+        } else {
+          throw e;
+        }
+      }
+    } else {
+      user = await auth.getUserByEmail(email!);
+    }
 
     // Create a simple action link to the security page
     const baseUrl = process.env.NEXT_PUBLIC_VERCEL_URL
