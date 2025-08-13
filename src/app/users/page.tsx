@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { FiEdit, FiKey, FiMail, FiUserCheck, FiShieldOff, FiTrash2, FiZap } from "react-icons/fi";
 import { useAuth } from "../AuthProvider";
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, setDoc, Firestore } from "firebase/firestore";
 import { createUserWithEmailAndPassword, updateProfile, signInWithEmailAndPassword, signOut } from "firebase/auth";
@@ -825,12 +826,46 @@ export default function UsersPage() {
                       {canManageUsers && (
                         <td className="py-3 px-4">
                           <div className="flex flex-wrap gap-2">
+                            {/* 1) Edit - Dark Grey */}
                             <button
                               onClick={() => setEditingUser({...userData})}
-                              className="px-3 py-1 rounded text-sm bg-[#bbbdbe] hover:bg-[#aeb0b1] text-gray-900"
+                              className="px-3 py-1 rounded text-sm bg-[#bbbdbe] hover:bg-[#aeb0b1] text-gray-900 inline-flex items-center gap-1"
                             >
-                              Edit
+                              <FiEdit /> Edit
                             </button>
+                            {/* 2) Reset Password - Black */}
+                            {(userProfile?.role === "admin" || userProfile?.role === "superAdmin") && (
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    setResettingPassword(userData.id);
+                                    const res = await fetch('/api/admin/password-reset', {
+                                      method: 'POST',
+                                      headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({ uid: userData.id, email: userData.email })
+                                    });
+                                    const data = await res.json();
+                                    if (!res.ok) throw new Error(data?.error || 'Failed');
+                                    const link: string = data?.link || '';
+                                    if (link) {
+                                      window.prompt('Copy password reset link for ' + (userData.email || 'user'), link);
+                                    } else {
+                                      alert('Reset link generated but not returned. Check console.');
+                                      console.log('Reset link response:', data);
+                                    }
+                                  } catch (e: any) {
+                                    alert(e?.message || 'Failed to generate reset link');
+                                  } finally {
+                                    setResettingPassword(null);
+                                  }
+                                }}
+                                disabled={resettingPassword === userData.id}
+                                className="px-3 py-1 rounded text-sm bg-black text-white hover:opacity-90 inline-flex items-center gap-1 disabled:opacity-50"
+                              >
+                                <FiKey /> {resettingPassword === userData.id ? "Creating..." : "Reset Password"}
+                              </button>
+                            )}
+                            {/* 3) Send Verification - Light Grey */}
                             {userProfile?.role === 'superAdmin' && (
                               <>
                                 <button
@@ -845,7 +880,6 @@ export default function UsersPage() {
                                       if (!res.ok) throw new Error(data?.error || 'Failed');
                                       const link: string = data?.link || '';
                                       if (link) {
-                                        // Use prompt to make it easy to copy
                                         window.prompt('Copy verification link for ' + (userData.email || 'user'), link);
                                       } else {
                                         alert('Verification link generated but not returned. Check console.');
@@ -855,10 +889,11 @@ export default function UsersPage() {
                                       alert(e?.message || 'Failed to send verification');
                                     }
                                   }}
-                                  className="px-3 py-1 rounded text-sm bg-[#cccdce] hover:bg-[#bbbdbe] text-gray-900"
+                                  className="px-3 py-1 rounded text-sm bg-[#cccdce] hover:bg-[#bbbdbe] text-gray-900 inline-flex items-center gap-1"
                                 >
-                                  Send Verification Email
+                                  <FiMail /> Send Verification Email
                                 </button>
+                                {/* 4) Update Auth Email - Light Grey */}
                                 <button
                                   onClick={async () => {
                                     try {
@@ -871,16 +906,16 @@ export default function UsersPage() {
                                       });
                                       const data = await res.json();
                                       if (!res.ok) throw new Error(data?.error || 'Failed');
-                                      // Show verification link for the updated email
                                       window.prompt('Copy verification link for ' + newEmail, data.link);
                                     } catch (e: any) {
                                       alert(e?.message || 'Failed to update email');
                                     }
                                   }}
-                                  className="px-3 py-1 rounded text-sm bg-[#cccdce] hover:bg-[#bbbdbe] text-gray-900"
+                                  className="px-3 py-1 rounded text-sm bg-[#cccdce] hover:bg-[#bbbdbe] text-gray-900 inline-flex items-center gap-1"
                                 >
-                                  Update Auth Email
+                                  <FiUserCheck /> Update Auth Email
                                 </button>
+                                {/* 5) Grant 1-time Bypass - Dark Grey */}
                                 <button
                                   onClick={async () => {
                                     try {
@@ -896,75 +931,46 @@ export default function UsersPage() {
                                       alert(e?.message || 'Failed to set bypass');
                                     }
                                   }}
-                                  className="px-3 py-1 rounded text-sm bg-[#cccdce] hover:bg-[#bbbdbe] text-gray-900"
+                                  className="px-3 py-1 rounded text-sm bg-[#bbbdbe] hover:bg-[#aeb0b1] text-gray-900 inline-flex items-center gap-1"
                                 >
-                                  Grant 1-time Bypass
+                                  <FiShieldOff /> Grant 1-time Bypass
                                 </button>
                               </>
                             )}
+                            {/* 6) Set Temp Password - Red */}
+                            {(userProfile?.role === "admin" || userProfile?.role === "superAdmin") && (
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    setResettingPassword(userData.id);
+                                    const res = await fetch('/api/admin/set-temp-password', {
+                                      method: 'POST',
+                                      headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({ uid: userData.id, email: userData.email })
+                                    });
+                                    const data = await res.json();
+                                    if (!res.ok) throw new Error(data?.error || 'Failed');
+                                    const pwd: string = data?.tempPassword || '';
+                                    window.prompt('Copy temporary password for ' + (userData.email || 'user'), pwd);
+                                  } catch (e: any) {
+                                    alert(e?.message || 'Failed to set temp password');
+                                  } finally {
+                                    setResettingPassword(null);
+                                  }
+                                }}
+                                disabled={resettingPassword === userData.id}
+                                className="px-3 py-1 rounded text-sm bg-[#e40115] hover:bg-[#c7010e] text-white inline-flex items-center gap-1 disabled:opacity-50"
+                              >
+                                <FiZap /> Set Temp Password
+                              </button>
+                            )}
+                            {/* 7) Delete - Red */}
                             <button
                               onClick={() => handleDeleteUser(userData.id)}
-                              className="px-3 py-1 rounded text-sm bg-[#e40115] hover:bg-[#c7010e] text-white"
+                              className="px-3 py-1 rounded text-sm bg-[#e40115] hover:bg-[#c7010e] text-white inline-flex items-center gap-1"
                             >
-                              Delete
+                              <FiTrash2 /> Delete
                             </button>
-                            {(userProfile?.role === "admin" || userProfile?.role === "superAdmin") && (
-                              <div className="flex items-center gap-2">
-                                <button
-                                  onClick={async () => {
-                                    try {
-                                      setResettingPassword(userData.id);
-                                      const res = await fetch('/api/admin/password-reset', {
-                                        method: 'POST',
-                                        headers: { 'Content-Type': 'application/json' },
-                                        body: JSON.stringify({ uid: userData.id, email: userData.email })
-                                      });
-                                      const data = await res.json();
-                                      if (!res.ok) throw new Error(data?.error || 'Failed');
-                                      const link: string = data?.link || '';
-                                      if (link) {
-                                        window.prompt('Copy password reset link for ' + (userData.email || 'user'), link);
-                                      } else {
-                                        alert('Reset link generated but not returned. Check console.');
-                                        console.log('Reset link response:', data);
-                                      }
-                                    } catch (e: any) {
-                                      alert(e?.message || 'Failed to generate reset link');
-                                    } finally {
-                                      setResettingPassword(null);
-                                    }
-                                  }}
-                                  disabled={resettingPassword === userData.id}
-                                  className="px-3 py-1 rounded text-sm bg-[#bbbdbe] hover:bg-[#aeb0b1] text-gray-900 disabled:opacity-50"
-                                >
-                                  {resettingPassword === userData.id ? "Creating..." : "Reset Password"}
-                                </button>
-                                <button
-                                  onClick={async () => {
-                                    try {
-                                      setResettingPassword(userData.id);
-                                      const res = await fetch('/api/admin/set-temp-password', {
-                                        method: 'POST',
-                                        headers: { 'Content-Type': 'application/json' },
-                                        body: JSON.stringify({ uid: userData.id, email: userData.email })
-                                      });
-                                      const data = await res.json();
-                                      if (!res.ok) throw new Error(data?.error || 'Failed');
-                                      const pwd: string = data?.tempPassword || '';
-                                      window.prompt('Copy temporary password for ' + (userData.email || 'user'), pwd);
-                                    } catch (e: any) {
-                                      alert(e?.message || 'Failed to set temp password');
-                                    } finally {
-                                      setResettingPassword(null);
-                                    }
-                                  }}
-                                  disabled={resettingPassword === userData.id}
-                                  className="px-3 py-1 rounded text-sm bg-[#e40115] hover:bg-[#c7010e] text-white disabled:opacity-50"
-                                >
-                                  Set Temp Password
-                                </button>
-                              </div>
-                            )}
                           </div>
                         </td>
                       )}
