@@ -862,6 +862,28 @@ export default function UsersPage() {
                                 <button
                                   onClick={async () => {
                                     try {
+                                      const newEmail = window.prompt('Enter new email for this user', userData.email || '');
+                                      if (!newEmail || !newEmail.includes('@')) return;
+                                      const res = await fetch('/api/admin/update-email', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ uid: userData.id, newEmail })
+                                      });
+                                      const data = await res.json();
+                                      if (!res.ok) throw new Error(data?.error || 'Failed');
+                                      // Show verification link for the updated email
+                                      window.prompt('Copy verification link for ' + newEmail, data.link);
+                                    } catch (e: any) {
+                                      alert(e?.message || 'Failed to update email');
+                                    }
+                                  }}
+                                  className="text-blue-700 hover:text-blue-900 font-medium text-sm"
+                                >
+                                  Update Auth Email
+                                </button>
+                                <button
+                                  onClick={async () => {
+                                    try {
                                       const res = await fetch('/api/admin/bypass', {
                                         method: 'POST',
                                         headers: { 'Content-Type': 'application/json' },
