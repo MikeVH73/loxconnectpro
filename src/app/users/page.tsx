@@ -827,7 +827,7 @@ export default function UsersPage() {
                           <div className="flex flex-wrap gap-2">
                             <button
                               onClick={() => setEditingUser({...userData})}
-                              className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm"
+                              className="px-3 py-1 rounded text-sm bg-[#bbbdbe] hover:bg-[#aeb0b1] text-gray-900"
                             >
                               Edit
                             </button>
@@ -855,7 +855,7 @@ export default function UsersPage() {
                                       alert(e?.message || 'Failed to send verification');
                                     }
                                   }}
-                                  className="px-3 py-1 bg-purple-600 text-white rounded hover:bg-purple-700 text-sm"
+                                  className="px-3 py-1 rounded text-sm bg-[#cccdce] hover:bg-[#bbbdbe] text-gray-900"
                                 >
                                   Send Verification Email
                                 </button>
@@ -877,7 +877,7 @@ export default function UsersPage() {
                                       alert(e?.message || 'Failed to update email');
                                     }
                                   }}
-                                  className="px-3 py-1 bg-indigo-600 text-white rounded hover:bg-indigo-700 text-sm"
+                                  className="px-3 py-1 rounded text-sm bg-[#cccdce] hover:bg-[#bbbdbe] text-gray-900"
                                 >
                                   Update Auth Email
                                 </button>
@@ -896,7 +896,7 @@ export default function UsersPage() {
                                       alert(e?.message || 'Failed to set bypass');
                                     }
                                   }}
-                                  className="px-3 py-1 bg-orange-500 text-white rounded hover:bg-orange-600 text-sm"
+                                  className="px-3 py-1 rounded text-sm bg-[#cccdce] hover:bg-[#bbbdbe] text-gray-900"
                                 >
                                   Grant 1-time Bypass
                                 </button>
@@ -904,7 +904,7 @@ export default function UsersPage() {
                             )}
                             <button
                               onClick={() => handleDeleteUser(userData.id)}
-                              className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 text-sm"
+                              className="px-3 py-1 rounded text-sm bg-[#e40115] hover:bg-[#c7010e] text-white"
                             >
                               Delete
                             </button>
@@ -935,7 +935,7 @@ export default function UsersPage() {
                                     }
                                   }}
                                   disabled={resettingPassword === userData.id}
-                                  className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 text-sm disabled:opacity-50"
+                                  className="px-3 py-1 rounded text-sm bg-[#bbbdbe] hover:bg-[#aeb0b1] text-gray-900 disabled:opacity-50"
                                 >
                                   {resettingPassword === userData.id ? "Creating..." : "Reset Password"}
                                 </button>
@@ -959,7 +959,7 @@ export default function UsersPage() {
                                     }
                                   }}
                                   disabled={resettingPassword === userData.id}
-                                  className="px-3 py-1 bg-pink-600 text-white rounded hover:bg-pink-700 text-sm disabled:opacity-50"
+                                  className="px-3 py-1 rounded text-sm bg-[#e40115] hover:bg-[#c7010e] text-white disabled:opacity-50"
                                 >
                                   Set Temp Password
                                 </button>
