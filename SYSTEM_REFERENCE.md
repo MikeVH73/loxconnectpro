@@ -76,6 +76,32 @@ interface UserProfile {
 - **Profile Fixing**: Utility to repair existing user profiles with missing fields
 - **Temporary Password Creation**: Generate temporary passwords for users who forgot their password
 
+**Admin Actions UI (Buttons, Order, Colors, Icons)**
+- **Order (most used → least used)**:
+  1. Edit
+  2. Reset Password
+  3. Send Verification Email
+  4. Update Auth Email
+  5. Grant 1‑time Bypass
+  6. Set Temp Password
+  7. Delete
+- **Colors**:
+  - Edit: Dark Grey `#BBBDBE`
+  - Reset Password: Black with white text
+  - Send Verification Email: Light Grey `#CCCDCE`
+  - Update Auth Email: Light Grey `#CCCDCE`
+  - Grant 1‑time Bypass: Dark Grey `#BBBDBE`
+  - Set Temp Password: Loxam Red `#E40115`
+  - Delete: Loxam Red `#E40115`
+- **Icons (react-icons/fi)**:
+  - Edit: `FiEdit`
+  - Reset Password: `FiKey`
+  - Send Verification Email: `FiMail`
+  - Update Auth Email: `FiUserCheck`
+  - Grant 1‑time Bypass: `FiShieldOff`
+  - Set Temp Password: `FiZap`
+  - Delete: `FiTrash2`
+
 **Authorization Rules**:
 - **superAdmin**: Can see all users from all organizations, can reset passwords for any user
 - **admin**: Can see users from their assigned countries, can reset passwords for users in same country
