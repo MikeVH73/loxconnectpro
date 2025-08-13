@@ -38,6 +38,7 @@ export default function UsersPage() {
   const [reviewSelection, setReviewSelection] = useState<Record<string, boolean>>({});
   const [reviewSubmitting, setReviewSubmitting] = useState(false);
   const [reviewCompleted, setReviewCompleted] = useState(false);
+  const [lastReviewMonth, setLastReviewMonth] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -733,7 +734,7 @@ export default function UsersPage() {
   const canManageUsers = userProfile?.role === "admin" || userProfile?.role === "superAdmin";
   const canManageCountries = userProfile?.role === "admin" || userProfile?.role === "superAdmin";
   const monthKey = new Date().toISOString().slice(0,7);
-  const needsMonthlyReview = !reviewCompleted && (userProfile?.role === 'admin' || userProfile?.role === 'superAdmin');
+  const needsMonthlyReview = (!reviewCompleted || lastReviewMonth !== monthKey) && (userProfile?.role === 'admin' || userProfile?.role === 'superAdmin');
   
   if (!canViewUsers) {
     return (
@@ -1513,7 +1514,7 @@ export default function UsersPage() {
                 <tbody>
                   {users.map((u) => (
                     <tr key={u.id} className="border-b hover:bg-gray-50">
-                      <td className="p-2"><input type="checkbox" checked={!!reviewSelection[u.id]} onChange={(e) => setReviewSelection(prev => ({ ...prev, [u.id]: e.target.checked }))} /></td>
+                      <td className="p-2"><input type="checkbox" checked={reviewSelection[u.id] !== undefined ? reviewSelection[u.id] : !(u.disabled || u.accessDisabled)} onChange={(e) => setReviewSelection(prev => ({ ...prev, [u.id]: e.target.checked }))} /></td>
                       <td className="p-2">{u.displayName || '—'}</td>
                       <td className="p-2">{u.email || '—'}</td>
                       <td className="p-2">{(u.countries || []).join(', ')}</td>
@@ -1564,6 +1565,7 @@ export default function UsersPage() {
                     }
                     setUsers(refreshed);
                     setReviewCompleted(true);
+                    setLastReviewMonth(monthKey);
                   } catch (e: any) {
                     alert(e?.message || 'Failed to submit review');
                   } finally {
