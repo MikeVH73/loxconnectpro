@@ -887,35 +887,61 @@ export default function UsersPage() {
                               Delete
                             </button>
                             {(userProfile?.role === "admin" || userProfile?.role === "superAdmin") && (
-                              <button
-                                onClick={async () => {
-                                  try {
-                                    setResettingPassword(userData.id);
-                                    const res = await fetch('/api/admin/password-reset', {
-                                      method: 'POST',
-                                      headers: { 'Content-Type': 'application/json' },
-                                      body: JSON.stringify({ uid: userData.id, email: userData.email })
-                                    });
-                                    const data = await res.json();
-                                    if (!res.ok) throw new Error(data?.error || 'Failed');
-                                    const link: string = data?.link || '';
-                                    if (link) {
-                                      window.prompt('Copy password reset link for ' + (userData.email || 'user'), link);
-                                    } else {
-                                      alert('Reset link generated but not returned. Check console.');
-                                      console.log('Reset link response:', data);
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={async () => {
+                                    try {
+                                      setResettingPassword(userData.id);
+                                      const res = await fetch('/api/admin/password-reset', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ uid: userData.id, email: userData.email })
+                                      });
+                                      const data = await res.json();
+                                      if (!res.ok) throw new Error(data?.error || 'Failed');
+                                      const link: string = data?.link || '';
+                                      if (link) {
+                                        window.prompt('Copy password reset link for ' + (userData.email || 'user'), link);
+                                      } else {
+                                        alert('Reset link generated but not returned. Check console.');
+                                        console.log('Reset link response:', data);
+                                      }
+                                    } catch (e: any) {
+                                      alert(e?.message || 'Failed to generate reset link');
+                                    } finally {
+                                      setResettingPassword(null);
                                     }
-                                  } catch (e: any) {
-                                    alert(e?.message || 'Failed to generate reset link');
-                                  } finally {
-                                    setResettingPassword(null);
-                                  }
-                                }}
-                                disabled={resettingPassword === userData.id}
-                                className="text-green-600 hover:text-green-800 font-medium text-sm disabled:opacity-50"
-                              >
-                                {resettingPassword === userData.id ? "Creating..." : "Reset Password"}
-                              </button>
+                                  }}
+                                  disabled={resettingPassword === userData.id}
+                                  className="text-green-600 hover:text-green-800 font-medium text-sm disabled:opacity-50"
+                                >
+                                  {resettingPassword === userData.id ? "Creating..." : "Reset Password"}
+                                </button>
+                                <button
+                                  onClick={async () => {
+                                    try {
+                                      setResettingPassword(userData.id);
+                                      const res = await fetch('/api/admin/set-temp-password', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ uid: userData.id, email: userData.email })
+                                      });
+                                      const data = await res.json();
+                                      if (!res.ok) throw new Error(data?.error || 'Failed');
+                                      const pwd: string = data?.tempPassword || '';
+                                      window.prompt('Copy temporary password for ' + (userData.email || 'user'), pwd);
+                                    } catch (e: any) {
+                                      alert(e?.message || 'Failed to set temp password');
+                                    } finally {
+                                      setResettingPassword(null);
+                                    }
+                                  }}
+                                  disabled={resettingPassword === userData.id}
+                                  className="text-pink-600 hover:text-pink-800 font-medium text-sm disabled:opacity-50"
+                                >
+                                  Set Temp Password
+                                </button>
+                              </div>
                             )}
                           </div>
                         </td>
