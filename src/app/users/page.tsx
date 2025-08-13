@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { FiEdit, FiKey, FiMail, FiUserCheck, FiShieldOff, FiTrash2, FiZap } from "react-icons/fi";
+import { getAuth } from "firebase/auth";
 import { useAuth } from "../AuthProvider";
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, setDoc, Firestore } from "firebase/firestore";
 import { createUserWithEmailAndPassword, updateProfile, signInWithEmailAndPassword, signOut } from "firebase/auth";
@@ -38,7 +39,18 @@ export default function UsersPage() {
     const fetchUsers = async () => {
       try {
         const usersSnap = await getDocs(collection(db as Firestore, "users"));
-        const allUsers = usersSnap.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) }));
+        let allUsers = usersSnap.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) }));
+        // SuperAdmin: augment with MFA status via Admin SDK API route
+        if (userProfile?.role === 'superAdmin' && allUsers.length > 0) {
+          try {
+            const uids = allUsers.map(u => u.id);
+            const res = await fetch('/api/admin/mfa-status', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ uids }) });
+            const data = await res.json();
+            if (res.ok && data?.statuses) {
+              allUsers = allUsers.map(u => ({ ...u, mfaEnabled: Boolean(data.statuses[u.id]) }));
+            }
+          } catch {}
+        }
         
         // If user is superAdmin, show all users
         if (userProfile?.role === "superAdmin") {
@@ -794,8 +806,9 @@ export default function UsersPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {users.map((userData) => {
+                   {users.map((userData) => {
                     const normalizedRole = userData.role === 'readOnly' || userData.role === 'user' ? 'Employee' : userData.role;
+                     const mfaStatus = (userData as any).mfaEnabled as boolean | undefined;
                     return (
                     <tr key={userData.id} className="border-b border-gray-100 hover:bg-gray-50">
                       <td className="py-3 px-4">{userData.displayName || "—"}</td>
@@ -810,7 +823,7 @@ export default function UsersPage() {
                           {normalizedRole || "—"}
                         </span>
                       </td>
-                      <td className="py-3 px-4">
+                       <td className="py-3 px-4">
                         {userData.countries && userData.countries.length > 0 ? (
                           <div className="flex gap-1 flex-wrap">
                             {userData.countries.map((country: string, index: number) => (
@@ -822,6 +835,12 @@ export default function UsersPage() {
                         ) : (
                           <span className="text-gray-400">No countries assigned</span>
                         )}
+                         {userProfile?.role === 'superAdmin' && (
+                           <div className="mt-1 text-xs">
+                             {mfaStatus === true && <span className="text-green-700">MFA: Enabled</span>}
+                             {mfaStatus === false && <span className="text-red-700">MFA: Not enabled</span>}
+                           </div>
+                         )}
                       </td>
                       {canManageUsers && (
                         <td className="py-3 px-4">
@@ -863,6 +882,29 @@ export default function UsersPage() {
                                 className="px-3 py-1 rounded text-sm bg-black text-white hover:opacity-90 inline-flex items-center gap-1 disabled:opacity-50"
                               >
                                 <FiKey /> {resettingPassword === userData.id ? "Creating..." : "Reset Password"}
+                              </button>
+                            )}
+                            {/* SuperAdmin: Send MFA reminder */}
+                            {userProfile?.role === 'superAdmin' && (
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    const res = await fetch('/api/admin/send-mfa-reminder', {
+                                      method: 'POST',
+                                      headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({ uid: userData.id, email: userData.email })
+                                    });
+                                    const data = await res.json();
+                                    if (!res.ok) throw new Error(data?.error || 'Failed');
+                                    const url: string = data?.securityUrl || '';
+                                    window.prompt('Send this link to the user to enroll MFA', url);
+                                  } catch (e: any) {
+                                    alert(e?.message || 'Failed to send MFA reminder');
+                                  }
+                                }}
+                                className="px-3 py-1 rounded text-sm bg-[#bbbdbe] hover:bg-[#aeb0b1] text-gray-900"
+                              >
+                                Send MFA Reminder
                               </button>
                             )}
                             {/* 3) Send Verification - Light Grey */}
