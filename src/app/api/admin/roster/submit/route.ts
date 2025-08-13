@@ -42,7 +42,8 @@ export async function POST(req: Request) {
     const { auth, db } = getAdmin();
 
     // 1) Persist review record
-    const docRef = db.doc(`accessReviews/${reviewMonth}/countries/${body.country}`);
+    const countryKey = body.country && body.country.trim() ? body.country.trim() : 'Global';
+    const docRef = db.doc(`accessReviews/${reviewMonth}/countries/${countryKey}`);
     await docRef.set(
       {
         reviewedBy: body.reviewedBy || 'unknown',
@@ -54,14 +55,43 @@ export async function POST(req: Request) {
     );
 
     // 2) Disable users not marked active
-    const allIds = new Set((body.allUsers || []).map((u) => u.id));
     const activeSet = new Set(body.activeUserIds);
-    const toDisable = [...allIds].filter((id) => !activeSet.has(id));
+    const all = body.allUsers || [];
+    const targets = all.filter((u) => !activeSet.has(u.id));
 
-    const ops = toDisable.map((uid) => auth.updateUser(uid, { disabled: true }));
-    await Promise.allSettled(ops);
+    const results: { email?: string; uid?: string; ok: boolean; error?: string }[] = [];
+    for (const t of targets) {
+      try {
+        let uid: string | null = null;
+        if (t.email) {
+          try {
+            const byEmail = await auth.getUserByEmail(t.email);
+            uid = byEmail.uid;
+          } catch {
+            // ignore and try by id
+          }
+        }
+        if (!uid) {
+          try {
+            const byId = await auth.getUser(t.id);
+            uid = byId.uid;
+          } catch {
+            // no match
+          }
+        }
+        if (!uid) {
+          results.push({ email: t.email, ok: false, error: 'User not found in Auth' });
+          continue;
+        }
+        await auth.updateUser(uid, { disabled: true });
+        results.push({ email: t.email, uid, ok: true });
+      } catch (e: any) {
+        results.push({ email: t.email, ok: false, error: e?.message || String(e) });
+      }
+    }
 
-    return NextResponse.json({ ok: true, disabledCount: toDisable.length });
+    const disabledCount = results.filter((r) => r.ok).length;
+    return NextResponse.json({ ok: true, disabledCount, results });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || String(e) }, { status: 500 });
   }

@@ -44,13 +44,18 @@ export default function UsersPage() {
         const usersSnap = await getDocs(collection(db as Firestore, "users"));
         let allUsers = usersSnap.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) }));
         // SuperAdmin: augment with MFA status via Admin SDK API route
-        if (userProfile?.role === 'superAdmin' && allUsers.length > 0) {
+         if (userProfile?.role === 'superAdmin' && allUsers.length > 0) {
           try {
             const uids = allUsers.map(u => u.id);
-            const res = await fetch('/api/admin/mfa-status', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ uids }) });
+            const res = await fetch('/api/admin/auth-status', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ uids }) });
             const data = await res.json();
             if (res.ok && data?.statuses) {
-              allUsers = allUsers.map(u => ({ ...u, mfaEnabled: Boolean(data.statuses[u.id]) }));
+              allUsers = allUsers.map(u => ({
+                ...u,
+                mfaEnabled: Boolean(data.statuses[u.id]?.mfaEnabled),
+                disabled: Boolean(data.statuses[u.id]?.disabled),
+                emailVerified: Boolean(data.statuses[u.id]?.emailVerified),
+              }));
             }
           } catch {}
         }
@@ -858,7 +863,7 @@ export default function UsersPage() {
                         </span>
                       </td>
                        <td className="py-3 px-4">
-                        {userData.countries && userData.countries.length > 0 ? (
+                         {userData.countries && userData.countries.length > 0 ? (
                           <div className="flex gap-1 flex-wrap">
                             {userData.countries.map((country: string, index: number) => (
                               <span key={index} className="pill-modern bg-gray-500 text-xs">
@@ -871,8 +876,11 @@ export default function UsersPage() {
                         )}
                          {userProfile?.role === 'superAdmin' && (
                            <div className="mt-1 text-xs">
-                             {mfaStatus === true && <span className="text-green-700">MFA: Enabled</span>}
-                             {mfaStatus === false && <span className="text-red-700">MFA: Not enabled</span>}
+                             <span className={mfaStatus ? 'text-green-700' : 'text-red-700'}>
+                               MFA: {mfaStatus ? 'Enabled' : 'Not enabled'}
+                             </span>
+                             <span className="ml-2">Status: {userData.disabled ? 'Disabled' : 'Active'}</span>
+                             {!userData.emailVerified && <span className="ml-2 text-red-700">Email not verified</span>}
                            </div>
                          )}
                       </td>
@@ -941,6 +949,23 @@ export default function UsersPage() {
                                 className="px-3 py-1 rounded text-sm bg-[#bbbdbe] hover:bg-[#aeb0b1] text-gray-900"
                               >
                                 Send MFA Reminder
+                              </button>
+                            )}
+                           {userProfile?.role === 'superAdmin' && userData.disabled && (
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    const res = await fetch('/api/admin/roster/reactivate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ uid: userData.id }) });
+                                    const data = await res.json();
+                                    if (!res.ok) throw new Error(data?.error || 'Failed');
+                                    alert('User reactivated');
+                                  } catch (e: any) {
+                                    alert(e?.message || 'Failed to reactivate user');
+                                  }
+                                }}
+                                className="px-3 py-1 rounded text-sm bg-[#cccdce] hover:bg-[#bbbdbe] text-gray-900"
+                              >
+                                Reactivate
                               </button>
                             )}
                             {/* 3) Send Verification - Light Grey */}
@@ -1494,8 +1519,8 @@ export default function UsersPage() {
                   try {
                     setReviewSubmitting(true);
                     const activeUserIds = Object.entries(reviewSelection).filter(([,v]) => v).map(([id]) => id);
-                    const countryList = (userProfile?.role === 'superAdmin' ? [] : (userProfile?.countries || []));
-                    const myCountry = countryList[0] || 'Unknown';
+                    const countryList = (userProfile?.countries || []);
+                    const myCountry = countryList[0] || 'Global';
                     await fetch('/api/admin/roster/submit', {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
@@ -1507,7 +1532,26 @@ export default function UsersPage() {
                       }),
                     });
                     setShowMonthlyReview(false);
-                    alert('Review saved. Inactive users have been disabled.');
+                    alert('Review saved. Inactive users have been disabled where possible. Reloading list…');
+                    // refresh list to reflect disabled flags
+                    const usersSnap = await getDocs(collection(db as Firestore, 'users'));
+                    let refreshed = usersSnap.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) }));
+                    if (userProfile?.role === 'superAdmin' && refreshed.length > 0) {
+                      try {
+                        const uids = refreshed.map(u => u.id);
+                        const res = await fetch('/api/admin/auth-status', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ uids }) });
+                        const data = await res.json();
+                        if (res.ok && data?.statuses) {
+                          refreshed = refreshed.map(u => ({
+                            ...u,
+                            mfaEnabled: Boolean(data.statuses[u.id]?.mfaEnabled),
+                            disabled: Boolean(data.statuses[u.id]?.disabled),
+                            emailVerified: Boolean(data.statuses[u.id]?.emailVerified),
+                          }));
+                        }
+                      } catch {}
+                    }
+                    setUsers(refreshed);
                   } catch (e: any) {
                     alert(e?.message || 'Failed to submit review');
                   } finally {
