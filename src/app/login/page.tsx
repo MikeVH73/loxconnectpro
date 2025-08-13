@@ -96,7 +96,8 @@ export default function LoginPage() {
     setMfaError("");
     try {
       const cleanCode = mfaCode.replace(/\s+/g, "");
-      const assertion = TotpMultiFactorGenerator.assertionForSignIn(cleanCode);
+      const selectedHint = mfaResolver.hints?.[0];
+      const assertion = TotpMultiFactorGenerator.assertionForSignIn(cleanCode, selectedHint as any);
       const cred = await mfaResolver.resolveSignIn(assertion);
       const idToken = await getIdToken(cred.user, true);
       await fetch('/api/auth/session', {
@@ -161,7 +162,7 @@ export default function LoginPage() {
               inputMode="numeric"
               pattern="[0-9]*"
               maxLength={6}
-              className="w-full border rounded px-3 py-2 tracking-widest text-center"
+              className="w-full border rounded px-3 py-2 tracking-widest text-center text-2xl"
               value={mfaCode}
               onChange={e => setMfaCode(e.target.value)}
               required
