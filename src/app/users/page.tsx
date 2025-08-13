@@ -34,6 +34,9 @@ export default function UsersPage() {
   });
   const [fixingProfiles, setFixingProfiles] = useState(false);
   const [resettingPassword, setResettingPassword] = useState<string | null>(null);
+  const [showMonthlyReview, setShowMonthlyReview] = useState(false);
+  const [reviewSelection, setReviewSelection] = useState<Record<string, boolean>>({});
+  const [reviewSubmitting, setReviewSubmitting] = useState(false);
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -715,6 +718,8 @@ export default function UsersPage() {
   const canViewUsers = userProfile?.role === "admin" || userProfile?.role === "superAdmin";
   const canManageUsers = userProfile?.role === "admin" || userProfile?.role === "superAdmin";
   const canManageCountries = userProfile?.role === "admin" || userProfile?.role === "superAdmin";
+  const monthKey = new Date().toISOString().slice(0,7);
+  const needsMonthlyReview = (userProfile?.role === 'admin' || userProfile?.role === 'superAdmin');
   
   if (!canViewUsers) {
     return (
@@ -727,9 +732,38 @@ export default function UsersPage() {
 
   return (
     <div className="p-8">
+      {needsMonthlyReview && (
+        <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 text-yellow-800 rounded text-sm flex items-center justify-between">
+          <span>Monthly Access Review for {monthKey} is due. Please confirm active users.</span>
+          <button
+            onClick={() => {
+              const start: Record<string, boolean> = {};
+              users.forEach((u) => { start[u.id] = true; });
+              setReviewSelection(start);
+              setShowMonthlyReview(true);
+            }}
+            className="px-3 py-1 bg-yellow-600 text-white rounded hover:bg-yellow-700"
+          >
+            Start Review
+          </button>
+        </div>
+      )}
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">User Management</h1>
         <div className="flex gap-2">
+          {(userProfile?.role === 'admin' || userProfile?.role === 'superAdmin') && (
+            <button
+              onClick={() => {
+                const start: Record<string, boolean> = {};
+                users.forEach((u) => { start[u.id] = true; });
+                setReviewSelection(start);
+                setShowMonthlyReview(true);
+              }}
+              className="px-4 py-2 bg-[#cccdce] text-gray-900 rounded hover:bg-[#bbbdbe]"
+            >
+              Monthly Access Review
+            </button>
+          )}
           <button
             onClick={handleFixDuplicateUsers}
             disabled={submitting}
@@ -1422,6 +1456,71 @@ export default function UsersPage() {
           </div>
         )}
               </div>
+      )}
+
+      {/* Monthly Access Review Modal */}
+      {showMonthlyReview && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-2xl">
+            <h3 className="text-lg font-semibold mb-4">Monthly Access Review</h3>
+            <p className="text-sm text-gray-600 mb-3">Tick users who are still active. Unticked users will be disabled on save.</p>
+            <div className="max-h-96 overflow-y-auto border rounded">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-left p-2">Active</th>
+                    <th className="text-left p-2">Name</th>
+                    <th className="text-left p-2">Email</th>
+                    <th className="text-left p-2">Countries</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {users.map((u) => (
+                    <tr key={u.id} className="border-b hover:bg-gray-50">
+                      <td className="p-2"><input type="checkbox" checked={!!reviewSelection[u.id]} onChange={(e) => setReviewSelection(prev => ({ ...prev, [u.id]: e.target.checked }))} /></td>
+                      <td className="p-2">{u.displayName || '—'}</td>
+                      <td className="p-2">{u.email || '—'}</td>
+                      <td className="p-2">{(u.countries || []).join(', ')}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="flex gap-3 mt-4 justify-end">
+              <button onClick={() => setShowMonthlyReview(false)} className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300">Cancel</button>
+              <button
+                disabled={reviewSubmitting}
+                onClick={async () => {
+                  try {
+                    setReviewSubmitting(true);
+                    const activeUserIds = Object.entries(reviewSelection).filter(([,v]) => v).map(([id]) => id);
+                    const countryList = (userProfile?.role === 'superAdmin' ? [] : (userProfile?.countries || []));
+                    const myCountry = countryList[0] || 'Unknown';
+                    await fetch('/api/admin/roster/submit', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        country: myCountry,
+                        reviewedBy: userProfile?.email || user?.email || 'unknown',
+                        activeUserIds,
+                        allUsers: users.map(u => ({ id: u.id, email: u.email, displayName: u.displayName })),
+                      }),
+                    });
+                    setShowMonthlyReview(false);
+                    alert('Review saved. Inactive users have been disabled.');
+                  } catch (e: any) {
+                    alert(e?.message || 'Failed to submit review');
+                  } finally {
+                    setReviewSubmitting(false);
+                  }
+                }}
+                className="px-4 py-2 bg-[#e40115] text-white rounded hover:bg-[#c7010e] disabled:opacity-50"
+              >
+                {reviewSubmitting ? 'Saving…' : 'Save Review'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
