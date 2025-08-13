@@ -975,7 +975,7 @@ export default function UsersPage() {
                                     alert(e?.message || 'Failed to reactivate user');
                                   }
                                 }}
-                                className="px-3 py-1 rounded text-sm bg-[#cccdce] hover:bg-[#bbbdbe] text-gray-900"
+                                className="px-3 py-1 rounded text-sm bg-green-600 hover:bg-green-700 text-white"
                               >
                                 Reactivate
                               </button>
