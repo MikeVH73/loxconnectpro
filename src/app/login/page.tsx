@@ -96,8 +96,13 @@ export default function LoginPage() {
     setMfaError("");
     try {
       const cleanCode = mfaCode.replace(/\s+/g, "");
-      const selectedHint = mfaResolver.hints?.[0];
-      const assertion = TotpMultiFactorGenerator.assertionForSignIn(selectedHint as any, cleanCode);
+      const enrollmentId = (mfaResolver.hints?.[0] as any)?.uid;
+      if (!enrollmentId) {
+        setMfaError('No enrolled TOTP factor found for this account.');
+        setSubmitting(false);
+        return;
+      }
+      const assertion = TotpMultiFactorGenerator.assertionForSignIn(enrollmentId, cleanCode);
       const cred = await mfaResolver.resolveSignIn(assertion);
       const idToken = await getIdToken(cred.user, true);
       await fetch('/api/auth/session', {
@@ -121,7 +126,6 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-gray-100">
       {!mfaResolver ? (
         <form onSubmit={handleSubmit} className="bg-white p-8 rounded-lg shadow-md w-full max-w-md">
-          <img src="/loxam-logo.svg" alt="Loxam" className="mx-auto mb-4 h-8" />
           <h1 className="text-2xl font-bold mb-6 text-center text-[#e40115]">LoxConnect PRO Login</h1>
           <div className="mb-4">
             <label className="block mb-1 font-medium">Email</label>
@@ -155,7 +159,6 @@ export default function LoginPage() {
         </form>
       ) : (
         <form onSubmit={handleMfaSubmit} className="bg-white p-8 rounded-lg shadow-md w-full max-w-md">
-          <img src="/loxam-logo.svg" alt="Loxam" className="mx-auto mb-4 h-8" />
           <h1 className="text-xl font-semibold mb-4 text-center">Two‑Step Verification</h1>
           <p className="text-sm text-gray-600 mb-4">Enter the 6‑digit code from your Authenticator app to finish signing in.</p>
           <div className="mb-4">
