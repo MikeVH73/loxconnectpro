@@ -85,7 +85,27 @@ export async function POST(req: Request) {
         }
         await auth.updateUser(uid, { disabled: true });
         results.push({ email: t.email, uid, ok: true });
+        // Mirror in Firestore user profile
+        await db.collection('users').doc(t.id).set(
+          {
+            accessDisabled: true,
+            accessDisabledAt: new Date().toISOString(),
+            accessDisabledBy: body.reviewedBy || 'unknown',
+          },
+          { merge: true }
+        );
       } catch (e: any) {
+        // Even if Auth update fails (e.g., user not in Auth), persist disabled flag in Firestore
+        try {
+          await db.collection('users').doc(t.id).set(
+            {
+              accessDisabled: true,
+              accessDisabledAt: new Date().toISOString(),
+              accessDisabledBy: body.reviewedBy || 'unknown',
+            },
+            { merge: true }
+          );
+        } catch {}
         results.push({ email: t.email, ok: false, error: e?.message || String(e) });
       }
     }

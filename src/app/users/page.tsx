@@ -37,6 +37,7 @@ export default function UsersPage() {
   const [showMonthlyReview, setShowMonthlyReview] = useState(false);
   const [reviewSelection, setReviewSelection] = useState<Record<string, boolean>>({});
   const [reviewSubmitting, setReviewSubmitting] = useState(false);
+  const [reviewCompleted, setReviewCompleted] = useState(false);
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -58,6 +59,14 @@ export default function UsersPage() {
               }));
             }
           } catch {}
+
+           // Merge Firestore accessDisabled flag as fallback visual
+           try {
+             const dbFlagsSnap = await getDocs(collection(db as Firestore, 'users'));
+             const map: Record<string, any> = {};
+             dbFlagsSnap.docs.forEach(d => { map[d.id] = d.data(); });
+             allUsers = allUsers.map(u => ({ ...u, disabled: u.disabled || Boolean(map[u.id]?.accessDisabled) }));
+           } catch {}
         }
         
         // If user is superAdmin, show all users
@@ -724,7 +733,7 @@ export default function UsersPage() {
   const canManageUsers = userProfile?.role === "admin" || userProfile?.role === "superAdmin";
   const canManageCountries = userProfile?.role === "admin" || userProfile?.role === "superAdmin";
   const monthKey = new Date().toISOString().slice(0,7);
-  const needsMonthlyReview = (userProfile?.role === 'admin' || userProfile?.role === 'superAdmin');
+  const needsMonthlyReview = !reviewCompleted && (userProfile?.role === 'admin' || userProfile?.role === 'superAdmin');
   
   if (!canViewUsers) {
     return (
@@ -879,7 +888,7 @@ export default function UsersPage() {
                              <span className={mfaStatus ? 'text-green-700' : 'text-red-700'}>
                                MFA: {mfaStatus ? 'Enabled' : 'Not enabled'}
                              </span>
-                             <span className="ml-2">Status: {userData.disabled ? 'Disabled' : 'Active'}</span>
+                             <span className="ml-2">Status: {(userData.disabled || userData.accessDisabled) ? 'Disabled' : 'Active'}</span>
                              {!userData.emailVerified && <span className="ml-2 text-red-700">Email not verified</span>}
                            </div>
                          )}
@@ -951,7 +960,7 @@ export default function UsersPage() {
                                 Send MFA Reminder
                               </button>
                             )}
-                           {userProfile?.role === 'superAdmin' && userData.disabled && (
+                           {userProfile?.role === 'superAdmin' && (userData.disabled || userData.accessDisabled) && (
                               <button
                                 onClick={async () => {
                                   try {
@@ -959,6 +968,8 @@ export default function UsersPage() {
                                     const data = await res.json();
                                     if (!res.ok) throw new Error(data?.error || 'Failed');
                                     alert('User reactivated');
+                                    // refresh row locally
+                                    setUsers(prev => prev.map(u => u.id === userData.id ? { ...u, disabled: false, accessDisabled: false } : u));
                                   } catch (e: any) {
                                     alert(e?.message || 'Failed to reactivate user');
                                   }
@@ -1552,6 +1563,7 @@ export default function UsersPage() {
                       } catch {}
                     }
                     setUsers(refreshed);
+                    setReviewCompleted(true);
                   } catch (e: any) {
                     alert(e?.message || 'Failed to submit review');
                   } finally {

@@ -20,15 +20,16 @@ function getAdmin() {
       });
     }
   }
-  return admin.auth(adminApp);
+  return { auth: admin.auth(adminApp), db: admin.firestore(adminApp) };
 }
 
 export async function POST(req: Request) {
   try {
     const { uid } = await req.json();
     if (!uid) return NextResponse.json({ error: 'uid required' }, { status: 400 });
-    const auth = getAdmin();
+    const { auth, db } = getAdmin();
     await auth.updateUser(uid, { disabled: false });
+    await db.collection('users').doc(uid).set({ accessDisabled: false }, { merge: true });
     return NextResponse.json({ ok: true });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || String(e) }, { status: 500 });
