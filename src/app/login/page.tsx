@@ -62,7 +62,12 @@ export default function LoginPage() {
         }
       }
       
-      setError(err.message || "Login failed");
+      // Friendlier hint for unverified emails or strict policy
+      if (err?.code === 'auth/invalid-credential') {
+        setError('Login failed. If you recently changed your email, make sure it is verified. Contact an admin to resend a verification email.');
+      } else {
+        setError(err.message || "Login failed");
+      }
     } finally {
       setSubmitting(false);
     }

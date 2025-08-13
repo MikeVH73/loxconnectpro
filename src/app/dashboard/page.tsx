@@ -235,15 +235,15 @@ export default function DashboardPage() {
           if (shouldFilter && allowed.size > 0 && !(allowed.has(data.creatorCountry) || allowed.has(data.involvedCountry))) {
             return;
           }
-          combinedQRs.push({
+            combinedQRs.push({
             id: docSnap.id,
-            ...data,
-            labels: data.labels || [],
-            urgent: Boolean(data.urgent) || (data.labels || []).includes(urgentLabelId || ''),
-            problems: Boolean(data.problems) || (data.labels || []).includes(problemsLabelId || ''),
-            waitingForAnswer: Boolean(data.waitingForAnswer) || (data.labels || []).includes(waitingLabelId || ''),
-            planned: Boolean(data.planned) || (data.labels || []).includes(plannedLabelId || '')
-          } as QuoteRequest);
+              ...data,
+              labels: data.labels || [],
+              urgent: Boolean(data.urgent) || (data.labels || []).includes(urgentLabelId || ''),
+              problems: Boolean(data.problems) || (data.labels || []).includes(problemsLabelId || ''),
+              waitingForAnswer: Boolean(data.waitingForAnswer) || (data.labels || []).includes(waitingLabelId || ''),
+              planned: Boolean(data.planned) || (data.labels || []).includes(plannedLabelId || '')
+            } as QuoteRequest);
         });
 
         // Update Firestore to ensure consistency
@@ -258,7 +258,7 @@ export default function DashboardPage() {
           };
           try {
             await updateDoc(quoteRef, updateData);
-          } catch (err) {
+    } catch (err) {
             console.error('[DEBUG] Error updating quote request:', err);
           }
           return qr;
@@ -267,8 +267,8 @@ export default function DashboardPage() {
         await Promise.all(updatePromises);
 
         const customersData = customerSnap.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
+        id: doc.id,
+        ...doc.data()
         })) as Customer[];
 
         // Filter active quotes
@@ -370,7 +370,7 @@ export default function DashboardPage() {
       {/* Notifications Bar */}
       <div className="mb-6 bg-white rounded-lg shadow p-4 max-h-32 overflow-y-auto">
         <DashboardNotifications />
-      </div>
+          </div>
 
       <div className="flex">
         {/* Kanban Board */}
@@ -398,113 +398,113 @@ export default function DashboardPage() {
             {/* Urgent/Problems Column */}
             <div className="bg-white rounded-lg shadow p-4">
               <h2 className="text-lg font-medium text-red-600 mb-4">Urgent/Problems</h2>
-              <div className="space-y-4">
+            <div className="space-y-4">
                 {urgentProblems.map(qr => (
-                  <QuoteRequestCard
-                    key={qr.id}
+                <QuoteRequestCard
+                  key={qr.id}
                     qr={qr}
-                    customers={customers}
-                    labels={labels}
+                  customers={customers}
+                  labels={labels}
                     onCardClick={() => setSelectedQuoteRequest(qr.id)}
                     onDeleteClick={handleDeleteClick}
-                    getCustomerName={getCustomerName}
-                    getLabelName={getLabelName}
+                  getCustomerName={getCustomerName}
+                  getLabelName={getLabelName}
                     canDelete={canDeleteQuoteRequest(qr)}
                     showDeleteButton={false}
-                  />
-                ))}
+                />
+              ))}
                 {urgentProblems.length === 0 && (
                   <div className="text-gray-500 text-center py-4">No urgent or problem items</div>
                 )}
-              </div>
             </div>
+          </div>
 
-            {/* Waiting Column */}
+          {/* Waiting Column */}
             <div className="bg-white rounded-lg shadow p-4">
               <h2 className="text-lg font-medium text-yellow-600 mb-4">Waiting for Answer</h2>
-              <div className="space-y-4">
+            <div className="space-y-4">
                 {waiting.map(qr => (
-                  <QuoteRequestCard
-                    key={qr.id}
+                <QuoteRequestCard
+                  key={qr.id}
                     qr={qr}
-                    customers={customers}
-                    labels={labels}
+                  customers={customers}
+                  labels={labels}
                     onCardClick={() => setSelectedQuoteRequest(qr.id)}
                     onDeleteClick={handleDeleteClick}
-                    getCustomerName={getCustomerName}
-                    getLabelName={getLabelName}
+                  getCustomerName={getCustomerName}
+                  getLabelName={getLabelName}
                     canDelete={canDeleteQuoteRequest(qr)}
                     showDeleteButton={false}
-                  />
-                ))}
+                />
+              ))}
                 {waiting.length === 0 && (
                   <div className="text-gray-500 text-center py-4">No waiting items</div>
                 )}
-              </div>
             </div>
+          </div>
 
-            {/* Standard Column */}
+          {/* Standard Column */}
             <div className="bg-white rounded-lg shadow p-4">
               <h2 className="text-lg font-medium text-gray-600 mb-4">Standard</h2>
-              <div className="space-y-4">
+            <div className="space-y-4">
                 {standard.map(qr => (
-                  <QuoteRequestCard
-                    key={qr.id}
+                <QuoteRequestCard
+                  key={qr.id}
                     qr={qr}
-                    customers={customers}
-                    labels={labels}
+                  customers={customers}
+                  labels={labels}
                     onCardClick={() => setSelectedQuoteRequest(qr.id)}
                     onDeleteClick={handleDeleteClick}
-                    getCustomerName={getCustomerName}
-                    getLabelName={getLabelName}
+                  getCustomerName={getCustomerName}
+                  getLabelName={getLabelName}
                     canDelete={canDeleteQuoteRequest(qr)}
                     showDeleteButton={false}
-                  />
-                ))}
+                />
+              ))}
                 {standard.length === 0 && (
                   <div className="text-gray-500 text-center py-4">No standard items</div>
                 )}
-              </div>
             </div>
+          </div>
 
-            {/* Snoozed Column */}
+          {/* Snoozed Column */}
             <div className="bg-white rounded-lg shadow p-4">
               <h2 className="text-lg font-medium text-gray-600 mb-4">Snoozed</h2>
-              <div className="space-y-4">
+            <div className="space-y-4">
                 {snoozed.map(qr => (
-                  <QuoteRequestCard
-                    key={qr.id}
+                <QuoteRequestCard
+                  key={qr.id}
                     qr={qr}
-                    customers={customers}
-                    labels={labels}
+                  customers={customers}
+                  labels={labels}
                     onCardClick={() => setSelectedQuoteRequest(qr.id)}
                     onDeleteClick={handleDeleteClick}
-                    getCustomerName={getCustomerName}
-                    getLabelName={getLabelName}
+                  getCustomerName={getCustomerName}
+                  getLabelName={getLabelName}
                     canDelete={canDeleteQuoteRequest(qr)}
                     showDeleteButton={false}
-                  />
-                ))}
+                />
+              ))}
                 {snoozed.length === 0 && (
                   <div className="text-gray-500 text-center py-4">No snoozed items</div>
                 )}
-              </div>
             </div>
           </div>
         </div>
+      </div>
 
         {/* Fixed Messaging Panel Space */}
         <div className="fixed right-0 top-[53px] w-96 bg-white shadow-xl" style={{ height: 'calc(100vh - 53px)' }}>
           {selectedQuoteRequest ? (
-            <DashboardMessaging
+          <DashboardMessaging
               quoteRequestId={selectedQuoteRequest}
               onClose={() => setSelectedQuoteRequest(null)}
-            />
+          />
           ) : (
             <div className="flex items-center justify-center h-full text-gray-500">
               Please select a quote request to view messages.
-            </div>
-          )}
+        </div>
+      )}
         </div>
       </div>
 

@@ -18,7 +18,7 @@
     "date-fns": "^4.1.0",
     "dayjs": "^1.11.13",
     "firebase": "^11.9.0",
-    "firebase-admin": "^12.7.0",
+    "firebase-admin": "^13.4.0",
     "firebase-functions": "^6.4.0",
     "lodash": "^4.17.21",
     "next": "^15.3.4",
@@ -37,6 +37,7 @@
     "eslint": "^9",
     "eslint-config-next": "15.3.3",
     "tailwindcss": "^4",
+    "tsx": "^4.20.3",
     "typescript": "^5"
   }
 }
