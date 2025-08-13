@@ -48,14 +48,9 @@ export async function POST(request: Request) {
       user = await auth.getUserByEmail(email!);
     }
 
-    // Create a simple action link to the security page
-    const baseUrl = process.env.NEXT_PUBLIC_VERCEL_URL
-      ? `https://${process.env.NEXT_PUBLIC_VERCEL_URL}`
-      : process.env.VERCEL_URL
-      ? `https://${process.env.VERCEL_URL}`
-      : process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
-
-    const securityUrl = `${baseUrl}/users/security`;
+    // Always generate a stable, production-facing link so users don't need preview access
+    const prodBaseUrl = process.env.NEXT_PUBLIC_PROD_BASE_URL || 'https://loxconnectpro.vercel.app';
+    const securityUrl = `${prodBaseUrl}/users/security`;
 
     // Send using Admin SDK email action is not available for custom content.
     // Instead, trigger a verification link as a nudge (if not verified), appended with a note in return payload.
