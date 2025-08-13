@@ -469,18 +469,18 @@ const QuoteRequestsPage = () => {
               <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
-            </div>
-          </div>
-          <button
+                    </div>
+                  </div>
+                    <button
             type="button"
             className="px-4 py-2 rounded-lg bg-[#e40115] text-white hover:bg-red-700 whitespace-nowrap"
             onClick={clearAllFilters}
             title="Clear All Filters"
           >
             Clear All Filters
-          </button>
+                    </button>
         </div>
-      </div>
+                </div>
 
       {/* Advanced Filters */}
       {filtersOpen && (
@@ -575,7 +575,7 @@ const QuoteRequestsPage = () => {
                   ))}
                 </select>
               </div>
-            </div>
+                      </div>
 
             {/* Right Column */}
             <div className="space-y-4">
@@ -653,20 +653,20 @@ const QuoteRequestsPage = () => {
                 />
               </div>
             </div>
-          </div>
+                          </div>
 
           {/* Filter Actions */}
           <div className="mt-6 flex justify-between items-center pt-4 border-t border-gray-200">
             <div className="text-sm text-gray-600">
               {quoteRequests.length} quote request{quoteRequests.length !== 1 ? 's' : ''} found
-            </div>
+                        </div>
             <button 
               className="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors" 
               onClick={clearAllFilters}
             >
               Clear All Filters
             </button>
-          </div>
+                    </div>
         </div>
       )}
 

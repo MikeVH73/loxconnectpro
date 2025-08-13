@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { signInWithEmailAndPassword } from "firebase/auth";
+import { getIdToken } from "firebase/auth";
 import { useRouter } from "next/navigation";
 import { auth, db } from "../../firebaseClient";
 import { useAuth } from "../AuthProvider";
@@ -30,8 +31,14 @@ export default function LoginPage() {
     setError("");
     
     try {
-      // First, try normal Firebase Auth login
-      await signInWithEmailAndPassword(auth, email, password);
+      // First, try normal Firebase Auth login and set a secure session cookie
+      const cred = await signInWithEmailAndPassword(auth, email, password);
+      const idToken = await getIdToken(cred.user, true);
+      await fetch('/api/auth/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken })
+      });
       router.replace("/dashboard");
     } catch (err: any) {
       // If normal login fails, check if it's a temporary password
@@ -55,7 +62,12 @@ export default function LoginPage() {
         }
       }
       
-      setError(err.message || "Login failed");
+      // Friendlier hint for unverified emails or strict policy
+      if (err?.code === 'auth/invalid-credential') {
+        setError('Login failed. If you recently changed your email, make sure it is verified. Contact an admin to resend a verification email.');
+      } else {
+        setError(err.message || "Login failed");
+      }
     } finally {
       setSubmitting(false);
     }

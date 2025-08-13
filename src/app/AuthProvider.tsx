@@ -23,8 +23,8 @@ interface AuthContextType {
   retryProfileLoad: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextType>({
-  user: null,
+const AuthContext = createContext<AuthContextType>({ 
+  user: null, 
   userProfile: null,
   loading: true,
   error: null,
@@ -166,18 +166,18 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
           } catch (err) {
             console.error('Error ensuring user profile:', err);
             setError('Error loading user profile. Please try again.');
-          }
-        } else {
-          setUserProfile(null);
-          setError(null);
         }
-
-        setLoading(false);
-      });
+      } else {
+        setUserProfile(null);
+          setError(null);
+      }
+      
+      setLoading(false);
+    });
     };
 
     initializeAuth();
-
+    
     return () => unsubscribe();
   }, [isClient]);
 
@@ -188,6 +188,12 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     try {
+      // Clear secure session cookie first (best-effort)
+      try {
+        await fetch('/api/auth/session', { method: 'DELETE' });
+      } catch (e) {
+        // ignore network errors; proceed to client sign out
+      }
       await signOut(auth);
       setUser(null);
       setUserProfile(null);
@@ -264,4 +270,4 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
 }
 
 export const useAuth = () => useContext(AuthContext);
-export default AuthProvider;
+export default AuthProvider; 

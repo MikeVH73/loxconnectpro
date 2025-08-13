@@ -1,0 +1,13 @@
+  deployment-july-2025        [m bd79897 [[34morigin/deployment-july-2025[m: behind 3] chore: Update Vercel config for automatic production deployment
+  feat/quote-request-redirect [m 50134b6 feat: add RootClientLayout component
+  feat/update-logo-and-header [m 785781c [[34morigin/feat/update-logo-and-header[m] fix: add delay before Cat-Class validation to allow time for typing
+  feature/messaging-panel     [m bf2da16 Update upload buttons to use neutral gray SVG icons for professional look
+  fix-loading-state           [m 011b96f Fixed loading state handling in EditQuoteRequestContent and simplified page component
+  fix/country-display         [m a551b53 fix: update quote request visibility and creator country handling
+  fix/messaging-system        [m 826b6a4 fix: improve label handling in dashboard and quote request cards
+  fix/read-only-permissions   [m af9afab [[34morigin/fix/read-only-permissions[m] feat: implement read-only permissions for quote requests
+  fix/read-only-permissions-v2[m ac97e2f [[34morigin/fix/read-only-permissions-v2[m] fix: enforce read-only permissions in quote request edit page
+  fix/remove-duplicate-labels [m 9b501af feat(quote-requests): improve edit page layout to use full width
+* [32mmain                        [m 590f2c4 [[34morigin/main[m: ahead 1] Implement comprehensive filter system for Quote Requests page
+  restore-exact-71a4863       [m e84536f Fix header layout and improve functionality across all pages
+  restore-from-71a4863        [m 71a4863 Enhanced messaging and notifications system: - Fixed files array handling in MessagingPanel - Improved notification targeting in useMessages hook - Added DashboardNotifications component - Updated cross-country communication

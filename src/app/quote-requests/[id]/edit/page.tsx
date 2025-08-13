@@ -537,6 +537,31 @@ export default function EditQuoteRequest() {
   }, [debouncedSave]);
 
   const handleInputChange = (field: string, value: any) => {
+    // Support nested updates (products.X.prop, jobsite.address)
+    if (field.startsWith('products.')) {
+      const parts = field.split('.');
+      const index = parseInt(parts[1] || '', 10);
+      const prop = parts[2];
+      if (!Number.isFinite(index) || !prop) return;
+      setQuoteRequest(prev => {
+        const prevProducts = Array.isArray(prev.products) ? prev.products : [];
+        const nextProducts = [...prevProducts];
+        const existing = nextProducts[index] || { catClass: '', description: '', quantity: 1 };
+        nextProducts[index] = { ...existing, [prop]: value } as any;
+        return { ...prev, products: nextProducts } as any;
+      });
+      return;
+    }
+
+    if (field.startsWith('jobsite.')) {
+      const [, subKey] = field.split('.');
+      if (!subKey) return;
+      setQuoteRequest(prev => ({
+        ...prev,
+        jobsite: { ...(prev.jobsite || {}), [subKey]: value },
+      } as any));
+      return;
+    }
     // Prevent final statuses without EUR total
     const finalStatuses = ["Won", "Lost", "Cancelled"];
     if (field === 'status' && finalStatuses.includes(value)) {
@@ -548,8 +573,8 @@ export default function EditQuoteRequest() {
     }
 
     setQuoteRequest(prev => ({
-        ...prev,
-        [field]: value
+      ...prev,
+      [field]: value,
     }));
 
     // Mark calculator changes as dirty to prompt manual save
@@ -1063,7 +1088,7 @@ export default function EditQuoteRequest() {
       <div className="flex-1 flex overflow-hidden">
         {/* Form Content - Scrollable */}
         <div className="flex-1 overflow-y-auto p-6">
-          <div className="max-w-5xl mx-auto">
+          <div className="max-w-5xl mx-auto text-sm">
             {/* Header */}
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center space-x-4">
@@ -1096,17 +1121,17 @@ export default function EditQuoteRequest() {
             </div>
 
             {/* Form Grid - 2 columns */}
-            <div className="grid grid-cols-2 gap-8">
+            <div className="grid grid-cols-2 gap-6">
               {/* Left Column */}
               <div className="space-y-6">
                 {/* Title */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Title</label>
                   <input
                     type="text"
                     value={quoteRequest.title}
                     onChange={(e) => handleInputChange("title", e.target.value)}
-                    className="w-full p-3 border border-gray-300 rounded-lg"
+                    className="w-full p-2 border border-gray-300 rounded-lg"
                     disabled={isReadOnly}
                   />
                 </div>
@@ -1114,36 +1139,36 @@ export default function EditQuoteRequest() {
                 {/* Creator and Target Country */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Creator Country</label>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Creator Country</label>
                     <CountrySelect
                       value={quoteRequest.creatorCountry}
                       onChange={(value) => handleInputChange("creatorCountry", value)}
                       disabled={isReadOnly}
                       required={true}
                       allowEmpty={false}
-                      className="w-full p-3 border border-gray-300 rounded-md"
+                      className="w-full p-2 text-sm border border-gray-300 rounded-md"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Involved Country</label>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Involved Country</label>
                     <CountrySelect
                       value={quoteRequest.involvedCountry}
                       onChange={(value) => handleInputChange("involvedCountry", value)}
                       disabled={isReadOnly}
                       required={true}
                       allowEmpty={false}
-                      className="w-full p-3 border border-gray-300 rounded-md"
+                      className="w-full p-2 text-sm border border-gray-300 rounded-md"
                     />
                   </div>
                 </div>
 
                 {/* Customer */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Customer</label>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Customer</label>
                   <select
                     value={quoteRequest.customer}
                     onChange={(e) => handleInputChange("customer", e.target.value)}
-                    className="w-full p-3 border border-gray-300 rounded-md"
+                    className="w-full p-2 border border-gray-300 rounded-md"
                     disabled={isReadOnly}
                   >
                     <option value="">Select Customer</option>
@@ -1162,11 +1187,11 @@ export default function EditQuoteRequest() {
 
                 {/* Status */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Status</label>
                   <select
                     value={quoteRequest.status}
                     onChange={(e) => handleInputChange("status", e.target.value)}
-                    className="w-full p-3 border border-gray-300 rounded-md"
+                    className="w-full p-2 border border-gray-300 rounded-md"
                     disabled={isReadOnly}
                   >
                     {statuses.map(status => (
@@ -1177,66 +1202,65 @@ export default function EditQuoteRequest() {
 
                 {/* Products */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Products</label>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Products</label>
                   <div className="space-y-2">
                     {(Array.isArray(quoteRequest.products) ? quoteRequest.products : []).map((product, index) => (
-                      <div key={index} className="grid grid-cols-12 gap-2 items-center">
+                      <div key={index} className="flex items-center gap-2">
                         <input
                           type="text"
                           value={product.catClass}
                           onChange={(e) => handleInputChange(`products.${index}.catClass`, e.target.value)}
                           placeholder="Product Code"
-                          className="col-span-3 p-2 border border-gray-300 rounded"
+                          className="w-28 p-2 border border-gray-300 rounded"
                         />
-                        {
-                          <button
-                            onClick={async () => {
-                              const code = normalizeCode(quoteRequest.products[index].catClass);
-                              if (!code) return;
-                              const p = await getProductByCode(code);
-                              if (p) {
-                                handleInputChange(`products.${index}.catClass`, p.catClass);
-                                handleInputChange(`products.${index}.description`, p.description);
-                              } else {
-                                const confirmAdd = confirm('Product not found. Add to catalog?');
-                                if (!confirmAdd) return;
-                                // Open Quick Add inline modal
-                                setQuickAdd({ index, code });
-                                setQuickAddCode(code);
-                              }
-                            }}
-                            className="col-span-1 text-blue-600 underline text-xs"
-                            title="Lookup description"
-                          >
-                            Lookup
-                          </button>
-                        }
+                        <button
+                          onClick={async () => {
+                            const code = normalizeCode(quoteRequest.products[index].catClass);
+                            if (!code) return;
+                            const p = await getProductByCode(code);
+                            if (p) {
+                              handleInputChange(`products.${index}.catClass`, p.catClass);
+                              handleInputChange(`products.${index}.description`, p.description);
+                            } else {
+                              const confirmAdd = confirm('Product not found. Add to catalog?');
+                              if (!confirmAdd) return;
+                              setQuickAdd({ index, code });
+                              setQuickAddCode(code);
+                            }
+                          }}
+                          className="shrink-0 text-blue-600 underline text-xs"
+                          title="Lookup description"
+                        >
+                          Lookup
+                        </button>
                         <input
                           type="text"
                           value={product.description}
                           onChange={(e) => handleInputChange(`products.${index}.description`, e.target.value)}
                           placeholder="Description"
-                          className="col-span-6 p-2 border border-gray-300 rounded"
+                          className="flex-1 p-2 border border-gray-300 rounded"
                         />
                         <input
                           type="number"
-                          value={product.quantity}
-                          onChange={(e) => handleInputChange(`products.${index}.quantity`, parseInt(e.target.value))}
+                          value={Number.isFinite(product.quantity) ? product.quantity : 0}
+                          onChange={(e) => {
+                            const val = e.currentTarget.valueAsNumber;
+                            const next = Number.isFinite(val) && val >= 0 ? Math.floor(val) : 0;
+                            handleInputChange(`products.${index}.quantity`, next);
+                          }}
                           placeholder="Qty"
-                          className="col-span-1 p-2 border border-gray-300 rounded w-24"
-                          min="1"
+                          className="w-16 p-2 border border-gray-300 rounded text-right"
+                          min="0"
                         />
-                        {
-                          <button
-                            onClick={() => handleRemoveProduct(index)}
-                            className="col-span-1 text-red-500 hover:text-red-700 p-2"
-                            title="Remove product"
-                          >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                          </button>
-                        }
+                        <button
+                          onClick={() => handleRemoveProduct(index)}
+                          className="shrink-0 text-red-500 hover:text-red-700 p-2"
+                          title="Remove product"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
                       </div>
                     ))}
                     {!isReadOnly && (
@@ -1252,7 +1276,7 @@ export default function EditQuoteRequest() {
 
                 {/* Notes */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Notes</label>
                   <div className="flex space-x-2">
                     <input
                       type="text"
@@ -1299,22 +1323,22 @@ export default function EditQuoteRequest() {
                 {/* Dates */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Start Date</label>
                     <input
                       type="date"
                       value={quoteRequest.startDate}
                       onChange={(e) => handleInputChange("startDate", e.target.value)}
-                      className="w-full p-3 border border-gray-300 rounded-md"
+                    className="w-full p-2 border border-gray-300 rounded-md"
                       disabled={isReadOnly}
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">End Date</label>
                     <input
                       type="date"
                       value={quoteRequest.endDate}
                       onChange={(e) => handleInputChange("endDate", e.target.value)}
-                      className="w-full p-3 border border-gray-300 rounded-md"
+                      className="w-full p-2 border border-gray-300 rounded-md"
                       disabled={isReadOnly || quoteRequest.customerDecidesEnd}
                     />
                   </div>
@@ -1330,18 +1354,18 @@ export default function EditQuoteRequest() {
                       className="mr-2"
                       disabled={isReadOnly}
                     />
-                    <span className="text-sm text-gray-700">Customer decides end date</span>
+                    <span className="text-xs text-gray-700">Customer decides end date</span>
                   </label>
                 </div>
 
                 {/* Jobsite Address */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Jobsite Address</label>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Jobsite Address</label>
                   <input
                     type="text"
                     value={quoteRequest.jobsite?.address || ''}
                     onChange={(e) => handleInputChange("jobsite.address", e.target.value)}
-                    className="w-full p-3 border border-gray-300 rounded-md"
+                    className="w-full p-2 border border-gray-300 rounded-md"
                     disabled={isReadOnly}
                   />
                 </div>
@@ -1349,7 +1373,7 @@ export default function EditQuoteRequest() {
                 {/* Coordinates */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Latitude</label>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Latitude</label>
                     <input
                       type="number"
                       step="0.000001"
@@ -1358,12 +1382,12 @@ export default function EditQuoteRequest() {
                       value={quoteRequest.latitude || ''}
                       onChange={(e) => handleInputChange("latitude", e.target.value)}
                       placeholder="e.g., 51.9244"
-                      className="w-full p-3 border border-gray-300 rounded-md"
+                      className="w-full p-2 border border-gray-300 rounded-md"
                       disabled={isReadOnly}
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Longitude</label>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Longitude</label>
                     <input
                       type="number"
                       step="0.000001"
@@ -1372,7 +1396,7 @@ export default function EditQuoteRequest() {
                       value={quoteRequest.longitude || ''}
                       onChange={(e) => handleInputChange("longitude", e.target.value)}
                       placeholder="e.g., 4.4777"
-                      className="w-full p-3 border border-gray-300 rounded-md"
+                      className="w-full p-2 border border-gray-300 rounded-md"
                       disabled={isReadOnly}
                     />
                   </div>
@@ -1380,7 +1404,7 @@ export default function EditQuoteRequest() {
 
                 {/* Jobsite Contact */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Jobsite Contact</label>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Jobsite Contact</label>
                   <select
                     value={jobsiteContactId}
                     onChange={(e) => {
@@ -1396,7 +1420,7 @@ export default function EditQuoteRequest() {
                         }));
                       }
                     }}
-                    className="w-full p-3 border border-gray-300 rounded-md"
+                    className="w-full p-2 border border-gray-300 rounded-md"
                       disabled={isReadOnly}
                   >
                     <option value="">Select Contact</option>
@@ -1415,19 +1439,19 @@ export default function EditQuoteRequest() {
 
                 {/* Customer Number */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Customer Number for {quoteRequest.involvedCountry}</label>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Customer Number for {quoteRequest.involvedCountry}</label>
                   <input
                     type="text"
                     value={quoteRequest.customerNumber || ''}
                     onChange={(e) => handleInputChange("customerNumber", e.target.value)}
-                    className="w-full p-3 border border-gray-300 rounded-md"
+                    className="w-full p-2 border border-gray-300 rounded-md"
                     disabled={isReadOnly}
                   />
                 </div>
 
                 {/* Handled By (Team Assignment) */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Handled by</label>
+                  <label className="block text-xs font-medium text-gray-700 mb-2">Handled by</label>
                   {(() => {
                     const canAssign = !isReadOnly && (
                       userProfile?.role === 'superAdmin' ||
@@ -1479,17 +1503,17 @@ export default function EditQuoteRequest() {
 
                 {/* Total Value */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Total Value</label>
+                  <label className="block text-xs font-medium text-gray-700 mb-2">Total Value</label>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs text-gray-600 mb-1">Total Value (EUR)</label>
+                      <label className="block text-[11px] text-gray-600 mb-1">Total Value (EUR)</label>
                       <input
                         type="number"
                         min="0"
                         step="0.01"
                         value={quoteRequest.totalValueEUR ?? ''}
                         onChange={(e) => handleInputChange('totalValueEUR', e.target.value === '' ? undefined : parseFloat(e.target.value))}
-                        className="w-full p-3 border border-gray-300 rounded-md"
+                        className="w-full p-2 border border-gray-300 rounded-md"
                         placeholder="e.g. 12500.00"
                         disabled={isReadOnly}
                       />
@@ -1501,12 +1525,12 @@ export default function EditQuoteRequest() {
                       )}
                     </div>
                     <div>
-                      <label className="block text-xs text-gray-600 mb-1">Local Currency Amount</label>
+                      <label className="block text-[11px] text-gray-600 mb-1">Local Currency Amount</label>
                       <div className="flex gap-2">
                         <select
                           value={quoteRequest.totalValueCurrency || 'EUR'}
                           onChange={(e) => handleInputChange('totalValueCurrency', e.target.value)}
-                          className="p-3 border border-gray-300 rounded-md w-28"
+                          className="p-2 border border-gray-300 rounded-md w-28"
                           disabled={isReadOnly}
                         >
                           {['EUR','DKK','SEK','NOK','CHF','GBP','PLN'].map(cur => (
@@ -1519,7 +1543,7 @@ export default function EditQuoteRequest() {
                           step="0.01"
                           value={quoteRequest.totalValueLocal ?? ''}
                           onChange={(e) => handleInputChange('totalValueLocal', e.target.value === '' ? undefined : parseFloat(e.target.value))}
-                          className="flex-1 p-3 border border-gray-300 rounded-md"
+                          className="flex-1 p-2 border border-gray-300 rounded-md"
                           placeholder="e.g. 93000.00"
                           disabled={isReadOnly}
                         />
@@ -1568,7 +1592,7 @@ export default function EditQuoteRequest() {
                                 handleInputChange('totalValueLocal', local);
                               }
                             }}
-                            className="w-full p-3 border border-gray-300 rounded-md"
+                            className="w-full p-2 border border-gray-300 rounded-md"
                             placeholder="e.g. 0.1339 or 7.4682"
                             disabled={isReadOnly}
                           />
