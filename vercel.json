@@ -9,5 +9,8 @@
   "cleanUrls": true,
   "trailingSlash": false,
   "public": false,
-  "regions": ["fra1"]
+  "regions": ["fra1"],
+  "crons": [
+    { "path": "/api/admin/archive/run", "schedule": "0 3 * * *" }
+  ]
 }
