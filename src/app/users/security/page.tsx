@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   TotpMultiFactorGenerator,
   multiFactor,
@@ -11,6 +12,7 @@ import { useAuth } from "../../AuthProvider";
 
 export default function SecurityPage() {
   const { user } = useAuth();
+  const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -117,6 +119,19 @@ export default function SecurityPage() {
           <div className="p-3 bg-green-50 border border-green-200 text-green-700 rounded text-sm">{success}</div>
         )}
 
+        {/* Step 1: Verify email */}
+        <section className="bg-white rounded border p-4 space-y-3">
+          <h2 className="font-medium">Step 1 — Verify your email</h2>
+          <p className="text-sm text-gray-600">If your email isn’t verified yet, request a new verification link.</p>
+          <button
+            onClick={() => router.push('/verify')}
+            className="px-3 py-2 bg-gray-800 text-white rounded hover:bg-black text-sm"
+          >
+            Send verification link
+          </button>
+        </section>
+
+        {/* Step 2: MFA */}
         <section className="bg-white rounded border p-4 space-y-3">
           <h2 className="font-medium">Multi‑factor Authentication (Authenticator app)</h2>
           {enrolledFactors && enrolledFactors.length > 0 ? (
