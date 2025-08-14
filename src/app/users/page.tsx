@@ -66,6 +66,21 @@ export default function UsersPage() {
                 };
               });
             }
+
+            // Fallback: call legacy MFA endpoint by UID and merge if any missing
+            const missingMfaFor = new Set(allUsers.filter(u => typeof u.mfaEnabled === 'undefined').map(u => u.id));
+            if (missingMfaFor.size > 0) {
+              try {
+                const res2 = await fetch('/api/admin/mfa-status', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ uids: Array.from(missingMfaFor) }) });
+                const data2 = await res2.json();
+                if (res2.ok && data2?.statuses) {
+                  allUsers = allUsers.map(u => ({
+                    ...u,
+                    mfaEnabled: typeof u.mfaEnabled !== 'undefined' ? u.mfaEnabled : Boolean(data2.statuses[u.id]),
+                  }));
+                }
+              } catch {}
+            }
           } catch {}
 
            // Merge Firestore accessDisabled flag as fallback visual
