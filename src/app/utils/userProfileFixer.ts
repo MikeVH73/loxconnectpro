@@ -85,7 +85,7 @@ export async function checkAndFixUserProfiles(): Promise<{
           needsUpdate = true;
         }
         
-        // Ensure uid field exists
+        // Ensure uid field exists (do NOT change MFA/emailVerified flags here)
         if (!userData.uid) {
           updatedData.uid = userId;
           needsUpdate = true;
