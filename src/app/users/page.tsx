@@ -38,7 +38,8 @@ export default function UsersPage() {
   const [reviewSelection, setReviewSelection] = useState<Record<string, boolean>>({});
   const [reviewSubmitting, setReviewSubmitting] = useState(false);
   const [reviewCompleted, setReviewCompleted] = useState(false);
-  const [lastReviewMonth, setLastReviewMonth] = useState<string | null>(null);
+	const [lastReviewMonth, setLastReviewMonth] = useState<string | null>(null);
+	const [archiving, setArchiving] = useState(false);
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -763,7 +764,7 @@ export default function UsersPage() {
           </button>
         </div>
       )}
-      <div className="flex justify-between items-center mb-6">
+			<div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">User Management</h1>
         <div className="flex gap-2">
           {(userProfile?.role === 'admin' || userProfile?.role === 'superAdmin') && (
@@ -779,6 +780,27 @@ export default function UsersPage() {
               Monthly Access Review
             </button>
           )}
+					{userProfile?.role === 'superAdmin' && (
+						<button
+							onClick={async () => {
+								try {
+									setArchiving(true);
+									const res = await fetch('/api/admin/archive/run', { method: 'POST' });
+									const data = await res.json();
+									if (!res.ok || data?.ok === false) throw new Error(data?.error || 'Archive failed');
+									alert(`Archive complete. Messages archived: ${data?.archivedMessages ?? 0}. Old notifications deleted: ${data?.deletedNotifications ?? 0}.`);
+								} catch (e: any) {
+									alert(e?.message || 'Failed to run archive');
+								} finally {
+									setArchiving(false);
+								}
+							}}
+							disabled={archiving}
+							className="px-4 py-2 bg-[#cccdce] text-gray-900 rounded hover:bg-[#bbbdbe] disabled:opacity-50"
+						>
+							{archiving ? 'Archiving…' : 'Run Archive Now'}
+						</button>
+					)}
           <button
             onClick={handleFixDuplicateUsers}
             disabled={submitting}
