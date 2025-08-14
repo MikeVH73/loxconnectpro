@@ -753,7 +753,7 @@ export default function UsersPage() {
   const canManageUsers = userProfile?.role === "admin" || userProfile?.role === "superAdmin";
   const canManageCountries = userProfile?.role === "admin" || userProfile?.role === "superAdmin";
   const monthKey = new Date().toISOString().slice(0,7);
-  const needsMonthlyReview = (!reviewCompleted || lastReviewMonth !== monthKey) && (userProfile?.role === 'admin' || userProfile?.role === 'superAdmin');
+  const needsMonthlyReview = (!reviewCompleted || lastReviewMonth !== monthKey) && (userProfile?.role === 'admin');
   
   if (!canViewUsers) {
     return (
@@ -785,7 +785,7 @@ export default function UsersPage() {
 			<div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">User Management</h1>
         <div className="flex gap-2">
-          {(userProfile?.role === 'admin' || userProfile?.role === 'superAdmin') && (
+          {userProfile?.role === 'admin' && (
             <button
               onClick={() => {
                 const start: Record<string, boolean> = {};
