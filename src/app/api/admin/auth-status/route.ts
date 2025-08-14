@@ -26,28 +26,43 @@ function getAdminAuth() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const uids: string[] = Array.isArray(body?.uids) ? body.uids : [];
-    if (!uids.length) {
-      return NextResponse.json({ error: 'uids required' }, { status: 400 });
+    const uids: string[] = Array.isArray(body?.uids) ? body.uids.filter(Boolean) : [];
+    const emails: string[] = Array.isArray(body?.emails) ? body.emails.filter(Boolean) : [];
+    if (!uids.length && !emails.length) {
+      return NextResponse.json({ error: 'uids or emails required' }, { status: 400 });
     }
 
     const auth = getAdminAuth();
-    const result = await auth.getUsers(uids.map((uid) => ({ uid })));
-    const map: Record<string, { mfaEnabled: boolean; disabled: boolean; emailVerified: boolean }> = {};
+    const byUid: Record<string, { mfaEnabled: boolean; disabled: boolean; emailVerified: boolean; email?: string }> = {};
+    const byEmail: Record<string, { mfaEnabled: boolean; disabled: boolean; emailVerified: boolean; uid?: string }> = {};
 
-    for (const user of result.users) {
-      const mfaEnabled = (user.multiFactor?.enrolledFactors || []).length > 0;
-      map[user.uid] = {
-        mfaEnabled,
-        disabled: !!user.disabled,
-        emailVerified: !!user.emailVerified,
-      };
-    }
-    for (const notFound of result.notFound) {
-      if (notFound?.uid) map[notFound.uid] = { mfaEnabled: false, disabled: false, emailVerified: false };
+    if (uids.length) {
+      const result = await auth.getUsers(uids.map((uid) => ({ uid })));
+      for (const user of result.users) {
+        const mfaEnabled = (user.multiFactor?.enrolledFactors || []).length > 0;
+        byUid[user.uid] = { mfaEnabled, disabled: !!user.disabled, emailVerified: !!user.emailVerified, email: (user.email || '').toLowerCase() };
+        if (user.email) byEmail[(user.email || '').toLowerCase()] = { mfaEnabled, disabled: !!user.disabled, emailVerified: !!user.emailVerified, uid: user.uid };
+      }
+      // do not mark notFound here; fallback to email lookup below
     }
 
-    return NextResponse.json({ statuses: map });
+    // Lookup by email for any provided emails, or for any uid misses when an email is known
+    const emailsToLookup = new Set<string>();
+    emails.forEach((e) => emailsToLookup.add((e as string).toLowerCase()));
+    // if caller provided pairs of {uid,email} you can include them too, but we'll just resolve provided emails
+
+    for (const email of Array.from(emailsToLookup)) {
+      try {
+        const user = await auth.getUserByEmail(email);
+        const mfaEnabled = (user.multiFactor?.enrolledFactors || []).length > 0;
+        byUid[user.uid] = { mfaEnabled, disabled: !!user.disabled, emailVerified: !!user.emailVerified, email: (user.email || '').toLowerCase() };
+        if (user.email) byEmail[(user.email || '').toLowerCase()] = { mfaEnabled, disabled: !!user.disabled, emailVerified: !!user.emailVerified, uid: user.uid };
+      } catch {
+        // ignore not found
+      }
+    }
+
+    return NextResponse.json({ statusesByUid: byUid, statusesByEmail: byEmail });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || String(e) }, { status: 500 });
   }

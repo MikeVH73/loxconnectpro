@@ -50,15 +50,21 @@ export default function UsersPage() {
          if (userProfile?.role === 'superAdmin' && allUsers.length > 0) {
           try {
             const uids = allUsers.map(u => u.id);
-            const res = await fetch('/api/admin/auth-status', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ uids }) });
+            const emails = allUsers.map(u => (u.email || '').toLowerCase());
+            const res = await fetch('/api/admin/auth-status', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ uids, emails }) });
             const data = await res.json();
-            if (res.ok && data?.statuses) {
-              allUsers = allUsers.map(u => ({
-                ...u,
-                mfaEnabled: Boolean(data.statuses[u.id]?.mfaEnabled),
-                disabled: Boolean(data.statuses[u.id]?.disabled),
-                emailVerified: Boolean(data.statuses[u.id]?.emailVerified),
-              }));
+            if (res.ok && (data?.statusesByUid || data?.statusesByEmail)) {
+              allUsers = allUsers.map(u => {
+                const byUid = data.statusesByUid?.[u.id];
+                const byEmail = data.statusesByEmail?.[(u.email || '').toLowerCase()];
+                const src = byUid || byEmail || {};
+                return {
+                  ...u,
+                  mfaEnabled: Boolean(src.mfaEnabled),
+                  disabled: Boolean(src.disabled),
+                  emailVerified: Boolean(src.emailVerified),
+                };
+              });
             }
           } catch {}
 
@@ -374,8 +380,8 @@ export default function UsersPage() {
       }
       
       // Refresh users list
-      const usersSnap = await getDocs(collection(db, "users"));
-      const allUsers = usersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const usersSnap = await getDocs(collection(db as Firestore, "users"));
+      const allUsers = usersSnap.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) }));
       
       // If user is superAdmin, show all users
       if (userProfile?.role === "superAdmin") {
@@ -428,7 +434,7 @@ export default function UsersPage() {
       // Reset via secure server API using Admin SDK
       
       // Store current user info for re-authentication
-      const currentUser = auth.currentUser;
+      const currentUser = (auth as any)?.currentUser;
       const currentUserEmail = currentUser?.email;
       
       if (!currentUserEmail) {
@@ -445,7 +451,7 @@ export default function UsersPage() {
 
       try {
         // Re-authenticate admin user
-        await signInWithEmailAndPassword(auth, currentUserEmail, adminPassword);
+        await signInWithEmailAndPassword(auth as any, currentUserEmail, adminPassword);
 
         // Call secure API to reset the target user's password
         const res = await fetch('/api/users/reset-password', { method: 'POST', body: JSON.stringify({ uid: userId }) });
@@ -482,10 +488,10 @@ export default function UsersPage() {
 
   // Handle country checkbox toggle for new user
   const handleNewUserCountryToggle = (countryName: string) => {
-    setNewUser(prev => ({
+    setNewUser((prev: typeof newUser) => ({
       ...prev,
       countries: prev.countries.includes(countryName)
-        ? prev.countries.filter(c => c !== countryName)
+        ? prev.countries.filter((c: string) => c !== countryName)
         : [...prev.countries, countryName]
     }));
   };
@@ -493,10 +499,10 @@ export default function UsersPage() {
   // Handle country checkbox toggle for editing user
   const handleEditUserCountryToggle = (countryName: string) => {
     if (!editingUser) return;
-    setEditingUser(prev => ({
+    setEditingUser((prev: any) => ({
       ...prev,
       countries: (prev.countries || []).includes(countryName)
-        ? (prev.countries || []).filter(c => c !== countryName)
+        ? (prev.countries || []).filter((c: string) => c !== countryName)
         : [...(prev.countries || []), countryName]
     }));
   };
@@ -518,7 +524,7 @@ export default function UsersPage() {
           const updates: any = {};
           if (data.creatorCountry === oldName) updates.creatorCountry = newName;
           if (data.involvedCountry === oldName) updates.involvedCountry = newName;
-          qrUpdates.push(updateDoc(doc(db, "quoteRequests", qrDoc.id), updates));
+          qrUpdates.push(updateDoc(doc(db as Firestore, "quoteRequests", qrDoc.id), updates));
         }
       }
       
@@ -567,7 +573,7 @@ export default function UsersPage() {
       console.log("[Data Consistency] Valid countries:", validCountries);
       
       // Check Quote Requests
-      const qrSnapshot = await getDocs(collection(db, "quoteRequests"));
+      const qrSnapshot = await getDocs(collection(db as Firestore, "quoteRequests"));
       const orphanedQuoteRequests = [];
       
       for (const qrDoc of qrSnapshot.docs) {
@@ -591,7 +597,7 @@ export default function UsersPage() {
       }
       
       // Check User Profiles
-      const usersSnapshot = await getDocs(collection(db, "users"));
+      const usersSnapshot = await getDocs(collection(db as Firestore, "users"));
       const orphanedUsers = [];
       
       for (const userDoc of usersSnapshot.docs) {
@@ -664,10 +670,7 @@ export default function UsersPage() {
 
       // Get all users
       const snapshot = await getDocs(collection(db as Firestore, "users"));
-      const allUsers = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
+      const allUsers = snapshot.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
 
       // Find duplicates by email
       const emailGroups = allUsers.reduce((acc, user) => {
@@ -683,8 +686,8 @@ export default function UsersPage() {
 
       // Find duplicates
       const duplicates = Object.entries(emailGroups)
-        .filter(([email, users]) => users.length > 1)
-        .map(([email, users]) => ({ email, users }));
+        .filter(([, users]) => (users as any[]).length > 1)
+        .map(([email, users]) => ({ email, users: users as any[] }));
 
       if (duplicates.length === 0) {
         setSuccess("No duplicate users found.");
@@ -695,10 +698,10 @@ export default function UsersPage() {
       let removedCount = 0;
       for (const { email, users } of duplicates) {
         // Sort by document ID - UID-based documents usually come first
-        users.sort((a, b) => a.id.localeCompare(b.id));
+        (users as any[]).sort((a: any, b: any) => a.id.localeCompare(b.id));
         
         // Keep the first one, remove the rest
-        const toRemove = users.slice(1);
+        const toRemove = (users as any[]).slice(1);
         for (const user of toRemove) {
           await deleteDoc(doc(db as Firestore, "users", user.id));
           removedCount++;
