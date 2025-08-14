@@ -11,6 +11,10 @@ interface CreateNotificationParams {
   notificationType: 'message' | 'status_change' | 'property_change' | 'deletion';
 }
 
+function normalizeCountryKey(name: string | undefined): string {
+  return (name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
 interface CreateRecentActivityParams {
   quoteRequestId: string;
   quoteRequestTitle: string;
@@ -43,6 +47,7 @@ export async function createNotification({
       sender,
       senderCountry,
       targetCountry,
+      targetCountryKey: normalizeCountryKey(targetCountry),
       content,
       notificationType,
       createdAt: serverTimestamp(),

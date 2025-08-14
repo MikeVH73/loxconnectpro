@@ -69,9 +69,10 @@ export default function NotificationsPage() {
     if (!user || !db || !userProfile?.businessUnit) return;
 
     const notificationsRef = collection(db as Firestore, 'notifications');
+    const normalized = (userProfile.businessUnit || '').toLowerCase().replace(/[^a-z0-9]/g, '');
     const q = query(
       notificationsRef,
-      where('targetCountry', '==', userProfile.businessUnit),
+      where('targetCountryKey', '==', normalized),
       orderBy('createdAt', 'desc')
     );
 

@@ -439,8 +439,8 @@ export default function EditQuoteRequest() {
         // Create notifications for changes
         if (changes.length > 0) {
           const targetCountry = userProfile?.businessUnit === quoteRequest.creatorCountry 
-            ? quoteRequest.involvedCountry 
-            : quoteRequest.creatorCountry;
+            ? (quoteRequest.involvedCountry || quoteRequest.involvedCountries?.[0])
+            : (quoteRequest.creatorCountry);
 
               await createNotification({
                 quoteRequestId: id,

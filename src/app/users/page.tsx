@@ -925,7 +925,7 @@ export default function UsersPage() {
                           <span className="text-gray-400">No countries assigned</span>
                         )}
                          {userProfile?.role === 'superAdmin' && (
-                           <div className="mt-1 text-xs">
+                          <div className="mt-1 text-xs">
                              <span className={mfaStatus ? 'text-green-700' : 'text-red-700'}>
                                MFA: {mfaStatus ? 'Enabled' : 'Not enabled'}
                              </span>
@@ -936,7 +936,9 @@ export default function UsersPage() {
                       </td>
                       {canManageUsers && (
                         <td className="py-3 px-4">
-                          <div className="flex flex-wrap gap-2">
+                          <details className="inline-block">
+                            <summary className="px-3 py-1 rounded text-sm bg-[#cccdce] hover:bg-[#bbbdbe] text-gray-900 cursor-pointer">Actions</summary>
+                            <div className="mt-2 p-2 border rounded bg-white shadow flex flex-col gap-2 w-64">
                             {/* 1) Edit - Dark Grey */}
                             <button
                               onClick={() => setEditingUser({...userData})}
@@ -1126,7 +1128,8 @@ export default function UsersPage() {
                             >
                               <FiTrash2 /> Delete
                             </button>
-                          </div>
+                            </div>
+                          </details>
                         </td>
                       )}
                     </tr>
