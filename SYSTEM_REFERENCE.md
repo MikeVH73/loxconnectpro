@@ -402,6 +402,18 @@ const firebaseConfig = {
 - **Optimistic Updates**: UI updates before server confirmation
 - **Error Handling**: Graceful fallbacks and retry mechanisms
 
+### **Archiving & Cost Controls**
+- **Archive Bucket**: `loxconnect-archive` (europe-west1, Nearline → Coldline @90d, delete @365d)
+- **BigQuery Dataset**: `lox_archive` (europe-west1) for optional analytics
+- **Env Vars**:
+  - `ARCHIVE_BUCKET` → default `loxconnect-archive`
+  - `ARCHIVE_RETENTION_DAYS` → default `90`
+  - `NOTIFICATIONS_TTL_DAYS` → default `45`
+- **APIs**:
+  - `POST /api/admin/archive/run` → moves `messages` older than retention into GCS JSONL, deletes old `notifications`
+  - `GET /api/admin/archive/load?quoteRequestId=...&ym=YYYY-MM` → reads archived JSONL back for UI “Load older history”
+- **Permissions**: Cloud Functions/Next API service account needs Storage Object Admin on bucket and read permissions to list/download archived files.
+
 ### **State Management Pattern**
 ```typescript
 // Custom hooks for data management
