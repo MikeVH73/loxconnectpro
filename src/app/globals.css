@@ -34,6 +34,11 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Slightly compact default density on large screens (approx 90%) */
+@media (min-width: 1024px) {
+  body { zoom: 0.9; }
+}
+
 /* Modern card style */
 .card-modern {
   background: #fff;

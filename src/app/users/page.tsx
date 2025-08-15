@@ -34,6 +34,12 @@ export default function UsersPage() {
   });
   const [fixingProfiles, setFixingProfiles] = useState(false);
   const [resettingPassword, setResettingPassword] = useState<string | null>(null);
+  const [showMonthlyReview, setShowMonthlyReview] = useState(false);
+  const [reviewSelection, setReviewSelection] = useState<Record<string, boolean>>({});
+  const [reviewSubmitting, setReviewSubmitting] = useState(false);
+  const [reviewCompleted, setReviewCompleted] = useState(false);
+	const [lastReviewMonth, setLastReviewMonth] = useState<string | null>(null);
+	const [archiving, setArchiving] = useState(false);
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -41,15 +47,49 @@ export default function UsersPage() {
         const usersSnap = await getDocs(collection(db as Firestore, "users"));
         let allUsers = usersSnap.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) }));
         // SuperAdmin: augment with MFA status via Admin SDK API route
-        if (userProfile?.role === 'superAdmin' && allUsers.length > 0) {
+         if (userProfile?.role === 'superAdmin' && allUsers.length > 0) {
           try {
             const uids = allUsers.map(u => u.id);
-            const res = await fetch('/api/admin/mfa-status', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ uids }) });
+            const emails = allUsers.map(u => (u.email || '').toLowerCase());
+            const res = await fetch('/api/admin/auth-status', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ uids, emails }) });
             const data = await res.json();
-            if (res.ok && data?.statuses) {
-              allUsers = allUsers.map(u => ({ ...u, mfaEnabled: Boolean(data.statuses[u.id]) }));
+            if (res.ok && (data?.statusesByUid || data?.statusesByEmail)) {
+              allUsers = allUsers.map(u => {
+                const byUid = data.statusesByUid?.[u.id];
+                const byEmail = data.statusesByEmail?.[(u.email || '').toLowerCase()];
+                const src = byUid || byEmail || {};
+                return {
+                  ...u,
+                  mfaEnabled: Boolean(src.mfaEnabled),
+                  disabled: Boolean(src.disabled),
+                  emailVerified: Boolean(src.emailVerified),
+                };
+              });
+            }
+
+            // Fallback: call legacy MFA endpoint by UID and merge if any missing
+            const missingMfaFor = new Set(allUsers.filter(u => typeof u.mfaEnabled === 'undefined').map(u => u.id));
+            if (missingMfaFor.size > 0) {
+              try {
+                const res2 = await fetch('/api/admin/mfa-status', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ uids: Array.from(missingMfaFor) }) });
+                const data2 = await res2.json();
+                if (res2.ok && data2?.statuses) {
+                  allUsers = allUsers.map(u => ({
+                    ...u,
+                    mfaEnabled: typeof u.mfaEnabled !== 'undefined' ? u.mfaEnabled : Boolean(data2.statuses[u.id]),
+                  }));
+                }
+              } catch {}
             }
           } catch {}
+
+           // Merge Firestore accessDisabled flag as fallback visual
+           try {
+             const dbFlagsSnap = await getDocs(collection(db as Firestore, 'users'));
+             const map: Record<string, any> = {};
+             dbFlagsSnap.docs.forEach(d => { map[d.id] = d.data(); });
+             allUsers = allUsers.map(u => ({ ...u, disabled: u.disabled || Boolean(map[u.id]?.accessDisabled) }));
+           } catch {}
         }
         
         // If user is superAdmin, show all users
@@ -355,9 +395,32 @@ export default function UsersPage() {
       }
       
       // Refresh users list
-      const usersSnap = await getDocs(collection(db, "users"));
-      const allUsers = usersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      
+      const usersSnap = await getDocs(collection(db as Firestore, "users"));
+      let allUsers = usersSnap.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) }));
+
+      // After fixing profiles, merge live Auth status back so MFA/emailVerified aren't shown as disabled
+      if (userProfile?.role === 'superAdmin' && allUsers.length > 0) {
+        try {
+          const uids = allUsers.map(u => u.id);
+          const emails = allUsers.map(u => (u.email || '').toLowerCase());
+          const res = await fetch('/api/admin/auth-status', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ uids, emails }) });
+          const data = await res.json();
+          if (res.ok && (data?.statusesByUid || data?.statusesByEmail)) {
+            allUsers = allUsers.map(u => {
+              const byUid = data.statusesByUid?.[u.id];
+              const byEmail = data.statusesByEmail?.[(u.email || '').toLowerCase()];
+              const src = byUid || byEmail || {};
+              return {
+                ...u,
+                mfaEnabled: Boolean(src.mfaEnabled),
+                disabled: Boolean(src.disabled),
+                emailVerified: Boolean(src.emailVerified),
+              };
+            });
+          }
+        } catch {}
+      }
+
       // If user is superAdmin, show all users
       if (userProfile?.role === "superAdmin") {
         setUsers(allUsers);
@@ -409,7 +472,7 @@ export default function UsersPage() {
       // Reset via secure server API using Admin SDK
       
       // Store current user info for re-authentication
-      const currentUser = auth.currentUser;
+      const currentUser = (auth as any)?.currentUser;
       const currentUserEmail = currentUser?.email;
       
       if (!currentUserEmail) {
@@ -426,7 +489,7 @@ export default function UsersPage() {
 
       try {
         // Re-authenticate admin user
-        await signInWithEmailAndPassword(auth, currentUserEmail, adminPassword);
+        await signInWithEmailAndPassword(auth as any, currentUserEmail, adminPassword);
 
         // Call secure API to reset the target user's password
         const res = await fetch('/api/users/reset-password', { method: 'POST', body: JSON.stringify({ uid: userId }) });
@@ -463,10 +526,10 @@ export default function UsersPage() {
 
   // Handle country checkbox toggle for new user
   const handleNewUserCountryToggle = (countryName: string) => {
-    setNewUser(prev => ({
+    setNewUser((prev: typeof newUser) => ({
       ...prev,
       countries: prev.countries.includes(countryName)
-        ? prev.countries.filter(c => c !== countryName)
+        ? prev.countries.filter((c: string) => c !== countryName)
         : [...prev.countries, countryName]
     }));
   };
@@ -474,10 +537,10 @@ export default function UsersPage() {
   // Handle country checkbox toggle for editing user
   const handleEditUserCountryToggle = (countryName: string) => {
     if (!editingUser) return;
-    setEditingUser(prev => ({
+    setEditingUser((prev: any) => ({
       ...prev,
       countries: (prev.countries || []).includes(countryName)
-        ? (prev.countries || []).filter(c => c !== countryName)
+        ? (prev.countries || []).filter((c: string) => c !== countryName)
         : [...(prev.countries || []), countryName]
     }));
   };
@@ -499,7 +562,7 @@ export default function UsersPage() {
           const updates: any = {};
           if (data.creatorCountry === oldName) updates.creatorCountry = newName;
           if (data.involvedCountry === oldName) updates.involvedCountry = newName;
-          qrUpdates.push(updateDoc(doc(db, "quoteRequests", qrDoc.id), updates));
+          qrUpdates.push(updateDoc(doc(db as Firestore, "quoteRequests", qrDoc.id), updates));
         }
       }
       
@@ -548,7 +611,7 @@ export default function UsersPage() {
       console.log("[Data Consistency] Valid countries:", validCountries);
       
       // Check Quote Requests
-      const qrSnapshot = await getDocs(collection(db, "quoteRequests"));
+      const qrSnapshot = await getDocs(collection(db as Firestore, "quoteRequests"));
       const orphanedQuoteRequests = [];
       
       for (const qrDoc of qrSnapshot.docs) {
@@ -572,7 +635,7 @@ export default function UsersPage() {
       }
       
       // Check User Profiles
-      const usersSnapshot = await getDocs(collection(db, "users"));
+      const usersSnapshot = await getDocs(collection(db as Firestore, "users"));
       const orphanedUsers = [];
       
       for (const userDoc of usersSnapshot.docs) {
@@ -645,10 +708,7 @@ export default function UsersPage() {
 
       // Get all users
       const snapshot = await getDocs(collection(db as Firestore, "users"));
-      const allUsers = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
+      const allUsers = snapshot.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
 
       // Find duplicates by email
       const emailGroups = allUsers.reduce((acc, user) => {
@@ -664,8 +724,8 @@ export default function UsersPage() {
 
       // Find duplicates
       const duplicates = Object.entries(emailGroups)
-        .filter(([email, users]) => users.length > 1)
-        .map(([email, users]) => ({ email, users }));
+        .filter(([, users]) => (users as any[]).length > 1)
+        .map(([email, users]) => ({ email, users: users as any[] }));
 
       if (duplicates.length === 0) {
         setSuccess("No duplicate users found.");
@@ -676,10 +736,10 @@ export default function UsersPage() {
       let removedCount = 0;
       for (const { email, users } of duplicates) {
         // Sort by document ID - UID-based documents usually come first
-        users.sort((a, b) => a.id.localeCompare(b.id));
+        (users as any[]).sort((a: any, b: any) => a.id.localeCompare(b.id));
         
         // Keep the first one, remove the rest
-        const toRemove = users.slice(1);
+        const toRemove = (users as any[]).slice(1);
         for (const user of toRemove) {
           await deleteDoc(doc(db as Firestore, "users", user.id));
           removedCount++;
@@ -715,6 +775,8 @@ export default function UsersPage() {
   const canViewUsers = userProfile?.role === "admin" || userProfile?.role === "superAdmin";
   const canManageUsers = userProfile?.role === "admin" || userProfile?.role === "superAdmin";
   const canManageCountries = userProfile?.role === "admin" || userProfile?.role === "superAdmin";
+  const monthKey = new Date().toISOString().slice(0,7);
+  const needsMonthlyReview = (!reviewCompleted || lastReviewMonth !== monthKey) && (userProfile?.role === 'admin');
   
   if (!canViewUsers) {
     return (
@@ -727,9 +789,59 @@ export default function UsersPage() {
 
   return (
     <div className="p-8">
-      <div className="flex justify-between items-center mb-6">
+      {needsMonthlyReview && (
+        <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 text-yellow-800 rounded text-sm flex items-center justify-between">
+          <span>Monthly Access Review for {monthKey} is due. Please confirm active users.</span>
+          <button
+            onClick={() => {
+              const start: Record<string, boolean> = {};
+              users.forEach((u) => { start[u.id] = true; });
+              setReviewSelection(start);
+              setShowMonthlyReview(true);
+            }}
+            className="px-3 py-1 bg-yellow-600 text-white rounded hover:bg-yellow-700"
+          >
+            Start Review
+          </button>
+        </div>
+      )}
+			<div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">User Management</h1>
         <div className="flex gap-2">
+          {userProfile?.role === 'admin' && (
+            <button
+              onClick={() => {
+                const start: Record<string, boolean> = {};
+                users.forEach((u) => { start[u.id] = true; });
+                setReviewSelection(start);
+                setShowMonthlyReview(true);
+              }}
+              className="px-4 py-2 bg-[#cccdce] text-gray-900 rounded hover:bg-[#bbbdbe]"
+            >
+              Monthly Access Review
+            </button>
+          )}
+					{userProfile?.role === 'superAdmin' && (
+						<button
+							onClick={async () => {
+								try {
+									setArchiving(true);
+									const res = await fetch('/api/admin/archive/run', { method: 'POST' });
+									const data = await res.json();
+									if (!res.ok || data?.ok === false) throw new Error(data?.error || 'Archive failed');
+									alert(`Archive complete. Messages archived: ${data?.archivedMessages ?? 0}. Old notifications deleted: ${data?.deletedNotifications ?? 0}.`);
+								} catch (e: any) {
+									alert(e?.message || 'Failed to run archive');
+								} finally {
+									setArchiving(false);
+								}
+							}}
+							disabled={archiving}
+							className="px-4 py-2 bg-[#cccdce] text-gray-900 rounded hover:bg-[#bbbdbe] disabled:opacity-50"
+						>
+							{archiving ? 'Archiving…' : 'Run Archive Now'}
+						</button>
+					)}
           <button
             onClick={handleFixDuplicateUsers}
             disabled={submitting}
@@ -824,7 +936,7 @@ export default function UsersPage() {
                         </span>
                       </td>
                        <td className="py-3 px-4">
-                        {userData.countries && userData.countries.length > 0 ? (
+                         {userData.countries && userData.countries.length > 0 ? (
                           <div className="flex gap-1 flex-wrap">
                             {userData.countries.map((country: string, index: number) => (
                               <span key={index} className="pill-modern bg-gray-500 text-xs">
@@ -836,15 +948,20 @@ export default function UsersPage() {
                           <span className="text-gray-400">No countries assigned</span>
                         )}
                          {userProfile?.role === 'superAdmin' && (
-                           <div className="mt-1 text-xs">
-                             {mfaStatus === true && <span className="text-green-700">MFA: Enabled</span>}
-                             {mfaStatus === false && <span className="text-red-700">MFA: Not enabled</span>}
+                          <div className="mt-1 text-xs">
+                             <span className={mfaStatus ? 'text-green-700' : 'text-red-700'}>
+                               MFA: {mfaStatus ? 'Enabled' : 'Not enabled'}
+                             </span>
+                             <span className="ml-2">Status: {(userData.disabled || userData.accessDisabled) ? 'Disabled' : 'Active'}</span>
+                             {!userData.emailVerified && <span className="ml-2 text-red-700">Email not verified</span>}
                            </div>
                          )}
                       </td>
                       {canManageUsers && (
                         <td className="py-3 px-4">
-                          <div className="flex flex-wrap gap-2">
+                          <details className="inline-block">
+                            <summary className="px-3 py-1 rounded text-sm bg-[#cccdce] hover:bg-[#bbbdbe] text-gray-900 cursor-pointer">Actions</summary>
+                            <div className="mt-2 p-2 border rounded bg-white shadow flex flex-col gap-2 w-64">
                             {/* 1) Edit - Dark Grey */}
                             <button
                               onClick={() => setEditingUser({...userData})}
@@ -907,6 +1024,25 @@ export default function UsersPage() {
                                 className="px-3 py-1 rounded text-sm bg-[#bbbdbe] hover:bg-[#aeb0b1] text-gray-900"
                               >
                                 Send MFA Reminder
+                              </button>
+                            )}
+                           {userProfile?.role === 'superAdmin' && (userData.disabled || userData.accessDisabled) && (
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    const res = await fetch('/api/admin/roster/reactivate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ uid: userData.id }) });
+                                    const data = await res.json();
+                                    if (!res.ok) throw new Error(data?.error || 'Failed');
+                                    alert('User reactivated');
+                                    // refresh row locally
+                                    setUsers(prev => prev.map(u => u.id === userData.id ? { ...u, disabled: false, accessDisabled: false } : u));
+                                  } catch (e: any) {
+                                    alert(e?.message || 'Failed to reactivate user');
+                                  }
+                                }}
+                                className="px-3 py-1 rounded text-sm bg-green-600 hover:bg-green-700 text-white"
+                              >
+                                Reactivate
                               </button>
                             )}
                             {/* 3) Send Verification - Light Grey */}
@@ -1015,7 +1151,8 @@ export default function UsersPage() {
                             >
                               <FiTrash2 /> Delete
                             </button>
-                          </div>
+                            </div>
+                          </details>
                         </td>
                       )}
                     </tr>
@@ -1422,6 +1559,92 @@ export default function UsersPage() {
           </div>
         )}
               </div>
+      )}
+
+      {/* Monthly Access Review Modal */}
+      {showMonthlyReview && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-2xl">
+            <h3 className="text-lg font-semibold mb-4">Monthly Access Review</h3>
+            <p className="text-sm text-gray-600 mb-3">Tick users who are still active. Unticked users will be disabled on save.</p>
+            <div className="max-h-96 overflow-y-auto border rounded">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-left p-2">Active</th>
+                    <th className="text-left p-2">Name</th>
+                    <th className="text-left p-2">Email</th>
+                    <th className="text-left p-2">Countries</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {users.map((u) => (
+                    <tr key={u.id} className="border-b hover:bg-gray-50">
+                      <td className="p-2"><input type="checkbox" checked={reviewSelection[u.id] !== undefined ? reviewSelection[u.id] : !(u.disabled || u.accessDisabled)} onChange={(e) => setReviewSelection(prev => ({ ...prev, [u.id]: e.target.checked }))} /></td>
+                      <td className="p-2">{u.displayName || '—'}</td>
+                      <td className="p-2">{u.email || '—'}</td>
+                      <td className="p-2">{(u.countries || []).join(', ')}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="flex gap-3 mt-4 justify-end">
+              <button onClick={() => setShowMonthlyReview(false)} className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300">Cancel</button>
+              <button
+                disabled={reviewSubmitting}
+                onClick={async () => {
+                  try {
+                    setReviewSubmitting(true);
+                    const activeUserIds = Object.entries(reviewSelection).filter(([,v]) => v).map(([id]) => id);
+                    const countryList = (userProfile?.countries || []);
+                    const myCountry = countryList[0] || 'Global';
+                    await fetch('/api/admin/roster/submit', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        country: myCountry,
+                        reviewedBy: userProfile?.email || user?.email || 'unknown',
+                        activeUserIds,
+                        allUsers: users.map(u => ({ id: u.id, email: u.email, displayName: u.displayName })),
+                      }),
+                    });
+                    setShowMonthlyReview(false);
+                    alert('Review saved. Inactive users have been disabled where possible. Reloading list…');
+                    // refresh list to reflect disabled flags
+                    const usersSnap = await getDocs(collection(db as Firestore, 'users'));
+                    let refreshed = usersSnap.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) }));
+                    if (userProfile?.role === 'superAdmin' && refreshed.length > 0) {
+                      try {
+                        const uids = refreshed.map(u => u.id);
+                        const res = await fetch('/api/admin/auth-status', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ uids }) });
+                        const data = await res.json();
+                        if (res.ok && data?.statuses) {
+                          refreshed = refreshed.map(u => ({
+                            ...u,
+                            mfaEnabled: Boolean(data.statuses[u.id]?.mfaEnabled),
+                            disabled: Boolean(data.statuses[u.id]?.disabled),
+                            emailVerified: Boolean(data.statuses[u.id]?.emailVerified),
+                          }));
+                        }
+                      } catch {}
+                    }
+                    setUsers(refreshed);
+                    setReviewCompleted(true);
+                    setLastReviewMonth(monthKey);
+                  } catch (e: any) {
+                    alert(e?.message || 'Failed to submit review');
+                  } finally {
+                    setReviewSubmitting(false);
+                  }
+                }}
+                className="px-4 py-2 bg-[#e40115] text-white rounded hover:bg-[#c7010e] disabled:opacity-50"
+              >
+                {reviewSubmitting ? 'Saving…' : 'Save Review'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

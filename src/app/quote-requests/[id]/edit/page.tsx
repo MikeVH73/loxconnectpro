@@ -359,10 +359,45 @@ export default function EditQuoteRequest() {
           }
         });
       
-      // Check for product changes
-        if (JSON.stringify(originalData.products) !== JSON.stringify(quoteRequest.products)) {
-          changes.push('Products updated');
-      }
+        // Check for product changes with per-item diffs
+        try {
+          const oldProducts = Array.isArray(originalData.products) ? originalData.products : [];
+          const newProducts = Array.isArray(quoteRequest.products) ? quoteRequest.products : [];
+
+          const key = (p: any) => String(p?.catClass || p?.code || '').trim();
+          const oldMap = new Map<string, any>();
+          const newMap = new Map<string, any>();
+          oldProducts.forEach((p: any) => oldMap.set(key(p), p));
+          newProducts.forEach((p: any) => newMap.set(key(p), p));
+
+          // additions
+          for (const [k, p] of newMap.entries()) {
+            if (!oldMap.has(k)) {
+              changes.push(`Product added: ${p.catClass || p.code || '—'} (${p.description || 'no description'}) × ${p.quantity ?? 1}`);
+            }
+          }
+          // removals
+          for (const [k, p] of oldMap.entries()) {
+            if (!newMap.has(k)) {
+              changes.push(`Product removed: ${p.catClass || p.code || '—'} (${p.description || 'no description'})`);
+            }
+          }
+          // quantity/description changes
+          for (const [k, np] of newMap.entries()) {
+            const op = oldMap.get(k);
+            if (!op) continue;
+            if ((op.quantity ?? 1) !== (np.quantity ?? 1)) {
+              changes.push(`Quantity changed: ${np.catClass || np.code || '—'} ${op.quantity ?? 1} → ${np.quantity ?? 1}`);
+            }
+            if ((op.description || '') !== (np.description || '')) {
+              changes.push(`Description changed: ${np.catClass || np.code || '—'} "${op.description || '—'}" → "${np.description || '—'}"`);
+            }
+          }
+        } catch {
+          if (JSON.stringify(originalData.products) !== JSON.stringify(quoteRequest.products)) {
+            changes.push('Products updated');
+          }
+        }
       
       // Check for date changes
       if (originalData.startDate !== quoteRequest.startDate) {
@@ -404,8 +439,8 @@ export default function EditQuoteRequest() {
         // Create notifications for changes
         if (changes.length > 0) {
           const targetCountry = userProfile?.businessUnit === quoteRequest.creatorCountry 
-            ? quoteRequest.involvedCountry 
-            : quoteRequest.creatorCountry;
+            ? (quoteRequest.involvedCountry || quoteRequest.involvedCountries?.[0])
+            : (quoteRequest.creatorCountry);
 
               await createNotification({
                 quoteRequestId: id,
@@ -1613,7 +1648,7 @@ export default function EditQuoteRequest() {
         </div>
 
         {/* Right Panel - Fixed width */}
-        <div className="w-96 min-w-[384px] border-l border-gray-200 bg-white">
+        <div className="w-[360px] min-w-[360px] border-l border-gray-200 bg-white">
             <MessagingPanel
             messages={messages || []}
               currentUser={user?.email || ''}

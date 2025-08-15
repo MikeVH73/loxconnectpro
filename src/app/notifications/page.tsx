@@ -69,9 +69,10 @@ export default function NotificationsPage() {
     if (!user || !db || !userProfile?.businessUnit) return;
 
     const notificationsRef = collection(db as Firestore, 'notifications');
+    const normalized = (userProfile.businessUnit || '').toLowerCase().replace(/[^a-z0-9]/g, '');
     const q = query(
       notificationsRef,
-      where('targetCountry', '==', userProfile.businessUnit),
+      where('targetCountryKey', '==', normalized),
       orderBy('createdAt', 'desc')
     );
 
@@ -144,8 +145,19 @@ export default function NotificationsPage() {
                     {' '}
                     {notification.notificationType === 'message' && 'sent a message: '}
                     {notification.notificationType === 'status_change' && 'updated the status: '}
-                    {notification.notificationType === 'property_change' && 'made changes: '}
-                    <span className="italic">{notification.content}</span>
+                    {notification.notificationType === 'property_change' && 'made changes:'}
+                    {notification.notificationType !== 'property_change' ? (
+                      <span className="italic">{notification.content}</span>
+                    ) : (
+                      <ul className="list-disc ml-5 mt-1 text-[13px] space-y-1">
+                        {String(notification.content)
+                          .split(', ')
+                          .filter(Boolean)
+                          .map((line, i) => (
+                            <li key={i}>{line}</li>
+                          ))}
+                      </ul>
+                    )}
                   </div>
                 </div>
                 <div className="text-sm text-gray-500 whitespace-nowrap">

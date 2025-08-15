@@ -80,18 +80,22 @@ interface UserProfile {
 - **Order (most used → least used)**:
   1. Edit
   2. Reset Password
-  3. Send Verification Email
-  4. Update Auth Email
-  5. Grant 1‑time Bypass
-  6. Set Temp Password
-  7. Delete
+  3. Send MFA Reminder (superAdmin)
+  4. Send Verification Email
+  5. Update Auth Email
+  6. Grant 1‑time Bypass
+  7. Set Temp Password
+  8. Reactivate (superAdmin; only visible when user is disabled)
+  9. Delete
 - **Colors**:
   - Edit: Dark Grey `#BBBDBE`
   - Reset Password: Black with white text
+  - Send MFA Reminder: Light Grey `#CCCDCE`
   - Send Verification Email: Light Grey `#CCCDCE`
   - Update Auth Email: Light Grey `#CCCDCE`
   - Grant 1‑time Bypass: Dark Grey `#BBBDBE`
   - Set Temp Password: Loxam Red `#E40115`
+  - Reactivate: Green (stand‑out) `bg-green-600 text-white`
   - Delete: Loxam Red `#E40115`
 - **Icons (react-icons/fi)**:
   - Edit: `FiEdit`
@@ -101,6 +105,13 @@ interface UserProfile {
   - Grant 1‑time Bypass: `FiShieldOff`
   - Set Temp Password: `FiZap`
   - Delete: `FiTrash2`
+
+### **MFA (TOTP) & Reminder Links**
+- Users enroll at `/users/security` (Authenticator app).
+- Login is MFA-aware and handles the TOTP step.
+- SuperAdmin action “Send MFA Reminder” returns a production link for the user to enroll.
+  - API: `POST /api/admin/send-mfa-reminder` → `{ securityUrl, verificationLink? }`
+  - Base URL: `NEXT_PUBLIC_PROD_BASE_URL` fallback `https://loxconnectpro.vercel.app`.
 
 **Authorization Rules**:
 - **superAdmin**: Can see all users from all organizations, can reset passwords for any user
@@ -112,6 +123,25 @@ interface UserProfile {
 - Stores password reset information in user profile
 - User must change password on next login
 - Tracks who reset the password and when
+
+### **Monthly Access Review (Roster Attestation)**
+- Purpose: require Admins to confirm active staff monthly per country.
+- UI:
+  - Yellow banner on `Users` prompting review for the current `YYYY‑MM`.
+  - Modal lists users with checkboxes (checked = active, unchecked = disable).
+  - Save Review disables unchecked users and records an audit entry.
+  - Disabled rows show `Status: Disabled` and a green “Reactivate” (superAdmin only).
+- Persistence:
+  - Firestore audit: `accessReviews/<YYYY-MM>/countries/<Country>` with `{ reviewedBy, reviewedAt, activeUserIds, totalUsers }`.
+  - Per-user flag: merge `{ accessDisabled: true }` in `users/<uid>` as UI fallback.
+  - Auth: set `disabled=true` in Firebase Auth when UID/email resolves.
+- Reactivation:
+  - API: `POST /api/admin/roster/reactivate` → enables Auth user and clears `accessDisabled`.
+- APIs:
+  - `POST /api/admin/roster/status` → fetch current-month review data
+  - `POST /api/admin/roster/submit` → save review + disable unchecked
+  - `POST /api/admin/auth-status` → bulk `{ mfaEnabled, disabled, emailVerified }`
+  - `GET /api/admin/roster/remind` → countries missing current‑month review (cron)
 
 ## 📊 **DASHBOARD SYSTEM**
 
@@ -371,6 +401,18 @@ const firebaseConfig = {
 - **Offline Persistence**: IndexedDB with unlimited cache
 - **Optimistic Updates**: UI updates before server confirmation
 - **Error Handling**: Graceful fallbacks and retry mechanisms
+
+### **Archiving & Cost Controls**
+- **Archive Bucket**: `loxconnect-archive` (europe-west1, Nearline → Coldline @90d, delete @365d)
+- **BigQuery Dataset**: `lox_archive` (europe-west1) for optional analytics
+- **Env Vars**:
+  - `ARCHIVE_BUCKET` → default `loxconnect-archive`
+  - `ARCHIVE_RETENTION_DAYS` → default `90`
+  - `NOTIFICATIONS_TTL_DAYS` → default `45`
+- **APIs**:
+  - `POST /api/admin/archive/run` → moves `messages` older than retention into GCS JSONL, deletes old `notifications`
+  - `GET /api/admin/archive/load?quoteRequestId=...&ym=YYYY-MM` → reads archived JSONL back for UI “Load older history”
+- **Permissions**: Cloud Functions/Next API service account needs Storage Object Admin on bucket and read permissions to list/download archived files.
 
 ### **State Management Pattern**
 ```typescript

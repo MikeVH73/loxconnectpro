@@ -1,19 +1,23 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   TotpMultiFactorGenerator,
   multiFactor,
   EmailAuthProvider,
   reauthenticateWithCredential,
+  sendEmailVerification,
 } from "firebase/auth";
 import { useAuth } from "../../AuthProvider";
 
 export default function SecurityPage() {
   const { user } = useAuth();
+  const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [verifying, setVerifying] = useState(false);
 
   const [totpSecret, setTotpSecret] = useState<any | null>(null);
   const [verificationCode, setVerificationCode] = useState("");
@@ -117,8 +121,52 @@ export default function SecurityPage() {
           <div className="p-3 bg-green-50 border border-green-200 text-green-700 rounded text-sm">{success}</div>
         )}
 
+        {/* Step 1: Verify email */}
         <section className="bg-white rounded border p-4 space-y-3">
-          <h2 className="font-medium">Multi‑factor Authentication (Authenticator app)</h2>
+          <h2 className="font-medium">Step 1 — Verify your email</h2>
+          <div className="text-sm flex items-center gap-2">
+            <span className={`px-2 py-0.5 rounded ${user?.emailVerified ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
+              {user?.emailVerified ? 'Email verified' : 'Email not verified'}
+            </span>
+            <button
+              onClick={async ()=>{ try { setLoading(true); await (user as any)?.reload?.(); setSuccess('Status refreshed'); } finally { setLoading(false);} }}
+              className="text-xs px-2 py-1 border rounded hover:bg-gray-50"
+            >
+              Refresh
+            </button>
+          </div>
+          <p className="text-sm text-gray-600">We will send a verification email using the project template. After clicking the link, return here and press Refresh.</p>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={async ()=>{
+                if (!user) return;
+                try {
+                  setVerifying(true); setError(null); setSuccess(null);
+                  const base = (typeof process !== 'undefined' && (process as any)?.env?.NEXT_PUBLIC_APP_BASE_URL) || 'https://loxconnectpro.vercel.app';
+                  const url = `${base}/users/security`;
+                  await sendEmailVerification(user, { url, handleCodeInApp: false } as any);
+                  setSuccess('Verification email sent. Check your inbox, then come back and press Refresh.');
+                } catch (e: any) {
+                  setError(e?.message || 'Failed to send verification email');
+                } finally { setVerifying(false); }
+              }}
+              disabled={verifying || !user}
+              className="px-3 py-2 bg-gray-800 text-white rounded hover:bg-black text-sm disabled:opacity-50"
+            >
+              {verifying ? 'Sending…' : 'Send verification email'}
+            </button>
+            <button
+              onClick={()=> router.push('/verify')}
+              className="px-3 py-2 bg-gray-200 text-gray-800 rounded text-sm hover:bg-gray-300"
+            >
+              Advanced: open verification link now
+            </button>
+          </div>
+        </section>
+
+        {/* Step 2: MFA */}
+        <section className="bg-white rounded border p-4 space-y-3">
+          <h2 className="font-medium">Step 2 — Multi‑factor Authentication (Authenticator app)</h2>
           {enrolledFactors && enrolledFactors.length > 0 ? (
             <div className="space-y-2">
               <p className="text-sm text-gray-600">
