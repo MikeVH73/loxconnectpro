@@ -1648,7 +1648,7 @@ export default function EditQuoteRequest() {
         </div>
 
         {/* Right Panel - Fixed width */}
-        <div className="w-96 min-w-[384px] border-l border-gray-200 bg-white">
+        <div className="w-[360px] min-w-[360px] border-l border-gray-200 bg-white">
             <MessagingPanel
             messages={messages || []}
               currentUser={user?.email || ''}

@@ -112,10 +112,11 @@ export async function markNotificationsAsRead(quoteRequestId: string, targetCoun
 
   try {
     const notificationsRef = collection(db as Firestore, 'notifications');
+    const key = (targetCountry || '').toLowerCase().replace(/[^a-z0-9]/g, '');
     const q = query(
       notificationsRef,
       where('quoteRequestId', '==', quoteRequestId),
-      where('targetCountry', '==', targetCountry),
+      where('targetCountryKey', '==', key),
       where('isRead', '==', false)
     );
 
@@ -138,9 +139,10 @@ export async function clearNotifications(targetCountry: string) {
   try {
     console.log('Clearing notifications for country:', targetCountry);
     const notificationsRef = collection(db as Firestore, 'notifications');
+    const key = (targetCountry || '').toLowerCase().replace(/[^a-z0-9]/g, '');
     const q = query(
       notificationsRef,
-      where('targetCountry', '==', targetCountry)
+      where('targetCountryKey', '==', key)
     );
 
     const snapshot = await getDocs(q);
@@ -166,9 +168,10 @@ export async function clearDashboardNotifications(targetCountry: string) {
   try {
     console.log('Clearing dashboard notifications for country:', targetCountry);
     const notificationsRef = collection(db as Firestore, 'notifications');
+    const key = (targetCountry || '').toLowerCase().replace(/[^a-z0-9]/g, '');
     const q = query(
       notificationsRef,
-      where('targetCountry', '==', targetCountry)
+      where('targetCountryKey', '==', key)
     );
 
     const snapshot = await getDocs(q);
@@ -195,10 +198,11 @@ export async function clearQuoteRequestNotifications(quoteRequestId: string, tar
   try {
     console.log('Clearing notifications for quote request:', quoteRequestId);
     const notificationsRef = collection(db as Firestore, 'notifications');
+    const key = (targetCountry || '').toLowerCase().replace(/[^a-z0-9]/g, '');
     const q = query(
       notificationsRef,
       where('quoteRequestId', '==', quoteRequestId),
-      where('targetCountry', '==', targetCountry)
+      where('targetCountryKey', '==', key)
     );
 
     const snapshot = await getDocs(q);
