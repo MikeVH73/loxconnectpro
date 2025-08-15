@@ -396,8 +396,31 @@ export default function UsersPage() {
       
       // Refresh users list
       const usersSnap = await getDocs(collection(db as Firestore, "users"));
-      const allUsers = usersSnap.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) }));
-      
+      let allUsers = usersSnap.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) }));
+
+      // After fixing profiles, merge live Auth status back so MFA/emailVerified aren't shown as disabled
+      if (userProfile?.role === 'superAdmin' && allUsers.length > 0) {
+        try {
+          const uids = allUsers.map(u => u.id);
+          const emails = allUsers.map(u => (u.email || '').toLowerCase());
+          const res = await fetch('/api/admin/auth-status', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ uids, emails }) });
+          const data = await res.json();
+          if (res.ok && (data?.statusesByUid || data?.statusesByEmail)) {
+            allUsers = allUsers.map(u => {
+              const byUid = data.statusesByUid?.[u.id];
+              const byEmail = data.statusesByEmail?.[(u.email || '').toLowerCase()];
+              const src = byUid || byEmail || {};
+              return {
+                ...u,
+                mfaEnabled: Boolean(src.mfaEnabled),
+                disabled: Boolean(src.disabled),
+                emailVerified: Boolean(src.emailVerified),
+              };
+            });
+          }
+        } catch {}
+      }
+
       // If user is superAdmin, show all users
       if (userProfile?.role === "superAdmin") {
         setUsers(allUsers);
