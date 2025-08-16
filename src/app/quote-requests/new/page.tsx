@@ -107,7 +107,7 @@ const NewQuoteRequestPage = () => {
   const [showNewContact, setShowNewContact] = useState(false);
   const [newContact, setNewContact] = useState({ name: "", phone: "" });
   const [labels, setLabels] = useState<string[]>([]);
-  const [selectedLabels, setSelectedLabels] = useState<string[]>([]);
+  const [selectedLabels, setSelectedLabels] = useState<string[]>(['urgent']);
   const [notes, setNotes] = useState<Note[]>([]);
   const [noteText, setNoteText] = useState("");
   const [customerDetails, setCustomerDetails] = useState<Customer | null>(null);
@@ -516,6 +516,12 @@ const NewQuoteRequestPage = () => {
               type="date"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
+              onKeyDown={(e) => {
+                // Auto-advance from day to month to year via arrow-right
+                if (e.key === 'ArrowRight') {
+                  (e.target as HTMLInputElement).setSelectionRange(8, 10); // move to year segment
+                }
+              }}
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
               required
             />
