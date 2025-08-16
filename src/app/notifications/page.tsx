@@ -82,17 +82,21 @@ export default function NotificationsPage() {
     const normalized = (bu || '').toLowerCase().replace(/[^a-z0-9]/g, '');
     const q = query(
       notificationsRef,
-      where('targetCountryKey', '==', normalized),
-      orderBy('createdAt', 'desc')
+      where('targetCountryKey', '==', normalized)
     );
 
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
-        const newNotifications = snapshot.docs.map(doc => ({
+        const newNotifications = (snapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data()
-        })) as Notification[];
+        })) as Notification[])
+          .sort((a, b) => {
+            const da = (a.createdAt && typeof (a as any).createdAt.toDate === 'function') ? (a as any).createdAt.toDate().getTime() : 0;
+            const db = (b.createdAt && typeof (b as any).createdAt.toDate === 'function') ? (b as any).createdAt.toDate().getTime() : 0;
+            return db - da;
+          });
 
         setNotifications(newNotifications);
         setLoading(false);
