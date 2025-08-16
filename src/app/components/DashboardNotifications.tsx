@@ -97,8 +97,9 @@ export default function DashboardNotifications() {
         </div>
       ) : (
         notifications.map(notification => (
-          <div
+          <a
             key={notification.id}
+            href={`/quote-requests/${notification.quoteRequestId}/edit`}
             className={`flex items-start p-2 rounded ${
               notification.type === 'message' ? 'bg-green-50' :
               notification.type === 'status_change' ? 'bg-yellow-50' :
@@ -127,7 +128,7 @@ export default function DashboardNotifications() {
                 From: {notification.senderCountry}
               </p>
             </div>
-          </div>
+          </a>
         ))
       )}
     </div>

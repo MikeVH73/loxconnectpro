@@ -152,7 +152,7 @@ export default function NotificationsPage() {
           notifications.map((notification) => (
             <Link 
               key={notification.id}
-              href={userProfile?.role === 'Employee' ? `/quote-requests/${notification.quoteRequestId}` : `/quote-requests/${notification.quoteRequestId}/edit`}
+              href={`/quote-requests/${notification.quoteRequestId}/edit`}
               className={`block p-4 rounded-lg border ${
                 notification.isRead ? 'bg-white' : 'bg-blue-50'
               } hover:shadow-md transition-shadow`}
