@@ -251,13 +251,17 @@ const NewQuoteRequestPage = () => {
     e.preventDefault();
     if (submitting || !db) return;
 
+    // Build ISO dates up front for validation
+    const startIso = toIso(sd, sm, sy) || startDate;
+    const endIso = customerDecidesEnd ? null : (toIso(ed, em, ey) || endDate || "");
+
     // Validate required fields
-    const errors = [];
+    const errors = [] as string[];
     if (!title) errors.push("Title is required");
     if (!involvedCountry) errors.push("Involved Country is required");
     if (!customerId) errors.push("Customer is required");
     if (!products.length || !products[0].catClass) errors.push("At least one product with Cat. Class is required");
-    if (!startDate) errors.push("Start Date is required");
+    if (!startIso) errors.push("Start Date is required");
     if (!jobsiteAddress.trim()) errors.push("Jobsite Address is required");
     if (!jobsiteContactId) errors.push("Jobsite Contact is required");
 
@@ -280,10 +284,6 @@ const NewQuoteRequestPage = () => {
             type: selectedContact.type
       } : null;
 
-      // Build ISO date strings from segmented inputs if used
-      const startIso = toIso(sd, sm, sy) || startDate;
-      const endIso = customerDecidesEnd ? null : (toIso(ed, em, ey) || endDate || "");
-
       const quoteRequestData = {
         title,
         creatorCountry,
@@ -302,7 +302,7 @@ const NewQuoteRequestPage = () => {
         customerDecidesEnd,
         jobsiteContactId,
         jobsiteContact: jobsiteContactData,
-        labels: (urgentFlag ? ['urgent'] : []),
+        urgent: urgentFlag,
         notes,
         attachments,
         createdAt: serverTimestamp(),
