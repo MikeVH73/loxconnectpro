@@ -40,6 +40,8 @@ export default function NotificationsPage() {
     try {
       setClearing(true);
       await clearDashboardNotifications(userProfile.businessUnit);
+      // Optimistically clear current view; onSnapshot will confirm
+      setNotifications([]);
       toast.success('All notifications cleared');
     } catch (error) {
       console.error('Error clearing notifications:', error);
@@ -66,25 +68,41 @@ export default function NotificationsPage() {
   };
 
   useEffect(() => {
-    if (!user || !db || !userProfile?.businessUnit) return;
+    if (!user || !db) return;
+
+    const bu = userProfile?.businessUnit || userProfile?.countries?.[0] || '';
+    if (!bu) {
+      // No business unit available → show empty state instead of spinning forever
+      setNotifications([]);
+      setLoading(false);
+      return;
+    }
 
     const notificationsRef = collection(db as Firestore, 'notifications');
-    const normalized = (userProfile.businessUnit || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const normalized = (bu || '').toLowerCase().replace(/[^a-z0-9]/g, '');
     const q = query(
       notificationsRef,
       where('targetCountryKey', '==', normalized),
       orderBy('createdAt', 'desc')
     );
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const newNotifications = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Notification[];
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const newNotifications = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as Notification[];
 
-      setNotifications(newNotifications);
-      setLoading(false);
-    });
+        setNotifications(newNotifications);
+        setLoading(false);
+      },
+      (error) => {
+        console.error('Notifications listener error:', error);
+        setLoading(false);
+        toast.error('Failed to load notifications');
+      }
+    );
 
     return () => unsubscribe();
   }, [user, db, userProfile]);
