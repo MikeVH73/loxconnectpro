@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { collection, addDoc, serverTimestamp, getDocs, query, where, doc, getDoc, updateDoc, Firestore } from "firebase/firestore";
 import { db } from "../../../firebaseClient";
@@ -108,6 +108,21 @@ const NewQuoteRequestPage = () => {
   const [newContact, setNewContact] = useState({ name: "", phone: "" });
   const [labels, setLabels] = useState<string[]>([]);
   const [urgentFlag, setUrgentFlag] = useState(false);
+
+  // Date sub-fields for better keyboard flow
+  const [sd, setSd] = useState("");
+  const [sm, setSm] = useState("");
+  const [sy, setSy] = useState("");
+  const [ed, setEd] = useState("");
+  const [em, setEm] = useState("");
+  const [ey, setEy] = useState("");
+  const smRef = useRef<HTMLInputElement>(null);
+  const syRef = useRef<HTMLInputElement>(null);
+  const emRef = useRef<HTMLInputElement>(null);
+  const eyRef = useRef<HTMLInputElement>(null);
+
+  const pad2 = (v: string) => (v.length === 1 ? `0${v}` : v);
+  const toIso = (d: string, m: string, y: string) => (d && m && y && y.length === 4 ? `${y}-${pad2(m)}-${pad2(d)}` : "");
   const [notes, setNotes] = useState<Note[]>([]);
   const [noteText, setNoteText] = useState("");
   const [customerDetails, setCustomerDetails] = useState<Customer | null>(null);
@@ -265,6 +280,10 @@ const NewQuoteRequestPage = () => {
             type: selectedContact.type
       } : null;
 
+      // Build ISO date strings from segmented inputs if used
+      const startIso = toIso(sd, sm, sy) || startDate;
+      const endIso = customerDecidesEnd ? null : (toIso(ed, em, ey) || endDate || "");
+
       const quoteRequestData = {
         title,
         creatorCountry,
@@ -278,8 +297,8 @@ const NewQuoteRequestPage = () => {
           address: jobsiteAddress,
           coordinates: jobsiteCoords
         },
-        startDate,
-        endDate: customerDecidesEnd ? null : endDate,
+        startDate: startIso,
+        endDate: endIso,
         customerDecidesEnd,
         jobsiteContactId,
         jobsiteContact: jobsiteContactData,
@@ -512,43 +531,23 @@ const NewQuoteRequestPage = () => {
             <label className="block text-sm font-medium text-gray-700">
               Start Date <span className="text-red-500">*</span>
             </label>
-            <input
-              type="text"
-              inputMode="numeric"
-              placeholder="dd-mm-yyyy"
-              value={startDate}
-              onChange={(e) => {
-                const v = e.target.value.replace(/[^0-9]/g, "").slice(0, 8);
-                const parts = [v.slice(0,2), v.slice(2,4), v.slice(4,8)].filter(Boolean);
-                setStartDate(parts.join("-"));
-              }}
-              onKeyUp={(e) => {
-                const el = e.target as HTMLInputElement;
-                // insert dashes automatically: dd-mm-yyyy
-                const digits = el.value.replace(/[^0-9]/g, "");
-                if (digits.length === 2 || digits.length === 4) {
-                  el.value = (digits.length===2? digits+"-" : digits.slice(0,2)+"-"+digits.slice(2)+"-");
-                }
-              }}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-              required
-            />
+            <div className="mt-1 flex items-center gap-1">
+              <input value={sd} onChange={e=>{ const v=e.target.value.replace(/\D/g,'').slice(0,2); setSd(v); if(v.length===2) smRef.current?.focus(); }} placeholder="dd" className="w-12 text-center rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500" />
+              <span>-</span>
+              <input ref={smRef} value={sm} onChange={e=>{ const v=e.target.value.replace(/\D/g,'').slice(0,2); setSm(v); if(v.length===2) syRef.current?.focus(); }} placeholder="mm" className="w-12 text-center rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500" />
+              <span>-</span>
+              <input ref={syRef} value={sy} onChange={e=>{ const v=e.target.value.replace(/\D/g,'').slice(0,4); setSy(v); }} placeholder="yyyy" className="w-20 text-center rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500" />
+            </div>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700">End Date</label>
-            <input
-              type="text"
-              inputMode="numeric"
-              placeholder="dd-mm-yyyy"
-              value={endDate}
-              onChange={(e) => {
-                const v = e.target.value.replace(/[^0-9]/g, "").slice(0, 8);
-                const parts = [v.slice(0,2), v.slice(2,4), v.slice(4,8)].filter(Boolean);
-                setEndDate(parts.join("-"));
-              }}
-              disabled={customerDecidesEnd}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 disabled:bg-gray-100"
-            />
+            <div className="mt-1 flex items-center gap-1">
+              <input value={ed} onChange={e=>{ const v=e.target.value.replace(/\D/g,'').slice(0,2); setEd(v); if(v.length===2) emRef.current?.focus(); }} disabled={customerDecidesEnd} placeholder="dd" className="w-12 text-center rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 disabled:bg-gray-100" />
+              <span>-</span>
+              <input ref={emRef} value={em} onChange={e=>{ const v=e.target.value.replace(/\D/g,'').slice(0,2); setEm(v); if(v.length===2) eyRef.current?.focus(); }} disabled={customerDecidesEnd} placeholder="mm" className="w-12 text-center rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 disabled:bg-gray-100" />
+              <span>-</span>
+              <input ref={eyRef} value={ey} onChange={e=>{ const v=e.target.value.replace(/\D/g,'').slice(0,4); setEy(v); }} disabled={customerDecidesEnd} placeholder="yyyy" className="w-20 text-center rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 disabled:bg-gray-100" />
+            </div>
             <div className="mt-2">
               <label className="inline-flex items-center">
                 <input
