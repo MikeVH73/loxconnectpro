@@ -452,16 +452,7 @@ export default function EditQuoteRequest() {
                 notificationType: 'property_change'
               });
 
-          // Create recent activity entry
-          await createRecentActivity({
-            quoteRequestId: id,
-            quoteRequestTitle: quoteRequest.title,
-            sender: user?.email || '',
-            senderCountry: userProfile?.businessUnit || '',
-            targetCountry,
-            content: changes.join(', '),
-            activityType: 'property_change'
-          });
+          // Recent activity is created inside createNotification for property_change
         }
       }
     } catch (err) {
