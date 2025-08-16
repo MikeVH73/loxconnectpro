@@ -194,11 +194,6 @@ export default function QuoteRequestCard({ qr, customers, labels, onCardClick, o
         }`}>
           {qr.status}
         </span>
-        {qr.status === "New" && (
-          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-            NEW
-          </span>
-        )}
 
         {hasUrgentLabel && (
           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">

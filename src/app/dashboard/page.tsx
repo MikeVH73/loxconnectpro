@@ -296,7 +296,17 @@ export default function DashboardPage() {
   const urgentProblems: QuoteRequest[] = [];
   const standard: QuoteRequest[] = [];
 
-  quoteRequests.forEach(qr => {
+  // Stable sort: New items first by createdAt/updatedAt desc; others by updatedAt desc
+  const sorted = [...quoteRequests].sort((a, b) => {
+    const aNew = a.status === "New" ? 1 : 0;
+    const bNew = b.status === "New" ? 1 : 0;
+    if (aNew !== bNew) return bNew - aNew; // New first
+    const dateA = a.updatedAt?.toDate?.() || (a as any).createdAt?.toDate?.() || new Date(0);
+    const dateB = b.updatedAt?.toDate?.() || (b as any).createdAt?.toDate?.() || new Date(0);
+    return dateB.getTime() - dateA.getTime();
+  });
+
+  sorted.forEach(qr => {
     // Find special label IDs
     const urgentLabelId = labels.find(l => l.name.toLowerCase() === 'urgent')?.id || '';
     const problemsLabelId = labels.find(l => l.name.toLowerCase() === 'problems')?.id || '';
