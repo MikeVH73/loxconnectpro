@@ -161,12 +161,21 @@ export default function DashboardMessaging({ quoteRequestId, onClose }: Dashboar
             };
           }) as Message[];
 
-        // Sort messages by createdAt in memory
+        // Sort messages by createdAt in memory and auto-scroll to latest
         newMessages.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
 
         setMessages(newMessages);
         setLoading(false);
         setError(null);
+        // Defer scroll to bottom in the MessagingPanel via event queue
+        setTimeout(() => {
+          try {
+            const container = document.querySelector('[data-messaging-scroll]');
+            if (container) {
+              (container as HTMLElement).scrollTop = (container as HTMLElement).scrollHeight;
+            }
+          } catch {}
+        }, 0);
       }, (err) => {
         console.error('Error fetching messages:', err);
         setError(err.message);

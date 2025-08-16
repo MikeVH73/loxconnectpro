@@ -40,14 +40,39 @@ export async function createNotification({
     console.log('Creating notification:', { quoteRequestId, content, notificationType });
     
     const notificationsRef = collection(db as Firestore, 'notifications');
-    
+    const targetKey = normalizeCountryKey(targetCountry);
+
+    // Deduplicate: avoid multiple identical notifications in a short window
+    try {
+      const existingQuery = query(
+        notificationsRef,
+        where('quoteRequestId', '==', quoteRequestId),
+        where('targetCountryKey', '==', targetKey),
+        where('notificationType', '==', notificationType)
+      );
+      const existingSnap = await getDocs(existingQuery);
+      const nowMs = Date.now();
+      const duplicate = existingSnap.docs.some((d) => {
+        const data = d.data() as any;
+        const sameContent = String(data.content || '') === String(content || '');
+        const created = data.createdAt?.toDate ? data.createdAt.toDate().getTime() : 0;
+        return sameContent && created > 0 && (nowMs - created) < 5 * 60 * 1000;
+      });
+      if (duplicate) {
+        console.log('Skipping duplicate notification');
+        return;
+      }
+    } catch (e) {
+      console.warn('Deduplication check failed, proceeding:', e);
+    }
+
     await addDoc(notificationsRef, {
       quoteRequestId,
       quoteRequestTitle,
       sender,
       senderCountry,
       targetCountry,
-      targetCountryKey: normalizeCountryKey(targetCountry),
+      targetCountryKey: targetKey,
       content,
       notificationType,
       createdAt: serverTimestamp(),
@@ -140,19 +165,22 @@ export async function clearNotifications(targetCountry: string) {
     console.log('Clearing notifications for country:', targetCountry);
     const notificationsRef = collection(db as Firestore, 'notifications');
     const key = (targetCountry || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-    const q = query(
-      notificationsRef,
-      where('targetCountryKey', '==', key)
-    );
 
-    const snapshot = await getDocs(q);
-    console.log(`Found ${snapshot.size} notifications to clear`);
-    
-    const deletePromises = snapshot.docs.map(doc => {
-      console.log('Deleting notification:', doc.id);
-      return deleteDoc(doc.ref);
-    });
+    // New normalized query
+    const keyQuery = query(notificationsRef, where('targetCountryKey', '==', key));
+    const keySnapshot = await getDocs(keyQuery);
 
+    // Legacy query (older docs stored plain targetCountry only)
+    const legacyQuery = query(notificationsRef, where('targetCountry', '==', targetCountry));
+    const legacySnapshot = await getDocs(legacyQuery);
+
+    const allDocs = new Map<string, typeof keySnapshot.docs[number]>();
+    keySnapshot.docs.forEach(d => allDocs.set(d.id, d));
+    legacySnapshot.docs.forEach(d => allDocs.set(d.id, d));
+
+    console.log(`Found ${allDocs.size} notifications to clear (including legacy)`);
+
+    const deletePromises = Array.from(allDocs.values()).map(doc => deleteDoc(doc.ref));
     await Promise.all(deletePromises);
     console.log('Successfully cleared all notifications');
   } catch (error) {
@@ -169,19 +197,22 @@ export async function clearDashboardNotifications(targetCountry: string) {
     console.log('Clearing dashboard notifications for country:', targetCountry);
     const notificationsRef = collection(db as Firestore, 'notifications');
     const key = (targetCountry || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-    const q = query(
-      notificationsRef,
-      where('targetCountryKey', '==', key)
-    );
 
-    const snapshot = await getDocs(q);
-    console.log(`Found ${snapshot.size} dashboard notifications to clear`);
-    
-    const deletePromises = snapshot.docs.map(doc => {
-      console.log('Deleting dashboard notification:', doc.id);
-      return deleteDoc(doc.ref);
-    });
+    // New normalized query
+    const keyQuery = query(notificationsRef, where('targetCountryKey', '==', key));
+    const keySnapshot = await getDocs(keyQuery);
 
+    // Legacy query (older docs stored plain targetCountry only)
+    const legacyQuery = query(notificationsRef, where('targetCountry', '==', targetCountry));
+    const legacySnapshot = await getDocs(legacyQuery);
+
+    const allDocs = new Map<string, typeof keySnapshot.docs[number]>();
+    keySnapshot.docs.forEach(d => allDocs.set(d.id, d));
+    legacySnapshot.docs.forEach(d => allDocs.set(d.id, d));
+
+    console.log(`Found ${allDocs.size} dashboard notifications to clear (including legacy)`);
+
+    const deletePromises = Array.from(allDocs.values()).map(doc => deleteDoc(doc.ref));
     await Promise.all(deletePromises);
     console.log('Successfully cleared dashboard notifications');
   } catch (error) {

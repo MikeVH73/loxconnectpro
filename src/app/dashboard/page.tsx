@@ -367,8 +367,8 @@ export default function DashboardPage() {
 
   return (
     <div className="p-6">
-      {/* Notifications Bar */}
-      <div className="mb-6 bg-white rounded-lg shadow p-4 max-h-32 overflow-y-auto">
+      {/* Notifications Bar (leave space for right messaging panel) */}
+      <div className="mb-6 bg-white rounded-lg shadow p-4 max-h-32 overflow-y-auto mr-96">
         <DashboardNotifications />
           </div>
 
@@ -494,7 +494,7 @@ export default function DashboardPage() {
       </div>
 
         {/* Fixed Messaging Panel Space */}
-        <div className="fixed right-0 top-[53px] w-96 bg-white shadow-xl" style={{ height: 'calc(100vh - 53px)' }}>
+        <div className="fixed right-0 top-[53px] w-[410px] bg-white shadow-xl" style={{ height: 'calc(100vh - 53px)' }}>
           {selectedQuoteRequest ? (
           <DashboardMessaging
               quoteRequestId={selectedQuoteRequest}

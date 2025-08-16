@@ -77,7 +77,7 @@ export default function QuoteRequestPage() {
       try {
         setLoading(true);
         const firestore = db as Firestore;
-        const quoteRef = doc(firestore, "quoteRequests", params.id);
+        const quoteRef = doc(firestore, "quoteRequests", String(params.id));
         const snap = await getDoc(quoteRef);
         
         if (snap.exists()) {
@@ -234,42 +234,20 @@ export default function QuoteRequestPage() {
 
           {/* Content */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <div className="flex flex-wrap gap-4 items-center mb-6">
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={quoteRequest.waitingForAnswer}
-                  disabled
-                  className="h-5 w-5 text-blue-600"
-                />
-                <label className="text-sm text-gray-700">
-                  Waiting for Answer
-                </label>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={quoteRequest.urgent}
-                  disabled
-                  className="h-5 w-5 text-red-600"
-                />
-                <label className="text-sm text-gray-700">
-                  Urgent
-                </label>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={quoteRequest.problems}
-                  disabled
-                  className="h-5 w-5 text-yellow-600"
-                />
-                <label className="text-sm text-gray-700">
-                  Problems
-                </label>
-              </div>
+            {/* Label badges (read-only) */}
+            <div className="flex flex-wrap gap-2 items-center mb-6">
+              {quoteRequest.waitingForAnswer && (
+                <span className="px-2 py-1 text-xs rounded bg-yellow-100 text-yellow-800">Waiting for Answer</span>
+              )}
+              {quoteRequest.urgent && (
+                <span className="px-2 py-1 text-xs rounded bg-red-100 text-red-800">Urgent</span>
+              )}
+              {quoteRequest.problems && (
+                <span className="px-2 py-1 text-xs rounded bg-orange-100 text-orange-800">Problems</span>
+              )}
+              {quoteRequest.planned && (
+                <span className="px-2 py-1 text-xs rounded bg-red-100 text-red-800">Planned</span>
+              )}
             </div>
 
             <div className="grid grid-cols-[1fr_2fr_1fr] gap-8">

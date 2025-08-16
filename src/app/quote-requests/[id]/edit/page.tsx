@@ -159,6 +159,8 @@ export default function EditQuoteRequest() {
   const [showTotalValueModal, setShowTotalValueModal] = useState(false);
   const [rateDirection, setRateDirection] = useState<'LOCAL_TO_EUR' | 'EUR_TO_LOCAL'>('LOCAL_TO_EUR');
   const [calculatorDirty, setCalculatorDirty] = useState(false);
+  const [isDirty, setIsDirty] = useState(false);
+  const saveChangesRef = useRef<((auto?: boolean) => Promise<void>) | null>(null);
   // Quick Add product modal state
   const [quickAdd, setQuickAdd] = useState<{ index: number; code: string } | null>(null);
   const [quickAddCode, setQuickAddCode] = useState<string>("");
@@ -184,6 +186,41 @@ export default function EditQuoteRequest() {
   useEffect(() => {
     setIsMounted(true);
   }, []);
+
+  // Warn on browser/tab close if there are unsaved changes
+  useEffect(() => {
+    const beforeUnload = (e: BeforeUnloadEvent) => {
+      if (isDirty) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', beforeUnload);
+    return () => window.removeEventListener('beforeunload', beforeUnload);
+  }, [isDirty]);
+
+  // Intercept in-app link navigation to ask user to save
+  useEffect(() => {
+    const clickHandler = (event: Event) => {
+      const target = event.target as HTMLElement | null;
+      if (!target) return;
+      const anchor = target.closest('a') as HTMLAnchorElement | null;
+      if (!anchor || !anchor.href) return;
+      if (!isDirty) return;
+      event.preventDefault();
+      const confirmed = window.confirm('Want to SAVE your changes before leaving this Quote Request?');
+      if (confirmed) {
+        // Best-effort save, then navigate
+        saveChanges(false).finally(() => {
+          window.location.href = anchor.href;
+        });
+      } else {
+        window.location.href = anchor.href;
+      }
+    };
+    document.addEventListener('click', clickHandler, true);
+    return () => document.removeEventListener('click', clickHandler, true);
+  }, [isDirty]);
 
   // Fetch labels
   useEffect(() => {
@@ -318,9 +355,9 @@ export default function EditQuoteRequest() {
 
       await updateDoc(quoteRequestRef, sanitizedUpdateData);
       console.log('[SAVE] Save successful!');
-      if (!isAutoSave) {
-        setCalculatorDirty(false);
-      }
+      if (!isAutoSave) setCalculatorDirty(false);
+      setIsDirty(false);
+      setOriginalData(quoteRequest as QuoteRequestWithDynamicKeys);
 
       // Create modification record for all changes except jobsiteContactId
       if (originalData) {
@@ -452,16 +489,7 @@ export default function EditQuoteRequest() {
                 notificationType: 'property_change'
               });
 
-          // Create recent activity entry
-          await createRecentActivity({
-            quoteRequestId: id,
-            quoteRequestTitle: quoteRequest.title,
-            sender: user?.email || '',
-            senderCountry: userProfile?.businessUnit || '',
-            targetCountry,
-            content: changes.join(', '),
-            activityType: 'property_change'
-          });
+          // Recent activity is created inside createNotification for property_change
         }
       }
     } catch (err) {
@@ -480,13 +508,13 @@ export default function EditQuoteRequest() {
   const previousQuoteRequest = useRef<string | null>(null);
   
   // Create debounced save function with proper delay
-  const debouncedSave = useMemo(
-    () => debounce(
-      () => saveChanges(true), 
-      1000  // 1 second delay for normal fields
-    ),
-    [saveChanges]
-  );
+  const debouncedSave = useMemo(() => debounce(() => {
+    if (saveChangesRef.current) saveChangesRef.current(true);
+  }, 5000), []);
+
+  useEffect(() => {
+    saveChangesRef.current = saveChanges;
+  }, [saveChanges]);
 
   // Auto-save effect
   useEffect(() => {
@@ -607,6 +635,7 @@ export default function EditQuoteRequest() {
       }
     }
 
+    setIsDirty(true);
     setQuoteRequest(prev => ({
       ...prev,
       [field]: value,
@@ -644,6 +673,7 @@ export default function EditQuoteRequest() {
   };
 
   const handleAddProduct = () => {
+    setIsDirty(true);
     setQuoteRequest(prev => ({
       ...prev,
       products: [...(prev.products || []), { catClass: "", description: "", quantity: 1 }]
@@ -651,6 +681,7 @@ export default function EditQuoteRequest() {
   };
 
   const handleRemoveProduct = (index: number) => {
+    setIsDirty(true);
     setQuoteRequest(prev => ({
       ...prev,
       products: (prev.products || []).filter((_, i) => i !== index)
@@ -666,6 +697,7 @@ export default function EditQuoteRequest() {
         dateTime: new Date()
     };
     
+    setIsDirty(true);
     setQuoteRequest(prev => ({
         ...prev,
       notes: [...(prev.notes || []), note]

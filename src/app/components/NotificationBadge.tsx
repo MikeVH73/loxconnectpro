@@ -16,9 +16,12 @@ export default function NotificationBadge() {
     if (!db || !userProfile?.businessUnit) return;
 
     const notificationsRef = collection(db as Firestore, 'notifications');
+    const normalized = (userProfile.businessUnit || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '');
     const q = query(
       notificationsRef,
-      where('targetCountry', '==', userProfile.businessUnit),
+      where('targetCountryKey', '==', normalized),
       where('isRead', '==', false)
     );
 

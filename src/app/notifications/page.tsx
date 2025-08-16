@@ -40,6 +40,8 @@ export default function NotificationsPage() {
     try {
       setClearing(true);
       await clearDashboardNotifications(userProfile.businessUnit);
+      // Optimistically clear current view; onSnapshot will confirm
+      setNotifications([]);
       toast.success('All notifications cleared');
     } catch (error) {
       console.error('Error clearing notifications:', error);
@@ -66,25 +68,45 @@ export default function NotificationsPage() {
   };
 
   useEffect(() => {
-    if (!user || !db || !userProfile?.businessUnit) return;
+    if (!user || !db) return;
+
+    const bu = userProfile?.businessUnit || userProfile?.countries?.[0] || '';
+    if (!bu) {
+      // No business unit available → show empty state instead of spinning forever
+      setNotifications([]);
+      setLoading(false);
+      return;
+    }
 
     const notificationsRef = collection(db as Firestore, 'notifications');
-    const normalized = (userProfile.businessUnit || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const normalized = (bu || '').toLowerCase().replace(/[^a-z0-9]/g, '');
     const q = query(
       notificationsRef,
-      where('targetCountryKey', '==', normalized),
-      orderBy('createdAt', 'desc')
+      where('targetCountryKey', '==', normalized)
     );
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const newNotifications = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Notification[];
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const newNotifications = (snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as Notification[])
+          .sort((a, b) => {
+            const da = (a.createdAt && typeof (a as any).createdAt.toDate === 'function') ? (a as any).createdAt.toDate().getTime() : 0;
+            const db = (b.createdAt && typeof (b as any).createdAt.toDate === 'function') ? (b as any).createdAt.toDate().getTime() : 0;
+            return db - da;
+          });
 
-      setNotifications(newNotifications);
-      setLoading(false);
-    });
+        setNotifications(newNotifications);
+        setLoading(false);
+      },
+      (error) => {
+        console.error('Notifications listener error:', error);
+        setLoading(false);
+        toast.error('Failed to load notifications');
+      }
+    );
 
     return () => unsubscribe();
   }, [user, db, userProfile]);
@@ -130,7 +152,7 @@ export default function NotificationsPage() {
           notifications.map((notification) => (
             <Link 
               key={notification.id}
-              href={userProfile?.role === 'Employee' ? `/quote-requests/${notification.quoteRequestId}` : `/quote-requests/${notification.quoteRequestId}/edit`}
+              href={`/quote-requests/${notification.quoteRequestId}/edit`}
               className={`block p-4 rounded-lg border ${
                 notification.isRead ? 'bg-white' : 'bg-blue-50'
               } hover:shadow-md transition-shadow`}

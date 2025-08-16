@@ -277,6 +277,19 @@ const targetCountry = userCountry === creatorCountry
   : creatorCountry;
 ```
 
+### Fixes and Guarantees (August 2025)
+- Notifications collections now consistently use `targetCountryKey` (lowercased, alphanumeric) for querying. Badge, dashboard header, and Notifications page all filter by this key.
+- Clearing notifications removes both normalized docs (`targetCountryKey`) and legacy docs (`targetCountry`).
+- Notifications page avoids infinite spinner and shows a clean empty state; errors are surfaced via toast only on real listener failure.
+- Avoided duplicate entries: for `property_change` we call `createNotification` once; it also writes one Recent Activity entry. The edit page no longer writes a second Recent Activity record.
+- Dashboard header notifications no longer conflict with server timestamp ordering; we query without `orderBy` and sort client‑side by `createdAt`.
+- Layout: dashboard notifications bar reserves right margin (`mr-96`) so its scrollbar doesn’t sit behind the fixed Messaging panel.
+- Navigation: Clicking notifications (header + Notifications page) always routes to `/quote-requests/[id]/edit` (edit page), not the read‑only view.
+- Read‑only view: Replaced legacy label checkboxes with non‑interactive badges; all label toggling remains in the edit page only.
+- Messaging UX: Dashboard panel autoscrolls to newest message on open/switch; panel width widened to `410px` to fully cover page scrollbar.
+- Autosave policy: Debounce set to 5 seconds from the last change to consolidate updates; after successful save state is marked clean and baseline is refreshed to prevent repeating diffs.
+- Leave protection: When unsaved changes exist, users are prompted “Want to SAVE your changes before leaving this Quote Request?” with Save/Continue options.
+
 ## 🏷️ **LABEL SYSTEM**
 
 ### **Label Types & Colors**
