@@ -130,7 +130,7 @@ export default function QuoteRequestCard({ qr, customers, labels, onCardClick, o
     <div
       onClick={handleCardClick}
       className={`rounded-lg shadow-sm p-4 cursor-pointer hover:shadow-md transition-shadow duration-200 relative ${
-        qr.status === "New" ? "bg-purple-50 border-l-4 border-purple-400" : "bg-white"
+        qr.status === "New" ? "bg-purple-50 border-l-4 border-purple-400 animate-[pulse_1.5s_ease-in-out_1]" : "bg-white"
       }`}
     >
       {/* Delete Button - Only show if user can delete */}

@@ -10,6 +10,7 @@ import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import dynamic from 'next/dynamic';
 import DashboardNotifications from "../components/DashboardNotifications";
+import NewQrsBar from "./NewQrsBar";
 import { deleteQuoteRequest } from "../utils/quoteRequestUtils";
 
 // Dynamically import components with no SSR to prevent hydration issues
@@ -295,7 +296,17 @@ export default function DashboardPage() {
   const urgentProblems: QuoteRequest[] = [];
   const standard: QuoteRequest[] = [];
 
-  quoteRequests.forEach(qr => {
+  // Stable sort: New items first by createdAt/updatedAt desc; others by updatedAt desc
+  const sorted = [...quoteRequests].sort((a, b) => {
+    const aNew = a.status === "New" ? 1 : 0;
+    const bNew = b.status === "New" ? 1 : 0;
+    if (aNew !== bNew) return bNew - aNew; // New first
+    const dateA = a.updatedAt?.toDate?.() || (a as any).createdAt?.toDate?.() || new Date(0);
+    const dateB = b.updatedAt?.toDate?.() || (b as any).createdAt?.toDate?.() || new Date(0);
+    return dateB.getTime() - dateA.getTime();
+  });
+
+  sorted.forEach(qr => {
     // Find special label IDs
     const urgentLabelId = labels.find(l => l.name.toLowerCase() === 'urgent')?.id || '';
     const problemsLabelId = labels.find(l => l.name.toLowerCase() === 'problems')?.id || '';
@@ -368,9 +379,12 @@ export default function DashboardPage() {
   return (
     <div className="p-6">
       {/* Notifications Bar (leave space for right messaging panel) */}
-      <div className="mb-6 bg-white rounded-lg shadow p-4 max-h-32 overflow-y-auto mr-96">
+      <div className="mb-3 bg-white rounded-lg shadow p-4 max-h-32 overflow-y-auto mr-96">
         <DashboardNotifications />
           </div>
+
+      {/* New QRs Bar */}
+      <NewQrsBar />
 
       <div className="flex">
         {/* Kanban Board */}
