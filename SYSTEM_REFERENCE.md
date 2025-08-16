@@ -277,6 +277,14 @@ const targetCountry = userCountry === creatorCountry
   : creatorCountry;
 ```
 
+### Fixes and Guarantees (August 2025)
+- Notifications collections now consistently use `targetCountryKey` (lowercased, alphanumeric) for querying. Badge, dashboard header, and Notifications page all filter by this key.
+- Clearing notifications removes both normalized docs (`targetCountryKey`) and legacy docs (`targetCountry`).
+- Notifications page avoids infinite spinner and shows a clean empty state; errors are surfaced via toast only on real listener failure.
+- Avoided duplicate entries: for `property_change` we call `createNotification` once; it also writes one Recent Activity entry. The edit page no longer writes a second Recent Activity record.
+- Dashboard header notifications no longer conflict with server timestamp ordering; we query without `orderBy` and sort client‑side by `createdAt`.
+- Layout: dashboard notifications bar reserves right margin (`mr-96`) so its scrollbar doesn’t sit behind the fixed Messaging panel.
+
 ## 🏷️ **LABEL SYSTEM**
 
 ### **Label Types & Colors**

@@ -367,8 +367,8 @@ export default function DashboardPage() {
 
   return (
     <div className="p-6">
-      {/* Notifications Bar */}
-      <div className="mb-6 bg-white rounded-lg shadow p-4 max-h-32 overflow-y-auto">
+      {/* Notifications Bar (leave space for right messaging panel) */}
+      <div className="mb-6 bg-white rounded-lg shadow p-4 max-h-32 overflow-y-auto mr-96">
         <DashboardNotifications />
           </div>
 
