@@ -176,7 +176,7 @@ export default function MessagingPanel({
       </div>
 
       {/* Messages Area */}
-      <div className="flex-1 p-4 overflow-y-auto" style={{ maxHeight: 'calc(90vh - 180px)' }}>
+      <div className="flex-1 p-4 overflow-y-auto" data-messaging-scroll style={{ maxHeight: 'calc(90vh - 180px)' }}>
         {loading ? (
           <div className="flex items-center justify-center h-full">
             <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-gray-900"></div>

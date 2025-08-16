@@ -40,14 +40,39 @@ export async function createNotification({
     console.log('Creating notification:', { quoteRequestId, content, notificationType });
     
     const notificationsRef = collection(db as Firestore, 'notifications');
-    
+    const targetKey = normalizeCountryKey(targetCountry);
+
+    // Deduplicate: avoid multiple identical notifications in a short window
+    try {
+      const existingQuery = query(
+        notificationsRef,
+        where('quoteRequestId', '==', quoteRequestId),
+        where('targetCountryKey', '==', targetKey),
+        where('notificationType', '==', notificationType)
+      );
+      const existingSnap = await getDocs(existingQuery);
+      const nowMs = Date.now();
+      const duplicate = existingSnap.docs.some((d) => {
+        const data = d.data() as any;
+        const sameContent = String(data.content || '') === String(content || '');
+        const created = data.createdAt?.toDate ? data.createdAt.toDate().getTime() : 0;
+        return sameContent && created > 0 && (nowMs - created) < 5 * 60 * 1000;
+      });
+      if (duplicate) {
+        console.log('Skipping duplicate notification');
+        return;
+      }
+    } catch (e) {
+      console.warn('Deduplication check failed, proceeding:', e);
+    }
+
     await addDoc(notificationsRef, {
       quoteRequestId,
       quoteRequestTitle,
       sender,
       senderCountry,
       targetCountry,
-      targetCountryKey: normalizeCountryKey(targetCountry),
+      targetCountryKey: targetKey,
       content,
       notificationType,
       createdAt: serverTimestamp(),
