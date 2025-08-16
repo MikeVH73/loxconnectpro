@@ -10,6 +10,7 @@ import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import dynamic from 'next/dynamic';
 import DashboardNotifications from "../components/DashboardNotifications";
+import NewQrsBar from "./NewQrsBar";
 import { deleteQuoteRequest } from "../utils/quoteRequestUtils";
 
 // Dynamically import components with no SSR to prevent hydration issues
@@ -368,9 +369,12 @@ export default function DashboardPage() {
   return (
     <div className="p-6">
       {/* Notifications Bar (leave space for right messaging panel) */}
-      <div className="mb-6 bg-white rounded-lg shadow p-4 max-h-32 overflow-y-auto mr-96">
+      <div className="mb-3 bg-white rounded-lg shadow p-4 max-h-32 overflow-y-auto mr-96">
         <DashboardNotifications />
           </div>
+
+      {/* New QRs Bar */}
+      <NewQrsBar />
 
       <div className="flex">
         {/* Kanban Board */}
