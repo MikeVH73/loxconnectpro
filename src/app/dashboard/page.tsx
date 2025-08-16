@@ -494,7 +494,7 @@ export default function DashboardPage() {
       </div>
 
         {/* Fixed Messaging Panel Space */}
-        <div className="fixed right-0 top-[53px] w-96 bg-white shadow-xl" style={{ height: 'calc(100vh - 53px)' }}>
+        <div className="fixed right-0 top-[53px] w-[410px] bg-white shadow-xl" style={{ height: 'calc(100vh - 53px)' }}>
           {selectedQuoteRequest ? (
           <DashboardMessaging
               quoteRequestId={selectedQuoteRequest}
