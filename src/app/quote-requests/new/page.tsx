@@ -107,7 +107,7 @@ const NewQuoteRequestPage = () => {
   const [showNewContact, setShowNewContact] = useState(false);
   const [newContact, setNewContact] = useState({ name: "", phone: "" });
   const [labels, setLabels] = useState<string[]>([]);
-  const [selectedLabels, setSelectedLabels] = useState<string[]>(['urgent']);
+  const [urgentFlag, setUrgentFlag] = useState(false);
   const [notes, setNotes] = useState<Note[]>([]);
   const [noteText, setNoteText] = useState("");
   const [customerDetails, setCustomerDetails] = useState<Customer | null>(null);
@@ -283,7 +283,7 @@ const NewQuoteRequestPage = () => {
         customerDecidesEnd,
         jobsiteContactId,
         jobsiteContact: jobsiteContactData,
-        labels: selectedLabels,
+        labels: (urgentFlag ? ['urgent'] : []),
         notes,
         attachments,
         createdAt: serverTimestamp(),
@@ -513,13 +513,21 @@ const NewQuoteRequestPage = () => {
               Start Date <span className="text-red-500">*</span>
             </label>
             <input
-              type="date"
+              type="text"
+              inputMode="numeric"
+              placeholder="dd-mm-yyyy"
               value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              onKeyDown={(e) => {
-                // Auto-advance from day to month to year via arrow-right
-                if (e.key === 'ArrowRight') {
-                  (e.target as HTMLInputElement).setSelectionRange(8, 10); // move to year segment
+              onChange={(e) => {
+                const v = e.target.value.replace(/[^0-9]/g, "").slice(0, 8);
+                const parts = [v.slice(0,2), v.slice(2,4), v.slice(4,8)].filter(Boolean);
+                setStartDate(parts.join("-"));
+              }}
+              onKeyUp={(e) => {
+                const el = e.target as HTMLInputElement;
+                // insert dashes automatically: dd-mm-yyyy
+                const digits = el.value.replace(/[^0-9]/g, "");
+                if (digits.length === 2 || digits.length === 4) {
+                  el.value = (digits.length===2? digits+"-" : digits.slice(0,2)+"-"+digits.slice(2)+"-");
                 }
               }}
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
@@ -529,9 +537,15 @@ const NewQuoteRequestPage = () => {
           <div>
             <label className="block text-sm font-medium text-gray-700">End Date</label>
             <input
-              type="date"
+              type="text"
+              inputMode="numeric"
+              placeholder="dd-mm-yyyy"
               value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
+              onChange={(e) => {
+                const v = e.target.value.replace(/[^0-9]/g, "").slice(0, 8);
+                const parts = [v.slice(0,2), v.slice(2,4), v.slice(4,8)].filter(Boolean);
+                setEndDate(parts.join("-"));
+              }}
               disabled={customerDecidesEnd}
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 disabled:bg-gray-100"
             />
@@ -547,6 +561,18 @@ const NewQuoteRequestPage = () => {
               </label>
             </div>
           </div>
+        </div>
+
+        {/* Urgent toggle */}
+        <div className="flex items-center gap-2">
+          <input
+            id="urgentToggle"
+            type="checkbox"
+            checked={urgentFlag}
+            onChange={(e) => setUrgentFlag(e.target.checked)}
+            className="rounded border-gray-300 text-red-600 shadow-sm focus:border-red-500 focus:ring-red-500"
+          />
+          <label htmlFor="urgentToggle" className="text-sm text-gray-700">Mark as Urgent</label>
         </div>
 
         {/* Jobsite Address */}
