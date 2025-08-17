@@ -314,7 +314,7 @@ export default function DashboardMessaging({ quoteRequestId, onClose }: Dashboar
   }
 
   return (
-    <div className="h-full">
+    <div className="h-full flex flex-col">
       <MessagingPanel
         messages={messages}
         currentUser={user?.email || ''}
@@ -324,6 +324,19 @@ export default function DashboardMessaging({ quoteRequestId, onClose }: Dashboar
         onBack={onClose}
         quoteRequestFiles={quoteRequest?.attachments || []}
       />
+      {quoteRequest && (
+        <div className="mt-auto p-3 border-t bg-white">
+          <div className="text-xs text-gray-500 mb-2 truncate">
+            Link: /quote-requests/{quoteRequestId}/edit
+          </div>
+          <a
+            href={`/quote-requests/${quoteRequestId}/edit`}
+            className="inline-flex items-center px-3 py-2 rounded bg-[#e40115] text-white hover:bg-red-700 text-sm"
+          >
+            Open in Edit page
+          </a>
+        </div>
+      )}
     </div>
   );
 } 
