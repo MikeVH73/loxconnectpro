@@ -318,9 +318,24 @@ export default function EditQuoteRequest() {
     
     try {
       const quoteRequestRef = doc(db as Firestore, "quoteRequests", id);
+      // Ensure product descriptions are synced from catalog for known codes (handles 60AJX, 7-digit, etc.)
+      const sanitizedProducts = await Promise.all((quoteRequest.products || []).map(async (p: any) => {
+        const code = String(p?.catClass || p?.code || '').trim();
+        const desc = String(p?.description || '').trim();
+        if (!code) return { ...p };
+        if (desc) return { ...p, catClass: code };
+        try {
+          const found = await getProductByCode(code);
+          if (found?.description) {
+            return { ...p, catClass: found.catClass || code, description: found.description };
+          }
+        } catch {}
+        return { ...p, catClass: code };
+      }));
       const canAssign = (userProfile?.role === 'superAdmin' || userProfile?.role === 'admin' || userProfile?.businessUnit === quoteRequest.involvedCountry || (userProfile?.countries || []).includes(quoteRequest.involvedCountry));
       const updateData: any = {
         ...quoteRequest,
+        products: sanitizedProducts,
         // If user cannot assign, strip any local assignment changes from update
         ...(canAssign ? {} : { assignedUserId: originalData?.assignedUserId, assignedUserName: originalData?.assignedUserName }),
         updatedAt: serverTimestamp(),
