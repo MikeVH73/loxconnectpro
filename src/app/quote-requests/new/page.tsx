@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
+import DateInput from "../../components/DateInput";
 import { useRouter } from "next/navigation";
 import { collection, addDoc, serverTimestamp, getDocs, query, where, doc, getDoc, updateDoc, Firestore } from "firebase/firestore";
 import { db } from "../../../firebaseClient";
@@ -530,26 +531,10 @@ const NewQuoteRequestPage = () => {
         {/* Dates */}
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700">
-              Start Date <span className="text-red-500">*</span>
-            </label>
-            <div className="mt-1 flex items-center gap-1">
-              <input value={sd} onChange={e=>{ const v=e.target.value.replace(/\D/g,'').slice(0,2); setSd(v); if(v.length===2) smRef.current?.focus(); }} placeholder="dd" className="w-12 text-center rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500" />
-              <span>-</span>
-              <input ref={smRef} value={sm} onChange={e=>{ const v=e.target.value.replace(/\D/g,'').slice(0,2); setSm(v); if(v.length===2) syRef.current?.focus(); }} placeholder="mm" className="w-12 text-center rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500" />
-              <span>-</span>
-              <input ref={syRef} value={sy} onChange={e=>{ const v=e.target.value.replace(/\D/g,'').slice(0,4); setSy(v); }} placeholder="yyyy" className="w-20 text-center rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500" />
-            </div>
+            <DateInput label="Start Date" value={startDate} onChange={(iso)=>{ setStartDate(iso); setSd(iso?iso.slice(8,10):''); setSm(iso?iso.slice(5,7):''); setSy(iso?iso.slice(0,4):''); }} required />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700">End Date</label>
-            <div className="mt-1 flex items-center gap-1">
-              <input value={ed} onChange={e=>{ const v=e.target.value.replace(/\D/g,'').slice(0,2); setEd(v); if(v.length===2) emRef.current?.focus(); }} disabled={customerDecidesEnd} placeholder="dd" className="w-12 text-center rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 disabled:bg-gray-100" />
-              <span>-</span>
-              <input ref={emRef} value={em} onChange={e=>{ const v=e.target.value.replace(/\D/g,'').slice(0,2); setEm(v); if(v.length===2) eyRef.current?.focus(); }} disabled={customerDecidesEnd} placeholder="mm" className="w-12 text-center rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 disabled:bg-gray-100" />
-              <span>-</span>
-              <input ref={eyRef} value={ey} onChange={e=>{ const v=e.target.value.replace(/\D/g,'').slice(0,4); setEy(v); }} disabled={customerDecidesEnd} placeholder="yyyy" className="w-20 text-center rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 disabled:bg-gray-100" />
-            </div>
+            <DateInput label="End Date" value={endDate} onChange={setEndDate} disabled={customerDecidesEnd} />
             <div className="mt-2">
               <label className="inline-flex items-center">
                 <input
