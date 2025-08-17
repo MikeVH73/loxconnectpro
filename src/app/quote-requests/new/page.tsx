@@ -297,6 +297,8 @@ const NewQuoteRequestPage = () => {
           address: jobsiteAddress,
           coordinates: jobsiteCoords
         },
+        latitude: jobsiteCoords?.lat ?? null,
+        longitude: jobsiteCoords?.lng ?? null,
         startDate: startIso,
         endDate: endIso,
         customerDecidesEnd,
