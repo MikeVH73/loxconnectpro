@@ -407,16 +407,31 @@ export default function EditQuoteRequest() {
           oldProducts.forEach((p: any) => oldMap.set(key(p), p));
           newProducts.forEach((p: any) => newMap.set(key(p), p));
 
+          // Helper to resolve a human-readable description from catalog when empty
+          const resolveDesc = async (prod: any): Promise<string> => {
+            const code = String(prod?.catClass || prod?.code || '').trim();
+            const raw = String(prod?.description || '').trim();
+            if (raw) return raw;
+            try {
+              const p = await getProductByCode(code);
+              return (p?.description || '—');
+            } catch {
+              return '—';
+            }
+          };
+
           // additions
           for (const [k, p] of newMap.entries()) {
             if (!oldMap.has(k)) {
-              changes.push(`Product added: ${p.catClass || p.code || '—'} (${p.description || 'no description'}) × ${p.quantity ?? 1}`);
+              const desc = await resolveDesc(p);
+              changes.push(`Product added: ${p.catClass || p.code || '—'} (${desc}) × ${p.quantity ?? 1}`);
             }
           }
           // removals
           for (const [k, p] of oldMap.entries()) {
             if (!newMap.has(k)) {
-              changes.push(`Product removed: ${p.catClass || p.code || '—'} (${p.description || 'no description'})`);
+              const desc = await resolveDesc(p);
+              changes.push(`Product removed: ${p.catClass || p.code || '—'} (${desc})`);
             }
           }
           // quantity/description changes
@@ -426,8 +441,10 @@ export default function EditQuoteRequest() {
             if ((op.quantity ?? 1) !== (np.quantity ?? 1)) {
               changes.push(`Quantity changed: ${np.catClass || np.code || '—'} ${op.quantity ?? 1} → ${np.quantity ?? 1}`);
             }
-            if ((op.description || '') !== (np.description || '')) {
-              changes.push(`Description changed: ${np.catClass || np.code || '—'} "${op.description || '—'}" → "${np.description || '—'}"`);
+            const oldDesc = await resolveDesc(op);
+            const newDesc = await resolveDesc(np);
+            if (oldDesc !== newDesc) {
+              changes.push(`Description changed: ${np.catClass || np.code || '—'} "${oldDesc}" → "${newDesc}"`);
             }
           }
         } catch {
