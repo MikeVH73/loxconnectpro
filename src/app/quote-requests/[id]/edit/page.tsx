@@ -210,10 +210,14 @@ export default function EditQuoteRequest() {
       event.preventDefault();
       const confirmed = window.confirm('Want to SAVE your changes before leaving this Quote Request?');
       if (confirmed) {
-        // Best-effort save, then navigate
-        saveChanges(false).finally(() => {
-          window.location.href = anchor.href;
-        });
+        // Best-effort save via ref, then navigate
+        const saver = (saveChangesRef && typeof saveChangesRef === 'object') ? (saveChangesRef as any).current : null;
+        const doNavigate = () => { window.location.href = anchor.href; };
+        if (typeof saver === 'function') {
+          Promise.resolve(saver(false)).finally(doNavigate);
+        } else {
+          doNavigate();
+        }
       } else {
         window.location.href = anchor.href;
       }
@@ -248,10 +252,17 @@ export default function EditQuoteRequest() {
         
         if (quoteDoc.exists()) {
           const data = quoteDoc.data();
+          // Normalize products: drop legacy/empty rows
+          const normalizedProducts = (Array.isArray(data.products) ? data.products : []).filter((p:any) => {
+            const code = String(p?.catClass || p?.code || '').trim();
+            const desc = String(p?.description || '').trim();
+            return !!(code || desc);
+          });
+
           setQuoteRequest({
             id: quoteDoc.id,
             title: data.title || '',
-            products: Array.isArray(data.products) ? data.products : [],
+            products: normalizedProducts,
             creatorCountry: data.creatorCountry || '',
             involvedCountry: data.involvedCountry || '',
             startDate: data.startDate || '',
@@ -680,6 +691,7 @@ export default function EditQuoteRequest() {
       const index = parseInt(parts[1] || '', 10);
       const prop = parts[2];
       if (!Number.isFinite(index) || !prop) return;
+      setIsDirty(true);
       setQuoteRequest(prev => {
         const prevProducts = Array.isArray(prev.products) ? prev.products : [];
         const nextProducts = [...prevProducts];
@@ -752,6 +764,8 @@ export default function EditQuoteRequest() {
       ...prev,
       products: [...(prev.products || []), { catClass: "", description: "", quantity: 1, _draft: true }]
     }));
+    // Schedule an autosave in case user navigates immediately
+    try { (debouncedSave as any)?.flush?.(); } catch {}
   };
 
   const handleRemoveProduct = (index: number) => {
