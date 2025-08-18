@@ -238,6 +238,12 @@ interface QuoteRequest {
 - Attachments (file upload)
 - Customer Number (auto-filled)
 
+**Date Input UX (Unified)**:
+- Segmented day-month-year fields (dd-mm-yyyy) for fast keyboard entry
+- Hidden native date input is used only to present the system calendar via a calendar icon button
+- Always stores ISO `yyyy-mm-dd` values
+- Rolled out consistently across New, Edit, and Archived views
+
 **Post-Creation Flow**:
 - Success message displayed for 1.5 seconds
 - Automatic redirect to dashboard (not edit page)
@@ -252,6 +258,14 @@ interface QuoteRequest {
 - **File Attachments**: Upload/download with progress using FileUpload component
 - **Customer Consistency**: Uses customer IDs throughout
 - **Attachment Interface**: Proper FileData interface with id, uploadedAt, uploadedBy fields
+
+**Save and Navigation Guarantees (Aug 2025)**:
+- Adding a product triggers an immediate autosave flush to capture quick navigations
+- Any edits to product rows mark the form dirty immediately
+- Empty/draft product rows are filtered out:
+  - On load, quote requests normalize products and drop rows with both empty `catClass` and `description`
+  - On save, draft/empty rows are excluded from persistence
+- Leave protection uses a stable save-function reference and awaits save completion before navigating when user chooses to save
 
 ## 💬 **MESSAGING & NOTIFICATIONS**
 
@@ -289,6 +303,8 @@ const targetCountry = userCountry === creatorCountry
 - Messaging UX: Dashboard panel autoscrolls to newest message on open/switch; panel width widened to `410px` to fully cover page scrollbar.
 - Autosave policy: Debounce set to 5 seconds from the last change to consolidate updates; after successful save state is marked clean and baseline is refreshed to prevent repeating diffs.
 - Leave protection: When unsaved changes exist, users are prompted “Want to SAVE your changes before leaving this Quote Request?” with Save/Continue options.
+  - After manual save, the autosave baseline is refreshed to avoid later autosaves re-introducing old state
+  - Navigation prompt save uses an internal ref and reliably awaits the save before leaving
 
 ## 🏷️ **LABEL SYSTEM**
 
@@ -402,6 +418,7 @@ const firebaseConfig = {
   - Env: `NEXT_PUBLIC_ENABLE_APP_CHECK=true`, `NEXT_PUBLIC_RECAPTCHA_KEY=<site_key>`
   - Optional debug: `NEXT_PUBLIC_ENABLE_APP_CHECK_DEBUG=true` logs token events in Console
   - Enforce in Firebase Console → App Check → APIs once Verified > 90% consistently
+  - Note: In Preview environments and with tracking-prevention enabled, the dev console may show App Check token retrieval warnings; these do not block core functionality and are expected outside the allow‑listed production origin
 - **Auth Blocking Functions (planned/enabled per env)**:
   - `beforeCreate`: optional domain/allowlist gate
   - `beforeSignIn`: requires `emailVerified`; optional MFA enforcement flag
@@ -527,6 +544,10 @@ const useCustomers = () => {
 - Product Layout: 12-column grid ensuring quantity field visibility (Code: 3, Description: 6, Quantity: 2, Delete: 1)
 - Labels Management: Full CRUD with duplicate detection and smart resolution
 - Duplicate Label Prevention: Automatic detection and removal of duplicate labels, prioritizes correct system names
+
+### **Quote Requests Listing (Search & Sorting)**
+- Firestore is queried without `orderBy` to avoid snapshot index requirements; list is sorted client-side by `updatedAt`/`createdAt`
+- Search and product filters guard against non-array `products` to avoid runtime errors; filtering is performed purely client-side
 
 ---
 
