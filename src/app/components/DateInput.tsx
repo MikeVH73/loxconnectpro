@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { FiCalendar } from "react-icons/fi";
 
 type Props = {
   label?: string;
@@ -22,6 +23,7 @@ export default function DateInput({ label, value, onChange, required, disabled }
   const [y, setY] = useState(parse(value).y);
   const mRef = useRef<HTMLInputElement>(null);
   const yRef = useRef<HTMLInputElement>(null);
+  const dateRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const p = parse(value);
@@ -41,11 +43,39 @@ export default function DateInput({ label, value, onChange, required, disabled }
         <input ref={mRef} disabled={disabled} value={m} onChange={(e)=>{const v=e.target.value.replace(/\D/g,'').slice(0,2); setM(v); if(v.length===2) yRef.current?.focus();}} placeholder="mm" className="w-12 text-center rounded-md border border-gray-300 py-1"/>
         <span>-</span>
         <input ref={yRef} disabled={disabled} value={y} onChange={(e)=>{const v=e.target.value.replace(/\D/g,'').slice(0,4); setY(v);}} placeholder="yyyy" className="w-16 text-center rounded-md border border-gray-300 py-1"/>
-        {/* Native calendar for convenience (keeps ISO) */}
-        <input type="date" disabled={disabled} value={value} onChange={(e)=> onChange(e.target.value)} className="ml-2 rounded-md border border-gray-300 py-1 px-2"/>
+        {/* Hidden native input; opened via calendar button */}
+        <input
+          ref={dateRef}
+          type="date"
+          value={value}
+          onChange={(e)=> onChange(e.target.value)}
+          disabled={disabled}
+          aria-hidden="true"
+          tabIndex={-1}
+          className="absolute w-px h-px p-0 m-0 opacity-0 pointer-events-none"
+        />
+        <button
+          type="button"
+          className="ml-2 p-2 rounded-md border border-gray-300 hover:bg-gray-50 disabled:opacity-50"
+          onClick={() => {
+            const input = dateRef.current;
+            if (!input) return;
+            const anyInput = input as any;
+            if (typeof anyInput.showPicker === 'function') {
+              anyInput.showPicker();
+            } else {
+              input.click();
+            }
+          }}
+          disabled={disabled}
+          aria-label="Open calendar"
+        >
+          <FiCalendar className="w-4 h-4" />
+        </button>
       </div>
     </div>
   );
 }
+
 
 
