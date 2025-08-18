@@ -137,7 +137,8 @@ const QuoteRequestsPage = () => {
 
         // Fetch all data in parallel
         const [qrSnap, custSnap, usersSnap] = await Promise.all([
-          getDocs(query(collection(db as Firestore, "quoteRequests"), orderBy("createdAt", "desc"))),
+          // Fetch without Firestore orderBy to avoid index/field issues; sort client-side below
+          getDocs(collection(db as Firestore, "quoteRequests")),
           getDocs(collection(db as Firestore, "customers")),
           getDocs(collection(db as Firestore, "users"))
         ]);
