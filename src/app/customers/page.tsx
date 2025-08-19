@@ -15,6 +15,8 @@ interface Customer {
   customerNumbers: { [country: string]: string };
   countries?: string[];
   ownerCountry?: string;
+  createdBy?: string;
+  createdByName?: string;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -30,7 +32,7 @@ export default function CustomersPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
   const [showEditModal, setShowEditModal] = useState<string | null>(null);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
-  const { userProfile, loading: authLoading } = useAuth();
+  const { userProfile, loading: authLoading, user } = useAuth();
   const { countryNames: countries, loading: countriesLoading } = useCountries();
 
   useEffect(() => {
@@ -61,6 +63,8 @@ export default function CustomersPage() {
             countries: Array.isArray(data.countries) ? data.countries : 
                       Object.keys(data.customerNumbers || {}).filter(k => data.customerNumbers[k]),
             ownerCountry: data.ownerCountry || data.creatorCountry || (Array.isArray(data.countries) && data.countries.length ? data.countries[0] : undefined),
+            createdBy: data.createdBy || '',
+            createdByName: data.createdByName || '',
             createdAt: data.createdAt?.toDate() || null,
             updatedAt: data.updatedAt?.toDate() || null
           } as Customer;
@@ -133,6 +137,8 @@ export default function CustomersPage() {
           ? editingCustomer.countries
           : Object.keys(editingCustomer.customerNumbers || {}).filter(k => editingCustomer.customerNumbers[k]),
         ownerCountry: editingCustomer.ownerCountry || userProfile?.businessUnit,
+        createdBy: editingCustomer.createdBy || (user?.email || ''),
+        createdByName: editingCustomer.createdByName || (userProfile?.name || ''),
         updatedAt: new Date()
       };
 
@@ -161,9 +167,9 @@ export default function CustomersPage() {
   }
 
   // Filter countries based on user role
-  const availableCountries = userProfile?.role === "Employee" 
-    ? (userProfile.countries || [])
-    : countries;
+  // Show all countries for everyone so customers appear under their owner country.
+  // Editing permissions are enforced per card/modal.
+  const availableCountries = countries;
 
   const createInitialCustomerNumbers = (countries: string[]): { [key: string]: string } => {
     return countries.reduce((acc: { [key: string]: string }, country: string) => {
@@ -211,6 +217,12 @@ export default function CustomersPage() {
                   <div key={`customer-${customer.id}`} className="bg-white p-4 rounded-lg shadow">
                     <h3 className="font-semibold text-lg mb-2">{customer.name}</h3>
                     <p className="text-gray-600 mb-2">{customer.address}</p>
+                    {customer.ownerCountry && (
+                      <p className="text-xs text-gray-500 mb-1">Owner country: {customer.ownerCountry}</p>
+                    )}
+                    {customer.createdBy && (
+                      <p className="text-xs text-gray-500 mb-3">Created by: {customer.createdByName || customer.createdBy}</p>
+                    )}
                     {customer.contact && <p className="text-gray-600 mb-1">Contact: {customer.contact}</p>}
                     {customer.phone && <p className="text-gray-600 mb-1">Phone: {customer.phone}</p>}
                     {customer.email && <p className="text-gray-600 mb-1">Email: {customer.email}</p>}
@@ -240,6 +252,23 @@ export default function CustomersPage() {
                         <span className="px-3 py-1 text-sm bg-gray-50 text-gray-500 rounded">
                           Read-only
                         </span>
+                      )}
+                      {/* Non-owner may add their own customer number only */}
+                      {userProfile?.businessUnit && customer.ownerCountry !== userProfile.businessUnit && (
+                        <button
+                          onClick={() => {
+                            // Open modal limited to current country number field
+                            setEditingCustomer({
+                              ...customer,
+                              countries: [customer.ownerCountry!],
+                              customerNumbers: { ...customer.customerNumbers }
+                            });
+                            setShowEditModal(customer.id);
+                          }}
+                          className="px-3 py-1 text-sm bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+                        >
+                          Add my country number
+                        </button>
                       )}
                       {/* Manage Contacts button - always visible */}
                       <button
@@ -346,24 +375,43 @@ export default function CustomersPage() {
               <div>
                 <label className="block text-sm font-medium mb-3">Customer Numbers</label>
                 <div className="space-y-3 max-h-[60vh] overflow-y-auto">
-                  {availableCountries.map((country: string) => (
-                    <div key={country} className="flex items-center gap-3">
-                      <span className="w-32 text-sm font-medium">{country}:</span>
-                      <input
-                        type="text"
-                        value={editingCustomer.customerNumbers[country] || ''}
-                        onChange={e => setEditingCustomer({
-                          ...editingCustomer,
-                          customerNumbers: {
-                            ...editingCustomer.customerNumbers,
-                            [country]: e.target.value
-                          }
-                        })}
-                        className="flex-1 border rounded px-3 py-2"
-                        placeholder="Enter customer number"
-                      />
-                    </div>
-                  ))}
+                  {(userProfile?.businessUnit && editingCustomer.ownerCountry !== userProfile.businessUnit)
+                    ? [userProfile.businessUnit].map((country: string) => (
+                      <div key={country} className="flex items-center gap-3">
+                        <span className="w-32 text-sm font-medium">{country}:</span>
+                        <input
+                          type="text"
+                          value={editingCustomer.customerNumbers[country] || ''}
+                          onChange={e => setEditingCustomer({
+                            ...editingCustomer,
+                            customerNumbers: {
+                              ...editingCustomer.customerNumbers,
+                              [country]: e.target.value
+                            }
+                          })}
+                          className="flex-1 border rounded px-3 py-2"
+                          placeholder="Enter customer number"
+                        />
+                      </div>
+                    ))
+                    : availableCountries.map((country: string) => (
+                      <div key={country} className="flex items-center gap-3">
+                        <span className="w-32 text-sm font-medium">{country}:</span>
+                        <input
+                          type="text"
+                          value={editingCustomer.customerNumbers[country] || ''}
+                          onChange={e => setEditingCustomer({
+                            ...editingCustomer,
+                            customerNumbers: {
+                              ...editingCustomer.customerNumbers,
+                              [country]: e.target.value
+                            }
+                          })}
+                          className="flex-1 border rounded px-3 py-2"
+                          placeholder="Enter customer number"
+                        />
+                      </div>
+                    ))}
                 </div>
               </div>
             </div>
