@@ -14,6 +14,7 @@ interface Customer {
   email?: string;
   customerNumbers: { [country: string]: string };
   countries?: string[];
+  ownerCountry?: string;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -59,6 +60,7 @@ export default function CustomersPage() {
             customerNumbers: data.customerNumbers || {},
             countries: Array.isArray(data.countries) ? data.countries : 
                       Object.keys(data.customerNumbers || {}).filter(k => data.customerNumbers[k]),
+            ownerCountry: data.ownerCountry || data.creatorCountry || (Array.isArray(data.countries) && data.countries.length ? data.countries[0] : undefined),
             createdAt: data.createdAt?.toDate() || null,
             updatedAt: data.updatedAt?.toDate() || null
           } as Customer;
@@ -71,10 +73,11 @@ export default function CustomersPage() {
         if (userProfile?.role === "Employee" && userProfile.countries && userProfile.countries.length > 0) {
           console.log('Filtering customers for user countries:', userProfile.countries);
           fetchedCustomers = fetchedCustomers.filter(customer => {
-            const customerCountries = customer.countries || Object.keys(customer.customerNumbers || {});
-            const hasMatchingCountry = customerCountries.some(country => userProfile.countries?.includes(country));
-            console.log(`Customer ${customer.name} countries:`, customerCountries, 'Has matching country:', hasMatchingCountry);
-            return hasMatchingCountry;
+            const owner = customer.ownerCountry || (customer.countries || [])[0];
+            const related = new Set<string>([owner, ...Object.keys(customer.customerNumbers || {})]);
+            const match = Array.from(related).some(c => userProfile.countries?.includes(c));
+            console.log(`Customer ${customer.name} owner=${owner} related=${Array.from(related).join(',')}, match=${match}`);
+            return match;
           });
         }
 
@@ -92,19 +95,11 @@ export default function CustomersPage() {
     }
   }, [userProfile, countriesLoading, authLoading]);
 
-  // Group customers by country
+  // Group customers by ownerCountry only to prevent duplication across countries
   const groupedCustomers = customers.reduce<{ [country: string]: Customer[] }>((acc, customer) => {
-    const customerCountries = customer.countries || Object.keys(customer.customerNumbers || {});
-    
-    customerCountries.forEach((country: string) => {
-      if (!acc[country]) {
-        acc[country] = [];
-      }
-      if (!acc[country].find(c => c.id === customer.id)) {
-        acc[country].push(customer);
-      }
-    });
-    
+    const owner = customer.ownerCountry || (customer.countries && customer.countries.length ? customer.countries[0] : 'Unknown');
+    if (!acc[owner]) acc[owner] = [];
+    if (!acc[owner].find(c => c.id === customer.id)) acc[owner].push(customer);
     return acc;
   }, {});
 
@@ -134,7 +129,10 @@ export default function CustomersPage() {
         phone: editingCustomer.phone || '',
         email: editingCustomer.email || '',
         customerNumbers: editingCustomer.customerNumbers || {},
-        countries: Object.keys(editingCustomer.customerNumbers || {}).filter(k => editingCustomer.customerNumbers[k]),
+        countries: Array.isArray(editingCustomer.countries) && editingCustomer.countries.length
+          ? editingCustomer.countries
+          : Object.keys(editingCustomer.customerNumbers || {}).filter(k => editingCustomer.customerNumbers[k]),
+        ownerCountry: editingCustomer.ownerCountry || userProfile?.businessUnit,
         updatedAt: new Date()
       };
 
@@ -143,8 +141,9 @@ export default function CustomersPage() {
         setCustomers(prev => prev.map(c => c.id === editingCustomer.id ? { ...customerData, id: editingCustomer.id } as Customer : c));
       } else {
         customerData.createdAt = new Date();
-        const docRef = await addDoc(collection(db as Firestore, "customers"), customerData);
-        setCustomers(prev => [...prev, { ...customerData, id: docRef.id } as Customer]);
+        const withOwner = { ...customerData, ownerCountry: customerData.ownerCountry || userProfile?.businessUnit } as any;
+        const docRef = await addDoc(collection(db as Firestore, "customers"), withOwner);
+        setCustomers(prev => [...prev, { ...withOwner, id: docRef.id } as Customer]);
       }
       setShowEditModal(null);
       setEditingCustomer(null);
@@ -216,8 +215,8 @@ export default function CustomersPage() {
                     {customer.phone && <p className="text-gray-600 mb-1">Phone: {customer.phone}</p>}
                     {customer.email && <p className="text-gray-600 mb-1">Email: {customer.email}</p>}
                     <div className="mt-4 flex justify-end gap-2">
-                      {/* Only allow editing if user's country matches the customer's creator country */}
-                      {userProfile?.businessUnit && customer.countries?.includes(userProfile.businessUnit) && (
+                      {/* Only allow full edit/delete if user owns this customer (creator country) */}
+                      {userProfile?.businessUnit && customer.ownerCountry === userProfile.businessUnit && (
                         <>
                           <button
                             onClick={() => {
@@ -237,7 +236,7 @@ export default function CustomersPage() {
                         </>
                       )}
                       {/* Show read-only indicator for customers from other countries */}
-                      {userProfile?.businessUnit && !customer.countries?.includes(userProfile.businessUnit) && (
+                      {userProfile?.businessUnit && customer.ownerCountry !== userProfile.businessUnit && (
                         <span className="px-3 py-1 text-sm bg-gray-50 text-gray-500 rounded">
                           Read-only
                         </span>
