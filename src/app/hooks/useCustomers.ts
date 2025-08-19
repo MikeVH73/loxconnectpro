@@ -10,6 +10,7 @@ interface Customer {
   phone?: string;
   email?: string;
   customerNumbers?: { [country: string]: string };
+  ownerCountry?: string;
 }
 
 export function useCustomers() {
@@ -27,10 +28,19 @@ export function useCustomers() {
     try {
       const customersCollection = collection(db as Firestore, 'customers');
       const snapshot = await getDocs(customersCollection);
-      const customersData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      } as Customer));
+      const customersData = snapshot.docs.map(doc => {
+        const data: any = doc.data();
+        return {
+          id: doc.id,
+          name: data.name,
+          address: data.address,
+          contact: data.contact,
+          phone: data.phone,
+          email: data.email,
+          customerNumbers: data.customerNumbers || {},
+          ownerCountry: data.ownerCountry || data.creatorCountry || ''
+        } as Customer;
+      });
       setCustomers(customersData);
       setError(null);
     } catch (err) {

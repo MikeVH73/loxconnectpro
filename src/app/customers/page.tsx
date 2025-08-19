@@ -167,9 +167,10 @@ export default function CustomersPage() {
   }
 
   // Filter countries based on user role
-  // Show all countries for everyone so customers appear under their owner country.
-  // Editing permissions are enforced per card/modal.
-  const availableCountries = countries;
+  // Employees/Admins see only their own country section; superAdmin sees all.
+  const availableCountries = userProfile?.role === 'superAdmin'
+    ? countries
+    : (userProfile?.businessUnit ? [userProfile.businessUnit] : countries);
 
   const createInitialCustomerNumbers = (countries: string[]): { [key: string]: string } => {
     return countries.reduce((acc: { [key: string]: string }, country: string) => {
