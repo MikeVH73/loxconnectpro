@@ -253,16 +253,25 @@ export default function CustomersPage() {
                           Read-only
                         </span>
                       )}
-                      {/* Non-owner may add their own customer number only */}
-                      {userProfile?.businessUnit && customer.ownerCountry !== userProfile.businessUnit && (
+                      {/* SuperAdmin quick action to set owner country if missing */}
+                      {userProfile?.role === 'superAdmin' && !customer.ownerCountry && (
                         <button
                           onClick={() => {
-                            // Open modal limited to current country number field
-                            setEditingCustomer({
-                              ...customer,
-                              countries: [customer.ownerCountry!],
-                              customerNumbers: { ...customer.customerNumbers }
-                            });
+                            const newOwner = prompt('Set owner country for this customer:', userProfile.businessUnit || '');
+                            if (!newOwner) return;
+                            setEditingCustomer({ ...customer, ownerCountry: newOwner });
+                            setShowEditModal(customer.id);
+                          }}
+                          className="px-3 py-1 text-sm bg-yellow-100 text-yellow-800 rounded hover:bg-yellow-200"
+                        >
+                          Set owner country
+                        </button>
+                      )}
+                      {/* Non-owner may add their own customer number only */}
+                      {userProfile?.businessUnit && customer.ownerCountry && customer.ownerCountry !== userProfile.businessUnit && (
+                        <button
+                          onClick={() => {
+                            setEditingCustomer({ ...customer });
                             setShowEditModal(customer.id);
                           }}
                           className="px-3 py-1 text-sm bg-blue-100 text-blue-700 rounded hover:bg-blue-200"

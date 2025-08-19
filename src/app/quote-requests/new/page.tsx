@@ -422,11 +422,17 @@ const NewQuoteRequestPage = () => {
               required
             >
               <option value="">Select a customer</option>
-              {customers?.map((customer: Customer) => (
-                <option key={customer.id} value={customer.id}>
-                  {customer.name}
-                </option>
-              ))}
+              {customers
+                ?.filter((c: any) => {
+                  const owner = (c as any).ownerCountry || '';
+                  return owner === creatorCountry; // only creator's customers
+                })
+                .sort((a: any, b: any) => String(a.name).localeCompare(String(b.name)))
+                .map((customer: Customer) => (
+                  <option key={customer.id} value={customer.id}>
+                    {customer.name}
+                  </option>
+                ))}
             </select>
           </div>
         </div>
