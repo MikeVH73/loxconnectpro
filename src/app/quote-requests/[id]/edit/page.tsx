@@ -210,10 +210,14 @@ export default function EditQuoteRequest() {
       event.preventDefault();
       const confirmed = window.confirm('Want to SAVE your changes before leaving this Quote Request?');
       if (confirmed) {
-        // Best-effort save, then navigate
-        saveChanges(false).finally(() => {
-          window.location.href = anchor.href;
-        });
+        // Best-effort save via ref, then navigate
+        const saver = (saveChangesRef && typeof saveChangesRef === 'object') ? (saveChangesRef as any).current : null;
+        const doNavigate = () => { window.location.href = anchor.href; };
+        if (typeof saver === 'function') {
+          Promise.resolve(saver(false)).finally(doNavigate);
+        } else {
+          doNavigate();
+        }
       } else {
         window.location.href = anchor.href;
       }
@@ -248,10 +252,17 @@ export default function EditQuoteRequest() {
         
         if (quoteDoc.exists()) {
           const data = quoteDoc.data();
+          // Normalize products: drop legacy/empty rows
+          const normalizedProducts = (Array.isArray(data.products) ? data.products : []).filter((p:any) => {
+            const code = String(p?.catClass || p?.code || '').trim();
+            const desc = String(p?.description || '').trim();
+            return !!(code || desc);
+          });
+
           setQuoteRequest({
             id: quoteDoc.id,
             title: data.title || '',
-            products: Array.isArray(data.products) ? data.products : [],
+            products: normalizedProducts,
             creatorCountry: data.creatorCountry || '',
             involvedCountry: data.involvedCountry || '',
             startDate: data.startDate || '',
@@ -317,10 +328,33 @@ export default function EditQuoteRequest() {
     setError("");
     
     try {
+      // Stop any pending debounced auto-save to prevent a race after a manual save
+      try { (debouncedSave as any)?.cancel?.(); } catch {}
       const quoteRequestRef = doc(db as Firestore, "quoteRequests", id);
+      // Ensure product descriptions are synced from catalog for known codes (handles 60AJX, 7-digit, etc.)
+      const sanitizedProducts = await Promise.all((quoteRequest.products || []).map(async (p: any) => {
+        // Drop draft/empty product rows
+        const codeRaw = String(p?.catClass || p?.code || '').trim();
+        const descRaw = String(p?.description || '').trim();
+        if (!codeRaw && !descRaw) return undefined;
+        const code = codeRaw;
+        const desc = descRaw;
+        if (!code) return { ...p };
+        if (desc) return { ...p, catClass: code };
+        try {
+          const found = await getProductByCode(code);
+          if (found?.description) {
+            return { ...p, catClass: found.catClass || code, description: found.description };
+          }
+        } catch {}
+        return { ...p, catClass: code };
+      }));
+      // Filter out any undefined results from dropped drafts
+      const sanitizedNonEmptyProducts = sanitizedProducts.filter(Boolean);
       const canAssign = (userProfile?.role === 'superAdmin' || userProfile?.role === 'admin' || userProfile?.businessUnit === quoteRequest.involvedCountry || (userProfile?.countries || []).includes(quoteRequest.involvedCountry));
       const updateData: any = {
         ...quoteRequest,
+        products: sanitizedNonEmptyProducts,
         // If user cannot assign, strip any local assignment changes from update
         ...(canAssign ? {} : { assignedUserId: originalData?.assignedUserId, assignedUserName: originalData?.assignedUserName }),
         updatedAt: serverTimestamp(),
@@ -358,6 +392,40 @@ export default function EditQuoteRequest() {
       if (!isAutoSave) setCalculatorDirty(false);
       setIsDirty(false);
       setOriginalData(quoteRequest as QuoteRequestWithDynamicKeys);
+      // Align auto-save baseline with the just-saved state
+      try {
+        const currentState = JSON.stringify({
+          title: quoteRequest.title || '',
+          products: quoteRequest.products || [],
+          creatorCountry: quoteRequest.creatorCountry || '',
+          involvedCountry: quoteRequest.involvedCountry || '',
+          startDate: quoteRequest.startDate || '',
+          endDate: quoteRequest.endDate || '',
+          status: quoteRequest.status || '',
+          customer: quoteRequest.customer || '',
+          waitingForAnswer: quoteRequest.waitingForAnswer || false,
+          urgent: quoteRequest.urgent || false,
+          problems: quoteRequest.problems || false,
+          planned: quoteRequest.planned || false,
+          jobsite: quoteRequest.jobsite || {},
+          jobsiteContact: quoteRequest.jobsiteContact || {},
+          customerNumber: quoteRequest.customerNumber || '',
+          customerDecidesEnd: quoteRequest.customerDecidesEnd || false,
+          latitude: quoteRequest.latitude || '',
+          longitude: quoteRequest.longitude || '',
+          notes: quoteRequest.notes || [],
+          attachments: quoteRequest.attachments || [],
+          assignedUserId: quoteRequest.assignedUserId || '',
+          assignedUserName: quoteRequest.assignedUserName || '',
+          totalValueEUR: quoteRequest.totalValueEUR ?? null,
+          totalValueLocal: quoteRequest.totalValueLocal ?? null,
+          totalValueCurrency: quoteRequest.totalValueCurrency || '',
+          totalValueRateToEUR: quoteRequest.totalValueRateToEUR ?? null
+        });
+        if (previousQuoteRequest && typeof previousQuoteRequest === 'object') {
+          (previousQuoteRequest as any).current = currentState;
+        }
+      } catch {}
 
       // Create modification record for all changes except jobsiteContactId
       if (originalData) {
@@ -623,6 +691,7 @@ export default function EditQuoteRequest() {
       const index = parseInt(parts[1] || '', 10);
       const prop = parts[2];
       if (!Number.isFinite(index) || !prop) return;
+      setIsDirty(true);
       setQuoteRequest(prev => {
         const prevProducts = Array.isArray(prev.products) ? prev.products : [];
         const nextProducts = [...prevProducts];
@@ -693,8 +762,10 @@ export default function EditQuoteRequest() {
     setIsDirty(true);
     setQuoteRequest(prev => ({
       ...prev,
-      products: [...(prev.products || []), { catClass: "", description: "", quantity: 1 }]
+      products: [...(prev.products || []), { catClass: "", description: "", quantity: 1, _draft: true }]
     }));
+    // Schedule an autosave in case user navigates immediately
+    try { (debouncedSave as any)?.flush?.(); } catch {}
   };
 
   const handleRemoveProduct = (index: number) => {

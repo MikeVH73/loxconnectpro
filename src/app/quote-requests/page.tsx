@@ -137,7 +137,8 @@ const QuoteRequestsPage = () => {
 
         // Fetch all data in parallel
         const [qrSnap, custSnap, usersSnap] = await Promise.all([
-          getDocs(query(collection(db as Firestore, "quoteRequests"), orderBy("createdAt", "desc"))),
+          // Fetch without Firestore orderBy to avoid index/field issues; sort client-side below
+          getDocs(collection(db as Firestore, "quoteRequests")),
           getDocs(collection(db as Firestore, "customers")),
           getDocs(collection(db as Firestore, "users"))
         ]);
@@ -201,7 +202,8 @@ const QuoteRequestsPage = () => {
           if (searchLower) {
             const customerName = getCustomerName(qr.customer).toLowerCase();
             const assigneeName = qr.assignedUserName?.toLowerCase() || '';
-            const productsText = (qr.products || []).map((p: any) => `${p.catClass || ''} ${p.description || ''}`).join(' ').toLowerCase();
+            const productList: any[] = Array.isArray(qr.products) ? qr.products : [];
+            const productsText = productList.map((p: any) => `${p.catClass || ''} ${p.description || ''}`).join(' ').toLowerCase();
             const hay = `${qr.title || ''} ${customerName} ${productsText} ${assigneeName} ${qr.id}`.toLowerCase();
             if (!hay.includes(searchLower)) return false;
           }
@@ -269,7 +271,8 @@ const QuoteRequestsPage = () => {
           // Product filter
           if (filterProduct.trim()) {
             const prodNeedle = filterProduct.trim().toLowerCase();
-            const has = (qr.products || []).some((p: any) =>
+            const productList: any[] = Array.isArray(qr.products) ? qr.products : [];
+            const has = productList.some((p: any) =>
               `${p.catClass || ''}`.toLowerCase().includes(prodNeedle) ||
               `${p.description || ''}`.toLowerCase().includes(prodNeedle)
             );
