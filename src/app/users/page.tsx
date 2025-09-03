@@ -41,6 +41,18 @@ export default function UsersPage() {
 	const [lastReviewMonth, setLastReviewMonth] = useState<string | null>(null);
 	const [archiving, setArchiving] = useState(false);
 
+  // Helper: deduplicate countries by normalized name (trimmed, case-insensitive)
+  const dedupeCountriesByName = (list: any[]) => {
+    const byName = new Map<string, any>();
+    for (const c of list || []) {
+      const name = String((c as any)?.name || '').trim();
+      if (!name) continue;
+      const key = name.toLowerCase();
+      if (!byName.has(key)) byName.set(key, { ...c, name });
+    }
+    return Array.from(byName.values()).sort((a, b) => a.name.localeCompare(b.name));
+  };
+
   useEffect(() => {
     const fetchUsers = async () => {
       try {
@@ -125,7 +137,7 @@ export default function UsersPage() {
       try {
         const countriesSnap = await getDocs(collection(db as Firestore, "countries"));
         const countriesData = countriesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setCountries(countriesData);
+        setCountries(dedupeCountriesByName(countriesData));
       } catch (error) {
         console.error("Error fetching countries:", error);
       } finally {
@@ -149,7 +161,7 @@ export default function UsersPage() {
       setNewCountryName("");
       // Refresh countries list
       const countriesSnap = await getDocs(collection(db as Firestore, "countries"));
-      setCountries(countriesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setCountries(dedupeCountriesByName(countriesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
     } catch (error) {
       console.error("Error creating country:", error);
     }
@@ -189,7 +201,7 @@ export default function UsersPage() {
       
       // Refresh countries list
       const countriesSnap = await getDocs(collection(db as Firestore, "countries"));
-      setCountries(countriesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setCountries(dedupeCountriesByName(countriesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
       
       // Refresh users list to show updated data
       const usersSnap = await getDocs(collection(db as Firestore, "users"));
@@ -217,7 +229,7 @@ export default function UsersPage() {
       await deleteDoc(doc(db as Firestore, "countries", countryId));
       // Refresh countries list
       const countriesSnap = await getDocs(collection(db as Firestore, "countries"));
-      setCountries(countriesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setCountries(dedupeCountriesByName(countriesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
     } catch (error) {
       console.error("Error deleting country:", error);
     }

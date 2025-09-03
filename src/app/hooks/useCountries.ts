@@ -82,18 +82,30 @@ export const useCountries = () => {
           id: doc.id,
           ...doc.data()
         })) as Country[];
-        countriesData.sort((a, b) => a.name.localeCompare(b.name));
-        console.log(`Successfully fetched ${countriesData.length} countries after seeding`);
-        setCountries(countriesData);
+        // Deduplicate by normalized name to avoid duplicates created historically
+        const byName = new Map<string, Country>();
+        for (const c of countriesData) {
+          const key = String(c.name || '').trim().toLowerCase();
+          if (!byName.has(key)) byName.set(key, c);
+        }
+        const unique = Array.from(byName.values()).sort((a, b) => a.name.localeCompare(b.name));
+        console.log(`Successfully fetched ${unique.length} countries after seeding (deduped)`);
+        setCountries(unique);
       } else {
         // Use existing countries
         const countriesData = snapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data()
         })) as Country[];
-        countriesData.sort((a, b) => a.name.localeCompare(b.name));
-        console.log(`Successfully fetched ${countriesData.length} existing countries`);
-        setCountries(countriesData);
+        // Deduplicate by normalized name to hide duplicates in UI
+        const byName = new Map<string, Country>();
+        for (const c of countriesData) {
+          const key = String(c.name || '').trim().toLowerCase();
+          if (!byName.has(key)) byName.set(key, c);
+        }
+        const unique = Array.from(byName.values()).sort((a, b) => a.name.localeCompare(b.name));
+        console.log(`Successfully fetched ${unique.length} existing countries (deduped)`);
+        setCountries(unique);
       }
     } catch (error) {
       console.error("Error in fetchCountries:", error);
@@ -126,6 +138,6 @@ export const useCountries = () => {
     error,
     refetchCountries: fetchCountries,
     // Helper to get just the country names as an array
-    countryNames: countries.map(c => c.name)
+    countryNames: Array.from(new Set(countries.map(c => String(c.name || '').trim()))).sort((a, b) => a.localeCompare(b))
   };
 }; 

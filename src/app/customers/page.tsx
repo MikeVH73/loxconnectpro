@@ -14,6 +14,9 @@ interface Customer {
   email?: string;
   customerNumbers: { [country: string]: string };
   countries?: string[];
+  ownerCountry?: string;
+  createdBy?: string;
+  createdByName?: string;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -29,7 +32,7 @@ export default function CustomersPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
   const [showEditModal, setShowEditModal] = useState<string | null>(null);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
-  const { userProfile, loading: authLoading } = useAuth();
+  const { userProfile, loading: authLoading, user } = useAuth();
   const { countryNames: countries, loading: countriesLoading } = useCountries();
 
   useEffect(() => {
@@ -59,6 +62,9 @@ export default function CustomersPage() {
             customerNumbers: data.customerNumbers || {},
             countries: Array.isArray(data.countries) ? data.countries : 
                       Object.keys(data.customerNumbers || {}).filter(k => data.customerNumbers[k]),
+            ownerCountry: data.ownerCountry || data.creatorCountry || (Array.isArray(data.countries) && data.countries.length ? data.countries[0] : undefined),
+            createdBy: data.createdBy || '',
+            createdByName: data.createdByName || '',
             createdAt: data.createdAt?.toDate() || null,
             updatedAt: data.updatedAt?.toDate() || null
           } as Customer;
@@ -71,10 +77,11 @@ export default function CustomersPage() {
         if (userProfile?.role === "Employee" && userProfile.countries && userProfile.countries.length > 0) {
           console.log('Filtering customers for user countries:', userProfile.countries);
           fetchedCustomers = fetchedCustomers.filter(customer => {
-            const customerCountries = customer.countries || Object.keys(customer.customerNumbers || {});
-            const hasMatchingCountry = customerCountries.some(country => userProfile.countries?.includes(country));
-            console.log(`Customer ${customer.name} countries:`, customerCountries, 'Has matching country:', hasMatchingCountry);
-            return hasMatchingCountry;
+            const owner = customer.ownerCountry || (customer.countries || [])[0];
+            const related = new Set<string>([owner, ...Object.keys(customer.customerNumbers || {})]);
+            const match = Array.from(related).some(c => userProfile.countries?.includes(c));
+            console.log(`Customer ${customer.name} owner=${owner} related=${Array.from(related).join(',')}, match=${match}`);
+            return match;
           });
         }
 
@@ -92,19 +99,12 @@ export default function CustomersPage() {
     }
   }, [userProfile, countriesLoading, authLoading]);
 
-  // Group customers by country
+  // Group customers by ownerCountry (normalized) only to prevent duplication across countries
   const groupedCustomers = customers.reduce<{ [country: string]: Customer[] }>((acc, customer) => {
-    const customerCountries = customer.countries || Object.keys(customer.customerNumbers || {});
-    
-    customerCountries.forEach((country: string) => {
-      if (!acc[country]) {
-        acc[country] = [];
-      }
-      if (!acc[country].find(c => c.id === customer.id)) {
-        acc[country].push(customer);
-      }
-    });
-    
+    const ownerRaw = customer.ownerCountry || (customer.countries && customer.countries.length ? customer.countries[0] : 'Unknown');
+    const owner = String(ownerRaw).trim();
+    if (!acc[owner]) acc[owner] = [];
+    if (!acc[owner].find(c => c.id === customer.id)) acc[owner].push(customer);
     return acc;
   }, {});
 
@@ -134,7 +134,12 @@ export default function CustomersPage() {
         phone: editingCustomer.phone || '',
         email: editingCustomer.email || '',
         customerNumbers: editingCustomer.customerNumbers || {},
-        countries: Object.keys(editingCustomer.customerNumbers || {}).filter(k => editingCustomer.customerNumbers[k]),
+        countries: Array.isArray(editingCustomer.countries) && editingCustomer.countries.length
+          ? editingCustomer.countries
+          : Object.keys(editingCustomer.customerNumbers || {}).filter(k => editingCustomer.customerNumbers[k]),
+        ownerCountry: editingCustomer.ownerCountry || userProfile?.businessUnit,
+        createdBy: editingCustomer.createdBy || (user?.email || ''),
+        createdByName: editingCustomer.createdByName || (userProfile?.name || ''),
         updatedAt: new Date()
       };
 
@@ -143,8 +148,9 @@ export default function CustomersPage() {
         setCustomers(prev => prev.map(c => c.id === editingCustomer.id ? { ...customerData, id: editingCustomer.id } as Customer : c));
       } else {
         customerData.createdAt = new Date();
-        const docRef = await addDoc(collection(db as Firestore, "customers"), customerData);
-        setCustomers(prev => [...prev, { ...customerData, id: docRef.id } as Customer]);
+        const withOwner = { ...customerData, ownerCountry: customerData.ownerCountry || userProfile?.businessUnit } as any;
+        const docRef = await addDoc(collection(db as Firestore, "customers"), withOwner);
+        setCustomers(prev => [...prev, { ...withOwner, id: docRef.id } as Customer]);
       }
       setShowEditModal(null);
       setEditingCustomer(null);
@@ -162,9 +168,13 @@ export default function CustomersPage() {
   }
 
   // Filter countries based on user role
-  const availableCountries = userProfile?.role === "Employee" 
-    ? (userProfile.countries || [])
-    : countries;
+  // Employees/Admins see only their own country section; superAdmin sees all.
+  const allCountries = countries;
+  // Deduplicate headers and keep a single header per country
+  const uniqueCountryHeaders = Array.from(new Set(allCountries.map(c => String(c).trim()))).sort((a, b) => a.localeCompare(b));
+  const availableCountries = userProfile?.role === 'superAdmin'
+    ? uniqueCountryHeaders
+    : (userProfile?.businessUnit ? [userProfile.businessUnit] : uniqueCountryHeaders);
 
   const createInitialCustomerNumbers = (countries: string[]): { [key: string]: string } => {
     return countries.reduce((acc: { [key: string]: string }, country: string) => {
@@ -212,12 +222,18 @@ export default function CustomersPage() {
                   <div key={`customer-${customer.id}`} className="bg-white p-4 rounded-lg shadow">
                     <h3 className="font-semibold text-lg mb-2">{customer.name}</h3>
                     <p className="text-gray-600 mb-2">{customer.address}</p>
+                    {customer.ownerCountry && (
+                      <p className="text-xs text-gray-500 mb-1">Owner country: {customer.ownerCountry}</p>
+                    )}
+                    {customer.createdBy && (
+                      <p className="text-xs text-gray-500 mb-3">Created by: {customer.createdByName || customer.createdBy}</p>
+                    )}
                     {customer.contact && <p className="text-gray-600 mb-1">Contact: {customer.contact}</p>}
                     {customer.phone && <p className="text-gray-600 mb-1">Phone: {customer.phone}</p>}
                     {customer.email && <p className="text-gray-600 mb-1">Email: {customer.email}</p>}
                     <div className="mt-4 flex justify-end gap-2">
-                      {/* Only allow editing if user's country matches the customer's creator country */}
-                      {userProfile?.businessUnit && customer.countries?.includes(userProfile.businessUnit) && (
+                      {/* Only allow full edit/delete if user owns this customer (creator country) */}
+                      {userProfile?.businessUnit && customer.ownerCountry === userProfile.businessUnit && (
                         <>
                           <button
                             onClick={() => {
@@ -237,10 +253,36 @@ export default function CustomersPage() {
                         </>
                       )}
                       {/* Show read-only indicator for customers from other countries */}
-                      {userProfile?.businessUnit && !customer.countries?.includes(userProfile.businessUnit) && (
+                      {userProfile?.businessUnit && customer.ownerCountry !== userProfile.businessUnit && (
                         <span className="px-3 py-1 text-sm bg-gray-50 text-gray-500 rounded">
                           Read-only
                         </span>
+                      )}
+                      {/* SuperAdmin quick action to set owner country if missing */}
+                      {userProfile?.role === 'superAdmin' && !customer.ownerCountry && (
+                        <button
+                          onClick={() => {
+                            const newOwner = prompt('Set owner country for this customer:', userProfile.businessUnit || '');
+                            if (!newOwner) return;
+                            setEditingCustomer({ ...customer, ownerCountry: newOwner });
+                            setShowEditModal(customer.id);
+                          }}
+                          className="px-3 py-1 text-sm bg-yellow-100 text-yellow-800 rounded hover:bg-yellow-200"
+                        >
+                          Set owner country
+                        </button>
+                      )}
+                      {/* Non-owner may add their own customer number only */}
+                      {userProfile?.businessUnit && customer.ownerCountry && customer.ownerCountry !== userProfile.businessUnit && (
+                        <button
+                          onClick={() => {
+                            setEditingCustomer({ ...customer });
+                            setShowEditModal(customer.id);
+                          }}
+                          className="px-3 py-1 text-sm bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+                        >
+                          Add my country number
+                        </button>
                       )}
                       {/* Manage Contacts button - always visible */}
                       <button
@@ -347,24 +389,43 @@ export default function CustomersPage() {
               <div>
                 <label className="block text-sm font-medium mb-3">Customer Numbers</label>
                 <div className="space-y-3 max-h-[60vh] overflow-y-auto">
-                  {availableCountries.map((country: string) => (
-                    <div key={country} className="flex items-center gap-3">
-                      <span className="w-32 text-sm font-medium">{country}:</span>
-                      <input
-                        type="text"
-                        value={editingCustomer.customerNumbers[country] || ''}
-                        onChange={e => setEditingCustomer({
-                          ...editingCustomer,
-                          customerNumbers: {
-                            ...editingCustomer.customerNumbers,
-                            [country]: e.target.value
-                          }
-                        })}
-                        className="flex-1 border rounded px-3 py-2"
-                        placeholder="Enter customer number"
-                      />
-                    </div>
-                  ))}
+                  {(userProfile?.businessUnit && editingCustomer.ownerCountry !== userProfile.businessUnit)
+                    ? [userProfile.businessUnit].map((country: string) => (
+                      <div key={country} className="flex items-center gap-3">
+                        <span className="w-32 text-sm font-medium">{country}:</span>
+                        <input
+                          type="text"
+                          value={editingCustomer.customerNumbers[country] || ''}
+                          onChange={e => setEditingCustomer({
+                            ...editingCustomer,
+                            customerNumbers: {
+                              ...editingCustomer.customerNumbers,
+                              [country]: e.target.value
+                            }
+                          })}
+                          className="flex-1 border rounded px-3 py-2"
+                          placeholder="Enter customer number"
+                        />
+                      </div>
+                    ))
+                    : availableCountries.map((country: string) => (
+                      <div key={country} className="flex items-center gap-3">
+                        <span className="w-32 text-sm font-medium">{country}:</span>
+                        <input
+                          type="text"
+                          value={editingCustomer.customerNumbers[country] || ''}
+                          onChange={e => setEditingCustomer({
+                            ...editingCustomer,
+                            customerNumbers: {
+                              ...editingCustomer.customerNumbers,
+                              [country]: e.target.value
+                            }
+                          })}
+                          className="flex-1 border rounded px-3 py-2"
+                          placeholder="Enter customer number"
+                        />
+                      </div>
+                    ))}
                 </div>
               </div>
             </div>

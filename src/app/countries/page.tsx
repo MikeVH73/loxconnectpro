@@ -51,15 +51,27 @@ export default function CountriesPage() {
             id: doc.id,
             ...doc.data()
           })) as Country[];
-          countriesData.sort((a, b) => a.name.localeCompare(b.name));
-          setCountries(countriesData);
+          // Deduplicate by normalized name
+          const byName = new Map<string, Country>();
+          for (const c of countriesData) {
+            const key = String(c.name || '').trim().toLowerCase();
+            if (!byName.has(key)) byName.set(key, c);
+          }
+          const unique = Array.from(byName.values()).sort((a, b) => a.name.localeCompare(b.name));
+          setCountries(unique);
         } else {
           const countriesData = snapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data()
           })) as Country[];
-          countriesData.sort((a, b) => a.name.localeCompare(b.name));
-          setCountries(countriesData);
+          // Deduplicate by normalized name
+          const byName = new Map<string, Country>();
+          for (const c of countriesData) {
+            const key = String(c.name || '').trim().toLowerCase();
+            if (!byName.has(key)) byName.set(key, c);
+          }
+          const unique = Array.from(byName.values()).sort((a, b) => a.name.localeCompare(b.name));
+          setCountries(unique);
         }
       } catch (error) {
         console.error("Error fetching countries:", error);

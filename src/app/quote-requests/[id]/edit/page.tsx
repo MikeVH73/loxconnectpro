@@ -429,28 +429,34 @@ export default function EditQuoteRequest() {
 
       // Create modification record for all changes except jobsiteContactId
       if (originalData) {
-      const changes = [];
+      const changes: string[] = [];
+      const modChanges: Array<{ field: string; from: any; to: any }> = [];
       
       // Check for status changes
         if (originalData.status !== quoteRequest.status) {
         changes.push(`Status changed to ${quoteRequest.status}`);
+        modChanges.push({ field: 'status', from: originalData.status, to: quoteRequest.status });
       }
       // Check for total value changes
       if (originalData.totalValueEUR !== quoteRequest.totalValueEUR) {
         changes.push(`Total value (EUR) set to ${quoteRequest.totalValueEUR ?? 'Not set'}`);
+        modChanges.push({ field: 'totalValueEUR', from: originalData.totalValueEUR ?? null, to: quoteRequest.totalValueEUR ?? null });
       }
       if (originalData.totalValueCurrency !== quoteRequest.totalValueCurrency) {
         changes.push(`Total value currency set to ${quoteRequest.totalValueCurrency || 'Not set'}`);
+        modChanges.push({ field: 'totalValueCurrency', from: originalData.totalValueCurrency || '', to: quoteRequest.totalValueCurrency || '' });
       }
 
         // Check for title changes
         if (originalData.title !== quoteRequest.title) {
           changes.push(`Title changed from "${originalData.title}" to "${quoteRequest.title}"`);
+          modChanges.push({ field: 'title', from: originalData.title || '', to: quoteRequest.title || '' });
       }
 
       // Check for country changes
         if (originalData.involvedCountry !== quoteRequest.involvedCountry) {
         changes.push(`Involved country changed from ${originalData.involvedCountry} to ${quoteRequest.involvedCountry}`);
+        modChanges.push({ field: 'involvedCountry', from: originalData.involvedCountry || '', to: quoteRequest.involvedCountry || '' });
       }
       
         // Check for flag changes (labels) - only notify if they were actually changed
@@ -461,6 +467,7 @@ export default function EditQuoteRequest() {
                             field === 'urgent' ? 'Urgent' : 
                             field === 'problems' ? 'Problems' : 'Planned';
             changes.push(`${labelName} label ${(quoteRequest as any)[field] ? 'added' : 'removed'}`);
+            modChanges.push({ field, from: (originalData as any)[field] ?? false, to: (quoteRequest as any)[field] ?? false });
           }
         });
       
@@ -515,31 +522,40 @@ export default function EditQuoteRequest() {
               changes.push(`Description changed: ${np.catClass || np.code || '—'} "${oldDesc}" → "${newDesc}"`);
             }
           }
+          // If products array changed at all, record structured before/after once for Modifications page
+          if (JSON.stringify(oldProducts) !== JSON.stringify(newProducts)) {
+            modChanges.push({ field: 'products', from: oldProducts, to: newProducts });
+          }
         } catch {
           if (JSON.stringify(originalData.products) !== JSON.stringify(quoteRequest.products)) {
             changes.push('Products updated');
+            modChanges.push({ field: 'products', from: originalData.products || [], to: quoteRequest.products || [] });
           }
         }
       
       // Check for date changes
       if (originalData.startDate !== quoteRequest.startDate) {
           changes.push(`Start date changed from ${originalData.startDate} to ${quoteRequest.startDate}`);
+          modChanges.push({ field: 'startDate', from: originalData.startDate || '', to: quoteRequest.startDate || '' });
       }
       if (originalData.endDate !== quoteRequest.endDate) {
           const oldEndDate = originalData.endDate || 'Not set';
           const newEndDate = quoteRequest.endDate || 'Not set';
           changes.push(`End date changed from ${oldEndDate} to ${newEndDate}`);
+          modChanges.push({ field: 'endDate', from: originalData.endDate || '', to: quoteRequest.endDate || '' });
         }
 
         // Check for jobsite address changes
         if (originalData.jobsite?.address !== quoteRequest.jobsite?.address) {
           changes.push(`Jobsite address changed from "${originalData.jobsite?.address || 'Not set'}" to "${quoteRequest.jobsite?.address || 'Not set'}"`);
+          modChanges.push({ field: 'jobsite', from: originalData.jobsite || {}, to: quoteRequest.jobsite || {} });
         }
 
         // Check for jobsite contact changes
         if (originalData.jobsiteContact?.name !== quoteRequest.jobsiteContact?.name || 
             originalData.jobsiteContact?.phone !== quoteRequest.jobsiteContact?.phone) {
           changes.push(`Jobsite contact changed from "${originalData.jobsiteContact?.name || 'Not set'}" to "${quoteRequest.jobsiteContact?.name || 'Not set'}"`);
+          modChanges.push({ field: 'jobsiteContactId', from: '', to: jobsiteContactId || '' });
         }
 
         // Check for handler assignment changes
@@ -551,11 +567,13 @@ export default function EditQuoteRequest() {
         // Check for notes changes
         if (JSON.stringify(originalData.notes) !== JSON.stringify(quoteRequest.notes)) {
           changes.push('Notes updated');
+          modChanges.push({ field: 'notes', from: originalData.notes || [], to: quoteRequest.notes || [] });
         }
 
         // Check for attachments changes
         if (JSON.stringify(originalData.attachments) !== JSON.stringify(quoteRequest.attachments)) {
           changes.push('Attachments updated');
+          modChanges.push({ field: 'attachments', from: originalData.attachments || [], to: quoteRequest.attachments || [] });
         }
 
         // Create notifications for changes
@@ -575,6 +593,18 @@ export default function EditQuoteRequest() {
               });
 
           // Recent activity is created inside createNotification for property_change
+          // Also persist a structured modification record for the Modifications page
+          try {
+            const modsRef = collection(db as Firestore, 'modifications');
+            await addDoc(modsRef, {
+              quoteRequestId: id,
+              user: user?.email || '',
+              dateTime: serverTimestamp(),
+              changes: modChanges,
+            });
+          } catch (e) {
+            console.warn('Failed to write modifications record', e);
+          }
         }
       }
     } catch (err) {
@@ -1327,7 +1357,10 @@ export default function EditQuoteRequest() {
                     disabled={isReadOnly}
                   >
                     <option value="">Select Customer</option>
-                    {fetchedCustomers.map(customer => (
+                    {fetchedCustomers
+                      .slice()
+                      .sort((a: any, b: any) => String(a.name).localeCompare(String(b.name)))
+                      .map(customer => (
                       <option key={customer.id} value={customer.id}>
                         {customer.name}
                       </option>

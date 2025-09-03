@@ -70,11 +70,13 @@ export default function CountrySelect({
         disabled={disabled}
       >
         {allowEmpty && <option value="">{placeholder}</option>}
-        {countries.map((country) => (
-          <option key={country.id} value={country.name}>
-            {country.name}
-          </option>
-        ))}
+        {Array.from(new Set(countries.map((c) => (c.name || '').trim())))
+          .sort((a, b) => a.localeCompare(b))
+          .map((name) => (
+            <option key={name} value={name}>
+              {name}
+            </option>
+          ))}
       </select>
     </div>
   );
