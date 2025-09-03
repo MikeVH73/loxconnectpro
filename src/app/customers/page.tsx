@@ -99,9 +99,10 @@ export default function CustomersPage() {
     }
   }, [userProfile, countriesLoading, authLoading]);
 
-  // Group customers by ownerCountry only to prevent duplication across countries
+  // Group customers by ownerCountry (normalized) only to prevent duplication across countries
   const groupedCustomers = customers.reduce<{ [country: string]: Customer[] }>((acc, customer) => {
-    const owner = customer.ownerCountry || (customer.countries && customer.countries.length ? customer.countries[0] : 'Unknown');
+    const ownerRaw = customer.ownerCountry || (customer.countries && customer.countries.length ? customer.countries[0] : 'Unknown');
+    const owner = String(ownerRaw).trim();
     if (!acc[owner]) acc[owner] = [];
     if (!acc[owner].find(c => c.id === customer.id)) acc[owner].push(customer);
     return acc;
@@ -168,9 +169,12 @@ export default function CustomersPage() {
 
   // Filter countries based on user role
   // Employees/Admins see only their own country section; superAdmin sees all.
+  const allCountries = countries;
+  // Deduplicate headers and keep a single header per country
+  const uniqueCountryHeaders = Array.from(new Set(allCountries.map(c => String(c).trim()))).sort((a, b) => a.localeCompare(b));
   const availableCountries = userProfile?.role === 'superAdmin'
-    ? countries
-    : (userProfile?.businessUnit ? [userProfile.businessUnit] : countries);
+    ? uniqueCountryHeaders
+    : (userProfile?.businessUnit ? [userProfile.businessUnit] : uniqueCountryHeaders);
 
   const createInitialCustomerNumbers = (countries: string[]): { [key: string]: string } => {
     return countries.reduce((acc: { [key: string]: string }, country: string) => {

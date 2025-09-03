@@ -1256,7 +1256,10 @@ export default function EditQuoteRequest() {
                     disabled={isReadOnly}
                   >
                     <option value="">Select Customer</option>
-                    {fetchedCustomers.map(customer => (
+                    {fetchedCustomers
+                      .slice()
+                      .sort((a: any, b: any) => String(a.name).localeCompare(String(b.name)))
+                      .map(customer => (
                       <option key={customer.id} value={customer.id}>
                         {customer.name}
                       </option>
