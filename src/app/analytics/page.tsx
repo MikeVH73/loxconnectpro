@@ -288,10 +288,11 @@ export default function AnalyticsPage() {
   // Conversion funnel for the selected year and filters
   const funnel = useMemo(() => {
     const created = filtered.length;
-    const quoted = filtered.filter(q => (q.totalValueEUR || 0) > 0).length;
     const wonItems = filtered.filter(q => (q.status || '').toLowerCase() === 'won');
     const won = wonItems.length;
     const wonEUR = wonItems.reduce((s,q)=> s + (q.totalValueEUR || 0), 0);
+    const inProgress = filtered.filter(q => (q.status || '').toLowerCase() === 'in progress').length;
+    const newly = filtered.filter(q => (q.status || '').toLowerCase() === 'new').length;
     // Approximate cycle time: createdAt -> updatedAt for won items (if available)
     const days = wonItems
       .map(q => {
@@ -302,19 +303,23 @@ export default function AnalyticsPage() {
       })
       .filter((n): n is number => typeof n === 'number');
     const avgDaysToWin = days.length ? Math.round(days.reduce((a,b)=>a+b,0) / days.length) : null;
-    return { created, quoted, won, wonEUR, conversion: created ? Math.round((won/created)*100) : 0, avgDaysToWin };
+    return { created, won, wonEUR, inProgress, newly, conversion: created ? Math.round((won/created)*100) : 0, avgDaysToWin };
   }, [filtered]);
 
   // Conversion by country pair (creator -> involved)
   const pairFunnel = useMemo(() => {
-    const map = new Map<string, { label: string; created: number; quoted: number; won: number }>();
+    const map = new Map<string, { label: string; created: number; won: number; lost: number; cancelled: number; inProgress: number; newly: number }>();
     filtered.forEach(q => {
       const key = `${q.creatorCountry} -> ${q.involvedCountry}`;
-      if (!map.has(key)) map.set(key, { label: key, created: 0, quoted: 0, won: 0 });
+      if (!map.has(key)) map.set(key, { label: key, created: 0, won: 0, lost: 0, cancelled: 0, inProgress: 0, newly: 0 });
       const row = map.get(key)!;
       row.created += 1;
-      if ((q.totalValueEUR || 0) > 0) row.quoted += 1;
-      if ((q.status || '').toLowerCase() === 'won') row.won += 1;
+      const s = (q.status || '').toLowerCase();
+      if (s==='won') row.won += 1;
+      else if (s==='lost') row.lost += 1;
+      else if (s==='cancelled') row.cancelled += 1;
+      else if (s==='in progress') row.inProgress += 1;
+      else if (s==='new') row.newly += 1;
     });
     const rows = Array.from(map.values()).sort((a,b)=> (b.won - a.won) || (b.created - a.created)).slice(0, 10);
     return rows;
@@ -461,14 +466,18 @@ export default function AnalyticsPage() {
           {/* Conversion Funnel */}
           <div className="p-4 bg-white rounded shadow">
             <div className="text-sm text-gray-700 mb-3">Conversion Funnel — {year}</div>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-center">
+            <div className="grid grid-cols-2 md:grid-cols-6 gap-3 text-center">
               <div className="bg-gray-50 rounded p-3">
                 <div className="text-xs text-gray-500">Created</div>
                 <div className="text-xl font-semibold">{funnel.created}</div>
               </div>
               <div className="bg-gray-50 rounded p-3">
-                <div className="text-xs text-gray-500">Quoted</div>
-                <div className="text-xl font-semibold">{funnel.quoted}</div>
+                <div className="text-xs text-gray-500">In Progress</div>
+                <div className="text-xl font-semibold">{funnel.inProgress}</div>
+              </div>
+              <div className="bg-gray-50 rounded p-3">
+                <div className="text-xs text-gray-500">New</div>
+                <div className="text-xl font-semibold">{funnel.newly}</div>
               </div>
               <div className="bg-gray-50 rounded p-3">
                 <div className="text-xs text-gray-500">Won</div>
@@ -496,7 +505,8 @@ export default function AnalyticsPage() {
                 <tr className="text-left border-b">
                   <th className="py-2 pr-4">Country Pair</th>
                   <th className="py-2 pr-4">Created</th>
-                  <th className="py-2 pr-4">Quoted</th>
+                  <th className="py-2 pr-4">In Progress</th>
+                  <th className="py-2 pr-4">New</th>
                   <th className="py-2 pr-4">Won</th>
                   <th className="py-2 pr-4">Conversion %</th>
                 </tr>
@@ -506,7 +516,8 @@ export default function AnalyticsPage() {
                   <tr key={r.label} className="border-b last:border-0">
                     <td className="py-2 pr-4">{r.label}</td>
                     <td className="py-2 pr-4">{r.created}</td>
-                    <td className="py-2 pr-4">{r.quoted}</td>
+                    <td className="py-2 pr-4">{r.inProgress}</td>
+                    <td className="py-2 pr-4">{r.newly}</td>
                     <td className="py-2 pr-4">{r.won}</td>
                     <td className="py-2 pr-4">{r.created ? Math.round((r.won / r.created)*100) : 0}%</td>
                   </tr>
@@ -592,6 +603,8 @@ export default function AnalyticsPage() {
                   <th className="py-2 pr-4"># Won</th>
                   <th className="py-2 pr-4"># Lost</th>
                   <th className="py-2 pr-4"># Cancelled</th>
+                  <th className="py-2 pr-4"># In Progress</th>
+                  <th className="py-2 pr-4"># New</th>
                   <th className="py-2 pr-4">EUR Won</th>
                   <th className="py-2 pr-4">EUR Lost</th>
                   <th className="py-2 pr-4">EUR Cancelled</th>
@@ -606,13 +619,15 @@ export default function AnalyticsPage() {
                     <td className="py-2 pr-4">{r.won}</td>
                     <td className="py-2 pr-4">{r.lost}</td>
                     <td className="py-2 pr-4">{r.cancelled}</td>
+                    <td className="py-2 pr-4">{r.inProgress}</td>
+                    <td className="py-2 pr-4">{r.newly}</td>
                     <td className="py-2 pr-4">{Math.round(r.wonEUR).toLocaleString()}</td>
                     <td className="py-2 pr-4">{Math.round(r.lostEUR).toLocaleString()}</td>
                     <td className="py-2 pr-4">{Math.round(r.cancelledEUR).toLocaleString()}</td>
                   </tr>
                 ))}
                 {pairRows.length===0 && (
-                  <tr><td colSpan={9} className="py-3 text-gray-500">No data for selected filters</td></tr>
+                  <tr><td colSpan={11} className="py-3 text-gray-500">No data for selected filters</td></tr>
                 )}
               </tbody>
             </table>
