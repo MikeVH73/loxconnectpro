@@ -236,16 +236,19 @@ export default function AnalyticsPage() {
   // Pair table: KPIs between creatorCountry and involvedCountry
   type PairKey = string; // `${creator}->${involved}`
   const pairRows = useMemo(() => {
-    const map = new Map<PairKey, { creator: string; involved: string; total: number; won: number; lost: number; cancelled: number; wonEUR: number; lostEUR: number; cancelledEUR: number }>();
+    const map = new Map<PairKey, { creator: string; involved: string; total: number; won: number; lost: number; cancelled: number; inProgress: number; newly: number; wonEUR: number; lostEUR: number; cancelledEUR: number }>();
     filtered.forEach(qr => {
       const key = `${qr.creatorCountry}->${qr.involvedCountry}`;
-      if (!map.has(key)) map.set(key, { creator: qr.creatorCountry, involved: qr.involvedCountry, total: 0, won: 0, lost: 0, cancelled: 0, wonEUR: 0, lostEUR: 0, cancelledEUR: 0 });
+      if (!map.has(key)) map.set(key, { creator: qr.creatorCountry, involved: qr.involvedCountry, total: 0, won: 0, lost: 0, cancelled: 0, inProgress: 0, newly: 0, wonEUR: 0, lostEUR: 0, cancelledEUR: 0 });
       const row = map.get(key)!;
-      const s = qr.status?.toLowerCase();
+      row.total += 1; // count all created items for this pair
+      const s = (qr.status || '').toLowerCase();
       const eur = qr.totalValueEUR || 0;
-      if (s==='won') { row.won += 1; row.wonEUR += eur; row.total += 1; }
-      else if (s==='lost') { row.lost += 1; row.lostEUR += eur; row.total += 1; }
-      else if (s==='cancelled') { row.cancelled += 1; row.cancelledEUR += eur; row.total += 1; }
+      if (s==='won') { row.won += 1; row.wonEUR += eur; }
+      else if (s==='lost') { row.lost += 1; row.lostEUR += eur; }
+      else if (s==='cancelled') { row.cancelled += 1; row.cancelledEUR += eur; }
+      else if (s==='in progress') { row.inProgress += 1; }
+      else if (s==='new') { row.newly += 1; }
     });
     return Array.from(map.values()).sort((a,b) => (b.wonEUR - a.wonEUR) || (b.won - a.won));
   }, [filtered]);
@@ -415,10 +418,10 @@ export default function AnalyticsPage() {
                   labels: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],
                   datasets: [
                     { label: 'Won', data: monthly.won, backgroundColor: 'rgba(34,197,94,0.6)' },
-                    { label: 'Lost', data: monthly.lost, backgroundColor: 'rgba(239,68,68,0.6)' },
-                    { label: 'Cancelled', data: monthly.cancelled, backgroundColor: 'rgba(234,179,8,0.6)' },
-                    { label: 'In Progress', data: monthly.inProgress, backgroundColor: 'rgba(59,130,246,0.6)' },
-                    { label: 'New', data: monthly.newly, backgroundColor: 'rgba(168,85,247,0.6)' },
+                    { label: 'Lost', data: monthly.lost, backgroundColor: 'rgba(0,0,0,0.8)' },
+                    { label: 'Cancelled', data: monthly.cancelled, backgroundColor: '#bbbdbe' },
+                    { label: 'In Progress', data: monthly.inProgress, backgroundColor: '#E40115' },
+                    { label: 'New', data: monthly.newly, backgroundColor: '#E40115' },
                   ]
                 }}
                 options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }}
@@ -434,8 +437,8 @@ export default function AnalyticsPage() {
                   datasets: [{
                     label: 'Count',
                     data: [totals.won, totals.lost, totals.cancelled, totals.inProgress, totals.newCount],
-                    backgroundColor: ['rgba(34,197,94,0.6)','rgba(239,68,68,0.6)','rgba(234,179,8,0.6)','rgba(59,130,246,0.6)','rgba(168,85,247,0.6)'],
-                    borderColor: ['#16a34a','#dc2626','#ca8a04','#3b82f6','#a855f7']
+                    backgroundColor: ['rgba(34,197,94,0.6)','rgba(0,0,0,0.8)','#bbbdbe','#E40115','#E40115'],
+                    borderColor: ['#16a34a','#000000','#9aa0a6','#E40115','#E40115']
                   }]
                 }}
                 options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }}
@@ -451,8 +454,8 @@ export default function AnalyticsPage() {
                   datasets: [{
                     label: 'EUR',
                     data: [totals.totalWonEUR, totals.totalLostEUR, totals.totalCancelledEUR, totals.totalInProgressEUR, totals.totalNewEUR],
-                    backgroundColor: ['rgba(34,197,94,0.6)','rgba(239,68,68,0.6)','rgba(234,179,8,0.6)','rgba(59,130,246,0.6)','rgba(168,85,247,0.6)'],
-                    borderColor: ['#16a34a','#dc2626','#ca8a04','#3b82f6','#a855f7']
+                    backgroundColor: ['rgba(34,197,94,0.6)','rgba(0,0,0,0.8)','#bbbdbe','#E40115','#E40115'],
+                    borderColor: ['#16a34a','#000000','#9aa0a6','#E40115','#E40115']
                   }]
                 }}
                 options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } },
