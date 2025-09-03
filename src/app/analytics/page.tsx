@@ -175,12 +175,18 @@ export default function AnalyticsPage() {
   }, [data, year, filterCreator, filterInvolved, filterCustomers]);
 
   const totals = useMemo(() => {
-    const agg = { won:0, lost:0, cancelled:0, totalWonEUR:0, totalLostEUR:0, totalCancelledEUR:0 } as any;
+    const agg = {
+      won:0, lost:0, cancelled:0, inProgress:0, newCount:0,
+      totalWonEUR:0, totalLostEUR:0, totalCancelledEUR:0, totalInProgressEUR:0, totalNewEUR:0
+    } as any;
     filtered.forEach(qr => {
-      const status = qr.status?.toLowerCase();
-      if (status==='won') { agg.won++; agg.totalWonEUR += qr.totalValueEUR || 0; }
-      if (status==='lost') { agg.lost++; agg.totalLostEUR += qr.totalValueEUR || 0; }
-      if (status==='cancelled') { agg.cancelled++; agg.totalCancelledEUR += qr.totalValueEUR || 0; }
+      const status = (qr.status || '').toLowerCase();
+      const eur = qr.totalValueEUR || 0;
+      if (status==='won') { agg.won++; agg.totalWonEUR += eur; }
+      else if (status==='lost') { agg.lost++; agg.totalLostEUR += eur; }
+      else if (status==='cancelled') { agg.cancelled++; agg.totalCancelledEUR += eur; }
+      else if (status==='in progress') { agg.inProgress++; agg.totalInProgressEUR += eur; }
+      else if (status==='new') { agg.newCount++; agg.totalNewEUR += eur; }
     });
     return agg;
   }, [filtered]);
@@ -213,14 +219,18 @@ export default function AnalyticsPage() {
     const won = base();
     const lost = base();
     const cancelled = base();
+    const inProgress = base();
+    const newly = base();
     filtered.forEach(qr => {
       const m = monthFromQuote(qr);
-      const s = qr.status?.toLowerCase();
+      const s = (qr.status || '').toLowerCase();
       if (s === 'won') won[m] += 1;
       else if (s === 'lost') lost[m] += 1;
       else if (s === 'cancelled') cancelled[m] += 1;
+      else if (s === 'in progress') inProgress[m] += 1;
+      else if (s === 'new') newly[m] += 1;
     });
-    return { won, lost, cancelled };
+    return { won, lost, cancelled, inProgress, newly };
   }, [filtered]);
 
   // Pair table: KPIs between creatorCountry and involvedCountry
@@ -373,7 +383,7 @@ export default function AnalyticsPage() {
         <div className="text-gray-500">Loading…</div>
       ) : (
         <div className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
             <div className="p-4 bg-white rounded shadow">
               <div className="text-sm text-gray-500">Won</div>
               <div className="text-2xl font-semibold">{totals.won}</div>
@@ -402,6 +412,8 @@ export default function AnalyticsPage() {
                     { label: 'Won', data: monthly.won, backgroundColor: 'rgba(34,197,94,0.6)' },
                     { label: 'Lost', data: monthly.lost, backgroundColor: 'rgba(239,68,68,0.6)' },
                     { label: 'Cancelled', data: monthly.cancelled, backgroundColor: 'rgba(234,179,8,0.6)' },
+                    { label: 'In Progress', data: monthly.inProgress, backgroundColor: 'rgba(59,130,246,0.6)' },
+                    { label: 'New', data: monthly.newly, backgroundColor: 'rgba(168,85,247,0.6)' },
                   ]
                 }}
                 options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }}
@@ -413,12 +425,12 @@ export default function AnalyticsPage() {
               <div className="h-72">
               <Pie
                 data={{
-                  labels: ['Won','Lost','Cancelled'],
+                  labels: ['Won','Lost','Cancelled','In Progress','New'],
                   datasets: [{
                     label: 'Count',
-                    data: [totals.won, totals.lost, totals.cancelled],
-                    backgroundColor: ['rgba(34,197,94,0.6)','rgba(239,68,68,0.6)','rgba(234,179,8,0.6)'],
-                    borderColor: ['#16a34a','#dc2626','#ca8a04']
+                    data: [totals.won, totals.lost, totals.cancelled, totals.inProgress, totals.newCount],
+                    backgroundColor: ['rgba(34,197,94,0.6)','rgba(239,68,68,0.6)','rgba(234,179,8,0.6)','rgba(59,130,246,0.6)','rgba(168,85,247,0.6)'],
+                    borderColor: ['#16a34a','#dc2626','#ca8a04','#3b82f6','#a855f7']
                   }]
                 }}
                 options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }}
@@ -430,12 +442,12 @@ export default function AnalyticsPage() {
               <div className="h-72">
               <Pie
                 data={{
-                  labels: ['Won EUR','Lost EUR','Cancelled EUR'],
+                  labels: ['Won EUR','Lost EUR','Cancelled EUR','In Progress EUR','New EUR'],
                   datasets: [{
                     label: 'EUR',
-                    data: [totals.totalWonEUR, totals.totalLostEUR, totals.totalCancelledEUR],
-                    backgroundColor: ['rgba(34,197,94,0.6)','rgba(239,68,68,0.6)','rgba(234,179,8,0.6)'],
-                    borderColor: ['#16a34a','#dc2626','#ca8a04']
+                    data: [totals.totalWonEUR, totals.totalLostEUR, totals.totalCancelledEUR, totals.totalInProgressEUR, totals.totalNewEUR],
+                    backgroundColor: ['rgba(34,197,94,0.6)','rgba(239,68,68,0.6)','rgba(234,179,8,0.6)','rgba(59,130,246,0.6)','rgba(168,85,247,0.6)'],
+                    borderColor: ['#16a34a','#dc2626','#ca8a04','#3b82f6','#a855f7']
                   }]
                 }}
                 options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } },
