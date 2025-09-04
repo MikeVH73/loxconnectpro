@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { FiEdit, FiKey, FiMail, FiUserCheck, FiShieldOff, FiTrash2, FiZap } from "react-icons/fi";
 import { getAuth } from "firebase/auth";
 import { useAuth } from "../AuthProvider";
-import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, setDoc, Firestore } from "firebase/firestore";
+import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, setDoc, Firestore, getDoc } from "firebase/firestore";
 import { createUserWithEmailAndPassword, updateProfile, signInWithEmailAndPassword, signOut } from "firebase/auth";
 import { db, auth } from "../../firebaseClient";
 import { checkAndFixUserProfiles } from "../utils/userProfileFixer";
@@ -51,6 +51,14 @@ export default function UsersPage() {
       if (!byName.has(key)) byName.set(key, { ...c, name });
     }
     return Array.from(byName.values()).sort((a, b) => a.name.localeCompare(b.name));
+  };
+
+  // Helper: role-aware filtering to ensure admins only see users from their countries
+  const filterUsersForCurrentRole = (all: any[]): any[] => {
+    if (userProfile?.role === 'superAdmin') return all;
+    const myCountries = userProfile?.countries || [];
+    if (!myCountries || myCountries.length === 0) return all;
+    return all.filter((u: any) => Array.isArray(u?.countries) && u.countries.some((c: string) => myCountries.includes(c)));
   };
 
   useEffect(() => {
@@ -104,22 +112,8 @@ export default function UsersPage() {
            } catch {}
         }
         
-        // If user is superAdmin, show all users
-        if (userProfile?.role === "superAdmin") {
-          setUsers(allUsers);
-          return;
-        }
-        
-        // Otherwise, filter users by current user's countries
-        const userCountries = userProfile?.countries || [];
-        const visibleUsers = userCountries.length > 0
-          ? allUsers.filter((userData: any) => {
-              // Show users that have any country in common with current user
-              return userData.countries?.some((country: string) => userCountries.includes(country));
-            })
-          : allUsers;
-        
-        setUsers(visibleUsers);
+        // Role-aware filtering (admins see only their countries)
+        setUsers(filterUsersForCurrentRole(allUsers));
       } catch (error) {
         console.error("Error fetching users:", error);
       } finally {
@@ -313,16 +307,10 @@ export default function UsersPage() {
       setShowPasswordPrompt(false);
       setSuccess(`User ${newUser.displayName} created successfully!`);
       
-      // Refresh users list
+      // Refresh users list and reapply role filter
       const usersSnap = await getDocs(collection(db as Firestore, "users"));
       const allUsers = usersSnap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
-      const userCountries = userProfile?.countries || [];
-      const visibleUsers = userCountries.length > 0
-        ? allUsers.filter((userData: any) => {
-            return userData.countries?.some((country: string) => userCountries.includes(country));
-          })
-        : allUsers;
-      setUsers(visibleUsers);
+      setUsers(filterUsersForCurrentRole(allUsers));
       
     } catch (error: any) {
       console.error("Error creating user:", error);
@@ -377,16 +365,10 @@ export default function UsersPage() {
     try {
       await deleteDoc(doc(db as Firestore, "users", userId));
       
-      // Refresh users list
+      // Refresh users list and reapply role filter
       const usersSnap = await getDocs(collection(db as Firestore, "users"));
       const allUsers = usersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      const userCountries = userProfile?.countries || [];
-      const visibleUsers = userCountries.length > 0
-        ? allUsers.filter((userData: any) => {
-            return userData.countries?.some((country: string) => userCountries.includes(country));
-          })
-        : allUsers;
-      setUsers(visibleUsers);
+      setUsers(filterUsersForCurrentRole(allUsers));
     } catch (error) {
       console.error("Error deleting user:", error);
     }
@@ -433,20 +415,8 @@ export default function UsersPage() {
         } catch {}
       }
 
-      // If user is superAdmin, show all users
-      if (userProfile?.role === "superAdmin") {
-        setUsers(allUsers);
-      } else {
-        // Otherwise, filter users by current user's countries
-        const userCountries = userProfile?.countries || [];
-        const visibleUsers = userCountries.length > 0
-          ? allUsers.filter((userData: any) => {
-              // Show users that have any country in common with current user
-              return userData.countries?.some((country: string) => userCountries.includes(country));
-            })
-          : allUsers;
-        setUsers(visibleUsers);
-      }
+      // Reapply role-aware filtering after fixes
+      setUsers(filterUsersForCurrentRole(allUsers));
       
     } catch (error) {
       console.error("Error fixing user profiles:", error);
@@ -789,6 +759,29 @@ export default function UsersPage() {
   const canManageCountries = userProfile?.role === "admin" || userProfile?.role === "superAdmin";
   const monthKey = new Date().toISOString().slice(0,7);
   const needsMonthlyReview = (!reviewCompleted || lastReviewMonth !== monthKey) && (userProfile?.role === 'admin');
+
+  // Persisted Monthly Access Review status: check Firestore audit on load
+  useEffect(() => {
+    const checkMonthlyReview = async () => {
+      try {
+        if (!db || !userProfile) return;
+        const myCountry = userProfile?.businessUnit || (userProfile?.countries?.[0] || '');
+        if (!myCountry) return;
+        const ref = doc(db as Firestore, 'accessReviews', monthKey, 'countries', myCountry);
+        const snap = await getDoc(ref);
+        if (snap.exists()) {
+          setReviewCompleted(true);
+          setLastReviewMonth(monthKey);
+        } else {
+          setReviewCompleted(false);
+        }
+      } catch (e) {
+        // Non-blocking: if audit read fails, default banner logic remains
+        console.warn('Monthly review status check failed', e);
+      }
+    };
+    checkMonthlyReview();
+  }, [db, userProfile, monthKey]);
   
   if (!canViewUsers) {
     return (
@@ -1611,7 +1604,7 @@ export default function UsersPage() {
                     const activeUserIds = Object.entries(reviewSelection).filter(([,v]) => v).map(([id]) => id);
                     const countryList = (userProfile?.countries || []);
                     const myCountry = countryList[0] || 'Global';
-                    await fetch('/api/admin/roster/submit', {
+                    const resSave = await fetch('/api/admin/roster/submit', {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({
@@ -1621,6 +1614,11 @@ export default function UsersPage() {
                         allUsers: users.map(u => ({ id: u.id, email: u.email, displayName: u.displayName })),
                       }),
                     });
+                    // Persist banner state locally on success to avoid re-show until month changes
+                    if (resSave.ok) {
+                      setReviewCompleted(true);
+                      setLastReviewMonth(monthKey);
+                    }
                     setShowMonthlyReview(false);
                     alert('Review saved. Inactive users have been disabled where possible. Reloading list…');
                     // refresh list to reflect disabled flags
@@ -1641,7 +1639,8 @@ export default function UsersPage() {
                         }
                       } catch {}
                     }
-                    setUsers(refreshed);
+                    // Apply role-aware filter so Admins remain scoped to their countries
+                    setUsers(filterUsersForCurrentRole(refreshed));
                     setReviewCompleted(true);
                     setLastReviewMonth(monthKey);
                   } catch (e: any) {
