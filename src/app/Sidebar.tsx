@@ -20,6 +20,7 @@ const navItems = [
   { label: "Broadcast", href: "/notifications/broadcast" },
   { label: "Modifications", href: "/modifications" },
   { label: "Analytics", href: "/analytics" },
+  { label: "IT Overview", href: "/admin/it-overview" },
   { label: "FAQs", href: "/faqs" },
   { label: "Profile", href: "/users/profile" },
   { label: "Security", href: "/users/security" },
@@ -40,6 +41,9 @@ export default function Sidebar() {
   const filteredNavItems = navItems.filter(item => {
     if (restrictedLabels.includes(item.label)) {
       return userProfile?.role !== "Employee";
+    }
+    if (item.label === 'IT Overview') {
+      return userProfile?.role === 'superAdmin';
     }
     return true;
   });
