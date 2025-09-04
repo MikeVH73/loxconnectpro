@@ -53,6 +53,14 @@ export default function UsersPage() {
     return Array.from(byName.values()).sort((a, b) => a.name.localeCompare(b.name));
   };
 
+  // Helper: role-aware filtering to ensure admins only see users from their countries
+  const filterUsersForCurrentRole = (all: any[]): any[] => {
+    if (userProfile?.role === 'superAdmin') return all;
+    const myCountries = userProfile?.countries || [];
+    if (!myCountries || myCountries.length === 0) return all;
+    return all.filter((u: any) => Array.isArray(u?.countries) && u.countries.some((c: string) => myCountries.includes(c)));
+  };
+
   useEffect(() => {
     const fetchUsers = async () => {
       try {
@@ -104,22 +112,8 @@ export default function UsersPage() {
            } catch {}
         }
         
-        // If user is superAdmin, show all users
-        if (userProfile?.role === "superAdmin") {
-          setUsers(allUsers);
-          return;
-        }
-        
-        // Otherwise, filter users by current user's countries
-        const userCountries = userProfile?.countries || [];
-        const visibleUsers = userCountries.length > 0
-          ? allUsers.filter((userData: any) => {
-              // Show users that have any country in common with current user
-              return userData.countries?.some((country: string) => userCountries.includes(country));
-            })
-          : allUsers;
-        
-        setUsers(visibleUsers);
+        // Role-aware filtering (admins see only their countries)
+        setUsers(filterUsersForCurrentRole(allUsers));
       } catch (error) {
         console.error("Error fetching users:", error);
       } finally {
@@ -313,16 +307,10 @@ export default function UsersPage() {
       setShowPasswordPrompt(false);
       setSuccess(`User ${newUser.displayName} created successfully!`);
       
-      // Refresh users list
+      // Refresh users list and reapply role filter
       const usersSnap = await getDocs(collection(db as Firestore, "users"));
       const allUsers = usersSnap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
-      const userCountries = userProfile?.countries || [];
-      const visibleUsers = userCountries.length > 0
-        ? allUsers.filter((userData: any) => {
-            return userData.countries?.some((country: string) => userCountries.includes(country));
-          })
-        : allUsers;
-      setUsers(visibleUsers);
+      setUsers(filterUsersForCurrentRole(allUsers));
       
     } catch (error: any) {
       console.error("Error creating user:", error);
@@ -377,16 +365,10 @@ export default function UsersPage() {
     try {
       await deleteDoc(doc(db as Firestore, "users", userId));
       
-      // Refresh users list
+      // Refresh users list and reapply role filter
       const usersSnap = await getDocs(collection(db as Firestore, "users"));
       const allUsers = usersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      const userCountries = userProfile?.countries || [];
-      const visibleUsers = userCountries.length > 0
-        ? allUsers.filter((userData: any) => {
-            return userData.countries?.some((country: string) => userCountries.includes(country));
-          })
-        : allUsers;
-      setUsers(visibleUsers);
+      setUsers(filterUsersForCurrentRole(allUsers));
     } catch (error) {
       console.error("Error deleting user:", error);
     }
@@ -433,20 +415,8 @@ export default function UsersPage() {
         } catch {}
       }
 
-      // If user is superAdmin, show all users
-      if (userProfile?.role === "superAdmin") {
-        setUsers(allUsers);
-      } else {
-        // Otherwise, filter users by current user's countries
-        const userCountries = userProfile?.countries || [];
-        const visibleUsers = userCountries.length > 0
-          ? allUsers.filter((userData: any) => {
-              // Show users that have any country in common with current user
-              return userData.countries?.some((country: string) => userCountries.includes(country));
-            })
-          : allUsers;
-        setUsers(visibleUsers);
-      }
+      // Reapply role-aware filtering after fixes
+      setUsers(filterUsersForCurrentRole(allUsers));
       
     } catch (error) {
       console.error("Error fixing user profiles:", error);
