@@ -1,292 +1,225 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, Firestore, orderBy } from "firebase/firestore";
+import { db } from "../../firebaseClient";
+import { useAuth } from "../AuthProvider";
 
-type FaqItem = { q: string; a: JSX.Element };
-type FaqSection = { title: string; items: FaqItem[] };
+type Role = "Employee" | "admin" | "superAdmin";
+type FaqDoc = {
+  id: string;
+  subject: string;
+  question: string;
+  answer: string;
+  roles?: Role[]; // who can see
+  createdAt?: any;
+  updatedAt?: any;
+};
 
-const sections: FaqSection[] = [
-  {
-    title: "Getting started: sign‑in, email verification, MFA",
-    items: [
-      {
-        q: "How do I verify my email?",
-        a: (
-          <>
-            Go to <b>Users ▸ Security</b> and click <b>Send verification email</b>. Open the link in the
-            email. If you see "domain not allowlisted", the app uses a safe continueUrl – try again from
-            Security. After verifying, the Security page will show your verified status.
-          </>
-        ),
-      },
-      {
-        q: "How do I enable MFA (Authenticator app)?",
-        a: (
-          <>
-            Go to <b>Users ▸ Security</b> and follow <b>Step 2 – Enroll Authenticator App</b>. Scan the QR
-            code in your authenticator and enter the 6‑digit code. SuperAdmins can send an enrollment link
-            from <b>Users</b> via <b>Send MFA Reminder</b>.
-          </>
-        ),
-      },
-      {
-        q: "I can’t continue after verifying – what should I do?",
-        a: (
-          <>
-            Sign out and sign back in. Then revisit <b>Users ▸ Security</b>. The app merges your current
-            Auth status after profile fixes.
-          </>
-        ),
-      },
-    ],
-  },
-  {
-    title: "Quote Requests: create, edit, products & labels",
-    items: [
-      {
-        q: "How do I create a new Quote Request?",
-        a: (
-          <>
-            Go to <b>Quote Requests ▸ New</b>. Fill <b>Title</b>, select <b>Involved Country</b>, choose a
-            <b> Customer</b>, and enter <b>Start/End date</b> using the segmented inputs or calendar. Add at
-            least one product with a valid <b>Cat‑Class</b> (use <b>Lookup</b> to pull the description).
-            Optionally toggle <b>Mark as Urgent</b>. After creation, you’re redirected to the dashboard.
-          </>
-        ),
-      },
-      {
-        q: "How do I keep product descriptions consistent?",
-        a: (
-          <>
-            Use the <b>Lookup</b> button in the edit page to sync from the catalog. For unknown codes,
-            you’ll be prompted to add the product (Cat‑Class + description) to the catalog before saving.
-          </>
-        ),
-      },
-      {
-        q: "Why do I see empty product rows?",
-        a: (
-          <>
-            The edit page normalizes products and filters empty rows on save. If you add a row by mistake,
-            simply remove it before leaving. Unsaved changes trigger a navigation prompt to avoid loss.
-          </>
-        ),
-      },
-      {
-        q: "How do labels work (Urgent, Problems, Waiting, Planned)?",
-        a: (
-          <>
-            In the edit page, toggle labels in the left sidebar. Label changes save immediately, move the
-            card between dashboard columns, and notify the other country when applicable.
-          </>
-        ),
-      },
-      {
-        q: "Why are notifications created when I edit fields?",
-        a: (
-          <>
-            Field changes generate a <b>property_change</b> notification and an entry in <b>Recent
-            Activity</b>. Duplicates are de‑duplicated in a short window. Clicking notifications opens the
-            edit page.
-          </>
-        ),
-      },
-    ],
-  },
-  {
-    title: "Messaging & notifications",
-    items: [
-      {
-        q: "Who gets my message?",
-        a: (
-          <>
-            If you’re the <b>creator country</b>, messages target the <b>involved country</b>. If you’re
-            the involved country, messages target the creator. The dashboard header shows live
-            notifications; the Notifications page aggregates all.
-          </>
-        ),
-      },
-      {
-        q: "Why doesn’t the messaging list autoscroll sometimes?",
-        a: (
-          <>
-            The messaging panel scrolls to newest using an internal sentinel. If you switch between cards
-            with few vs. many messages, it recalculates on mount. This was hardened to be consistent.
-          </>
-        ),
-      },
-    ],
-  },
-  {
-    title: "Customers & ownership",
-    items: [
-      {
-        q: "Who can see or edit a customer?",
-        a: (
-          <>
-            Customers are grouped by <b>ownerCountry</b>. The owner country can edit or delete; other
-            countries see them as read‑only but can add <b>their own customer number</b>. SuperAdmins can
-            set the owner for legacy entries.
-          </>
-        ),
-      },
-      {
-        q: "Why do Customer dropdowns only show my country’s customers?",
-        a: (
-          <>
-            For new QRs the customer selector is filtered to your business unit/creator country to keep
-            selection relevant and prevent cross‑country edits.
-          </>
-        ),
-      },
-    ],
-  },
-  {
-    title: "Users & access",
-    items: [
-      {
-        q: "What is the Monthly Access Review?",
-        a: (
-          <>
-            Admins review active staff per country each month. Disabled users show a green <b>Reactivate</b>
-            button for SuperAdmins. The review is stored in Firestore and mirrored to Firebase Auth.
-          </>
-        ),
-      },
-      {
-        q: "How do I set a temporary password for someone?",
-        a: (
-          <>
-            In <b>Users</b>, choose <b>Set Temp Password</b>. Share the generated password securely; the
-            user must change it on next login.
-          </>
-        ),
-      },
-    ],
-  },
-  {
-    title: "Files & attachments",
-    items: [
-      {
-        q: "How do I add files to a QR?",
-        a: (
-          <>
-            Use the <b>Attachments</b> section in the edit page. Files upload to Firebase Storage and are
-            saved in the QR document with metadata (uploadedBy, uploadedAt). Progress is shown per file.
-          </>
-        ),
-      },
-    ],
-  },
-  {
-    title: "Analytics & reporting",
-    items: [
-      {
-        q: "What do the Analytics numbers mean?",
-        a: (
-          <>
-            <b>Created</b> counts all QRs for the selected year and filters. <b>In Progress</b> and <b>New</b>
-            show active pipeline. <b>Won/Lost/Cancelled</b> are outcomes; EUR tiles sum totalValueEUR.
-            Country‑pair tables compute totals per creator→involved pair.
-          </>
-        ),
-      },
-    ],
-  },
-  {
-    title: "Archiving & cost controls",
-    items: [
-      {
-        q: "What gets archived and when?",
-        a: (
-          <>
-            Messages older than the retention window are moved to GCS as JSONL. Older notifications are
-            removed. An admin endpoint supports on‑demand archiving; BigQuery can be used for analytics.
-          </>
-        ),
-      },
-    ],
-  },
-  {
-    title: "Troubleshooting",
-    items: [
-      {
-        q: "Unauthorized continue URL when sending verification email",
-        a: (
-          <>
-            Security uses the configured <code>NEXT_PUBLIC_APP_BASE_URL</code> for a safe continueUrl. Use
-            the Security page action rather than raw Firebase links.
-          </>
-        ),
-      },
-      {
-        q: "Why don’t I receive notifications?",
-        a: (
-          <>
-            Ensure your user profile has the correct <b>businessUnit</b>. Notification targeting depends on
-            creator vs. involved country; the app also uses a normalized <b>targetCountryKey</b> field for
-            reliable querying.
-          </>
-        ),
-      },
-    ],
-  },
+// Simple, non‑technical seed used only if the collection is empty (optional for preview)
+const seedExamples: Omit<FaqDoc, "id">[] = [
+  { subject: "Getting started", question: "How do I verify my email?", answer: "Open Users ▸ Security and click Send verification email. Open the link and return to the Security page to see the green check.", roles: ["Employee", "admin", "superAdmin"] },
+  { subject: "Quote Requests", question: "How do I create a new quote request?", answer: "Go to Quote Requests ▸ New. Fill the title, choose the countries, pick a customer, add the dates and at least one product. Save to finish.", roles: ["Employee", "admin", "superAdmin"] },
+  { subject: "Permissions", question: "Who can edit customers?", answer: "The owner country can edit. Other countries can view and add their own customer number. A superAdmin can change the owner if needed.", roles: ["Employee", "admin", "superAdmin"] },
 ];
 
 export default function FaqPage() {
-  const [open, setOpen] = useState<Record<string, boolean>>({});
-  const [query, setQuery] = useState("");
+  const { userProfile } = useAuth();
+  const role: Role = (userProfile?.role as any) || "Employee";
+  const canManage = role === "superAdmin";
 
-  const filtered = useMemo(() => {
-    if (!query.trim()) return sections;
-    const q = query.toLowerCase();
-    return sections
-      .map((s) => ({
-        ...s,
-        items: s.items.filter((it) => (it.q + " " + (typeof it.a === "string" ? it.a : "")).toLowerCase().includes(q)),
-      }))
-      .filter((s) => s.items.length > 0);
-  }, [query]);
+  const [faqs, setFaqs] = useState<FaqDoc[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState<Record<string, boolean>>({}); // all closed by default
+
+  const [editing, setEditing] = useState<Partial<FaqDoc> | null>(null);
+  const [showForm, setShowForm] = useState(false);
+
+  useEffect(() => {
+    const load = async () => {
+      if (!db) return;
+      setLoading(true);
+      const snap = await getDocs(collection(db as Firestore, "faqs"));
+      const list = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) })) as FaqDoc[];
+      if (list.length === 0 && canManage) {
+        // Optional: provide seed button instead of auto‑seeding; keep minimal to avoid surprise writes
+      }
+      setFaqs(list);
+      setLoading(false);
+    };
+    load();
+  }, [db, canManage]);
+
+  const visibleFaqs = useMemo(() => {
+    const allowed = (roles?: Role[]) => !roles || roles.length === 0 || roles.includes(role);
+    const list = faqs.filter((f) => allowed(f.roles));
+    const q = query.trim().toLowerCase();
+    const bySubject = new Map<string, FaqDoc[]>();
+    (q ? list.filter((f) => (f.subject + " " + f.question + " " + f.answer).toLowerCase().includes(q)) : list).forEach((f) => {
+      const key = f.subject || "General";
+      if (!bySubject.has(key)) bySubject.set(key, []);
+      bySubject.get(key)!.push(f);
+    });
+    // also show seeds if no docs
+    if (list.length === 0) {
+      seedExamples.forEach((s, i) => {
+        if (!allowed(s.roles)) return;
+        const key = s.subject;
+        if (!bySubject.has(key)) bySubject.set(key, []);
+        bySubject.get(key)!.push({ id: `seed-${i}`, ...s });
+      });
+    }
+    return Array.from(bySubject.entries()).map(([subject, items]) => ({ subject, items }));
+  }, [faqs, role, query]);
+
+  const upsertFaq = async () => {
+    if (!db || !editing?.question || !editing?.answer || !editing?.subject) return;
+    const payload = {
+      subject: editing.subject.trim(),
+      question: editing.question.trim(),
+      answer: editing.answer.trim(),
+      roles: (editing.roles || []) as Role[],
+      updatedAt: new Date(),
+    };
+    if (editing.id && !String(editing.id).startsWith("seed-")) {
+      await updateDoc(doc(db as Firestore, "faqs", editing.id), payload as any);
+      setFaqs((prev) => prev.map((f) => (f.id === editing.id ? ({ ...f, ...(payload as any) }) : f)));
+    } else {
+      const ref = await addDoc(collection(db as Firestore, "faqs"), { ...payload, createdAt: new Date() } as any);
+      setFaqs((prev) => [...prev, { id: ref.id, ...(payload as any) }]);
+    }
+    setShowForm(false);
+    setEditing(null);
+  };
+
+  const removeFaq = async (id: string) => {
+    if (!db) return;
+    if (String(id).startsWith("seed-")) {
+      setFaqs((prev) => prev.filter((f) => f.id !== id));
+      return;
+    }
+    await deleteDoc(doc(db as Firestore, "faqs", id));
+    setFaqs((prev) => prev.filter((f) => f.id !== id));
+  };
+
+  const rolesOptions: Role[] = ["Employee", "admin", "superAdmin"];
 
   return (
     <div className="p-6">
       <h1 className="text-2xl font-bold text-[#e40115] mb-4">FAQs</h1>
 
-      <div className="mb-4 max-w-2xl">
+      <div className="mb-4 max-w-2xl flex items-center gap-3">
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search questions..."
-          className="w-full rounded border border-gray-300 px-3 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-[#e40115]"
+          className="flex-1 rounded border border-gray-300 px-3 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-[#e40115]"
         />
+        {canManage && (
+          <button
+            onClick={() => { setEditing({ subject: "General", roles: ["Employee", "admin", "superAdmin"] }); setShowForm(true); }}
+            className="px-3 py-2 bg-[#e40115] text-white rounded hover:bg-red-700"
+          >
+            + Add Q&A
+          </button>
+        )}
       </div>
 
-      <div className="space-y-4">
-        {filtered.map((section) => {
-          const key = section.title;
-          const isOpen = open[key] ?? true;
-          return (
-            <div key={key} className="bg-white rounded shadow">
-              <button
-                onClick={() => setOpen((p) => ({ ...p, [key]: !isOpen }))}
-                className="w-full text-left px-4 py-3 border-b border-gray-200 flex items-center justify-between"
-              >
-                <span className="font-semibold text-gray-800">{section.title}</span>
-                <span className="text-gray-500 text-xl leading-none">{isOpen ? "–" : "+"}</span>
-              </button>
-              {isOpen && (
-                <div className="divide-y divide-gray-100">
-                  {section.items.map((item, idx) => (
-                    <div key={idx} className="p-4">
-                      <div className="font-medium text-gray-900 mb-1">{item.q}</div>
-                      <div className="text-gray-700 text-sm leading-relaxed">{item.a}</div>
-                    </div>
+      {loading ? (
+        <div className="text-gray-500">Loading…</div>
+      ) : (
+        <div className="space-y-4">
+          {visibleFaqs.map(({ subject, items }) => {
+            const isOpen = open[subject] ?? false; // closed by default
+            return (
+              <div key={subject} className="bg-white rounded shadow">
+                <button
+                  onClick={() => setOpen((p) => ({ ...p, [subject]: !isOpen }))}
+                  className="w-full text-left px-4 py-3 border-b border-gray-200 flex items-center justify-between"
+                >
+                  <span className="font-semibold text-gray-800">{subject}</span>
+                  <span className="text-gray-500 text-xl leading-none">{isOpen ? "–" : "+"}</span>
+                </button>
+                {isOpen && (
+                  <div className="divide-y divide-gray-100">
+                    {items.map((it) => (
+                      <div key={it.id} className="p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <div className="font-medium text-gray-900 mb-1">{it.question}</div>
+                            <div className="text-gray-700 text-sm leading-relaxed whitespace-pre-line">{it.answer}</div>
+                            {canManage && (
+                              <div className="text-xs text-gray-500 mt-1">Visible to: {(it.roles && it.roles.length>0 ? it.roles.join(", ") : "Everyone")}</div>
+                            )}
+                          </div>
+                          {canManage && (
+                            <div className="shrink-0 flex gap-2">
+                              <button
+                                onClick={() => { setEditing(it); setShowForm(true); }}
+                                className="px-2 py-1 text-sm bg-gray-100 rounded hover:bg-gray-200"
+                              >Edit</button>
+                              <button
+                                onClick={() => removeFaq(it.id)}
+                                className="px-2 py-1 text-sm bg-red-100 text-red-700 rounded hover:bg-red-200"
+                              >Remove</button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {showForm && canManage && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded p-4 w-full max-w-lg space-y-3">
+            <h3 className="text-lg font-semibold">{editing?.id ? "Edit Q&A" : "Add Q&A"}</h3>
+            <div className="grid grid-cols-1 gap-3">
+              <label className="text-sm">Subject
+                <input
+                  value={editing?.subject || ""}
+                  onChange={(e) => setEditing((p) => ({ ...(p || {}), subject: e.target.value }))}
+                  className="mt-1 w-full border rounded px-3 py-2"
+                />
+              </label>
+              <label className="text-sm">Question
+                <input
+                  value={editing?.question || ""}
+                  onChange={(e) => setEditing((p) => ({ ...(p || {}), question: e.target.value }))}
+                  className="mt-1 w-full border rounded px-3 py-2"
+                />
+              </label>
+              <label className="text-sm">Answer
+                <textarea
+                  value={editing?.answer || ""}
+                  onChange={(e) => setEditing((p) => ({ ...(p || {}), answer: e.target.value }))}
+                  rows={6}
+                  className="mt-1 w-full border rounded px-3 py-2"
+                />
+              </label>
+              <label className="text-sm">Visible to (roles)
+                <select multiple value={(editing?.roles as Role[] | undefined) || []} onChange={(e) => {
+                  const vals = Array.from(e.target.selectedOptions).map((o) => o.value as Role);
+                  setEditing((p) => ({ ...(p || {}), roles: vals }));
+                }} className="mt-1 w-full border rounded px-3 py-2 h-28">
+                  {rolesOptions.map((r) => (
+                    <option key={r} value={r}>{r}</option>
                   ))}
-                </div>
-              )}
+                </select>
+              </label>
             </div>
-          );
-        })}
-      </div>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => { setShowForm(false); setEditing(null); }} className="px-3 py-2 border rounded">Cancel</button>
+              <button onClick={upsertFaq} className="px-3 py-2 bg-[#e40115] text-white rounded hover:bg-red-700">Save</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
