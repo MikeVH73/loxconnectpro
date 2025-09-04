@@ -159,6 +159,18 @@ export default function CustomersPage() {
     }
   };
 
+  // SuperAdmin: change owner country quickly
+  const handleSetOwnerCountry = async (customer: Customer, newOwner: string) => {
+    if (!db || !newOwner || !customer?.id) return;
+    try {
+      await updateDoc(doc(db as Firestore, 'customers', customer.id), { ownerCountry: newOwner, updatedAt: new Date() });
+      setCustomers(prev => prev.map(c => c.id === customer.id ? { ...c, ownerCountry: newOwner } : c));
+    } catch (e) {
+      console.error('Failed to set owner country', e);
+      alert('Failed to set owner country');
+    }
+  };
+
   if (loading || countriesLoading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -258,14 +270,13 @@ export default function CustomersPage() {
                           Read-only
                         </span>
                       )}
-                      {/* SuperAdmin quick action to set owner country if missing */}
-                      {userProfile?.role === 'superAdmin' && !customer.ownerCountry && (
+                      {/* SuperAdmin quick action to set owner country */}
+                      {userProfile?.role === 'superAdmin' && (
                         <button
                           onClick={() => {
-                            const newOwner = prompt('Set owner country for this customer:', userProfile.businessUnit || '');
+                            const newOwner = prompt('Set owner country for this customer:', (customer.ownerCountry || userProfile.businessUnit) || '');
                             if (!newOwner) return;
-                            setEditingCustomer({ ...customer, ownerCountry: newOwner });
-                            setShowEditModal(customer.id);
+                            handleSetOwnerCountry(customer, newOwner);
                           }}
                           className="px-3 py-1 text-sm bg-yellow-100 text-yellow-800 rounded hover:bg-yellow-200"
                         >
