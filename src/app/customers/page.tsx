@@ -32,6 +32,8 @@ export default function CustomersPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
   const [showEditModal, setShowEditModal] = useState<string | null>(null);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
+  const [ownerModalCustomer, setOwnerModalCustomer] = useState<Customer | null>(null);
+  const [ownerSelection, setOwnerSelection] = useState<string>("");
   const { userProfile, loading: authLoading, user } = useAuth();
   const { countryNames: countries, loading: countriesLoading } = useCountries();
 
@@ -274,9 +276,8 @@ export default function CustomersPage() {
                       {userProfile?.role === 'superAdmin' && (
                         <button
                           onClick={() => {
-                            const newOwner = prompt('Set owner country for this customer:', (customer.ownerCountry || userProfile.businessUnit) || '');
-                            if (!newOwner) return;
-                            handleSetOwnerCountry(customer, newOwner);
+                            setOwnerModalCustomer(customer);
+                            setOwnerSelection(customer.ownerCountry || userProfile?.businessUnit || uniqueCountryHeaders[0] || '');
                           }}
                           className="px-3 py-1 text-sm bg-yellow-100 text-yellow-800 rounded hover:bg-yellow-200"
                         >
@@ -452,6 +453,37 @@ export default function CustomersPage() {
               </button>
               <button
                 onClick={handleEdit}
+                className="px-4 py-2 bg-[#e40115] text-white rounded hover:bg-red-700"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Owner Country Modal (superAdmin) */}
+      {ownerModalCustomer && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg p-6 max-w-sm w-full">
+            <h3 className="text-lg font-semibold mb-4">Set owner country</h3>
+            <label className="block text-sm font-medium mb-1">Owner country</label>
+            <select
+              value={ownerSelection}
+              onChange={(e) => setOwnerSelection(e.target.value)}
+              className="w-full border rounded px-3 py-2"
+            >
+              {Array.from(new Set(countries.map(c => String(c).trim()))).sort((a, b) => a.localeCompare(b)).map(c => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+            <div className="mt-6 flex justify-end gap-3">
+              <button onClick={() => setOwnerModalCustomer(null)} className="px-4 py-2 text-gray-600 hover:text-gray-800">Cancel</button>
+              <button
+                onClick={async () => {
+                  await handleSetOwnerCountry(ownerModalCustomer, ownerSelection);
+                  setOwnerModalCustomer(null);
+                }}
                 className="px-4 py-2 bg-[#e40115] text-white rounded hover:bg-red-700"
               >
                 Save
