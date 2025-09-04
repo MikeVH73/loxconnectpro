@@ -15,11 +15,15 @@ type FaqDoc = {
   updatedAt?: any;
 };
 
-// Simple, non‑technical seed used only if the collection is empty (optional for preview)
-const seedExamples: Omit<FaqDoc, "id">[] = [
-  { subject: "Getting started", question: "How do I verify my email?", answer: "Open Users ▸ Security and click Send verification email. Open the link and return to the Security page to see the green check.", roles: ["Employee", "admin", "superAdmin"] },
-  { subject: "Quote Requests", question: "How do I create a new quote request?", answer: "Go to Quote Requests ▸ New. Fill the title, choose the countries, pick a customer, add the dates and at least one product. Save to finish.", roles: ["Employee", "admin", "superAdmin"] },
-  { subject: "Permissions", question: "Who can edit customers?", answer: "The owner country can edit. Other countries can view and add their own customer number. A superAdmin can change the owner if needed.", roles: ["Employee", "admin", "superAdmin"] },
+// Default FAQs (non‑technical language) – always shown alongside database items
+const defaultFaqs: FaqDoc[] = [
+  { id: "default-1", subject: "Getting started", question: "How do I verify my email?", answer: "Open Users ▸ Security and click Send verification email. Open the link and return to the Security page to see the green check.", roles: ["Employee", "admin", "superAdmin"] },
+  { id: "default-2", subject: "Getting started", question: "How do I turn on the Authenticator app?", answer: "Go to Users ▸ Security and use Step 2 – Enroll Authenticator App. Scan the QR code with your phone and enter the 6‑digit code.", roles: ["Employee", "admin", "superAdmin"] },
+  { id: "default-3", subject: "Quote Requests", question: "How do I create a new quote request?", answer: "Go to Quote Requests ▸ New. Fill the title, choose the countries, pick a customer, add the dates and at least one product. Save to finish.", roles: ["Employee", "admin", "superAdmin"] },
+  { id: "default-4", subject: "Quote Requests", question: "How do I use labels like Urgent or Waiting?", answer: "Open the edit page of a request and toggle labels on the left. They save immediately and move the card to the right dashboard column.", roles: ["Employee", "admin", "superAdmin"] },
+  { id: "default-5", subject: "Messaging", question: "Who receives my message?", answer: "If you are the creator country, the involved country receives it. If you are the involved country, the creator receives it.", roles: ["Employee", "admin", "superAdmin"] },
+  { id: "default-6", subject: "Customers", question: "Who may edit a customer?", answer: "The owner country can edit. Other countries can view and add their own customer number. A superAdmin can set or change the owner if needed.", roles: ["Employee", "admin", "superAdmin"] },
+  { id: "default-7", subject: "Analytics", question: "What do the numbers mean?", answer: "Created shows all requests for the year and filters. In Progress and New show the pipeline. Won/Lost/Cancelled are outcomes. EUR tiles add up the values.", roles: ["Employee", "admin", "superAdmin"] },
 ];
 
 export default function FaqPage() {
@@ -33,6 +37,8 @@ export default function FaqPage() {
   const [open, setOpen] = useState<Record<string, boolean>>({}); // all closed by default
 
   const [editing, setEditing] = useState<Partial<FaqDoc> | null>(null);
+  const [subjectSelect, setSubjectSelect] = useState<string>("existing");
+  const [newSubject, setNewSubject] = useState<string>("");
   const [showForm, setShowForm] = useState(false);
 
   useEffect(() => {
@@ -41,9 +47,6 @@ export default function FaqPage() {
       setLoading(true);
       const snap = await getDocs(collection(db as Firestore, "faqs"));
       const list = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) })) as FaqDoc[];
-      if (list.length === 0 && canManage) {
-        // Optional: provide seed button instead of auto‑seeding; keep minimal to avoid surprise writes
-      }
       setFaqs(list);
       setLoading(false);
     };
@@ -52,7 +55,8 @@ export default function FaqPage() {
 
   const visibleFaqs = useMemo(() => {
     const allowed = (roles?: Role[]) => !roles || roles.length === 0 || roles.includes(role);
-    const list = faqs.filter((f) => allowed(f.roles));
+    // Merge defaults with database items; DB can override by id collision (unlikely)
+    const list = [...defaultFaqs, ...faqs].filter((f) => allowed(f.roles));
     const q = query.trim().toLowerCase();
     const bySubject = new Map<string, FaqDoc[]>();
     (q ? list.filter((f) => (f.subject + " " + f.question + " " + f.answer).toLowerCase().includes(q)) : list).forEach((f) => {
@@ -60,15 +64,6 @@ export default function FaqPage() {
       if (!bySubject.has(key)) bySubject.set(key, []);
       bySubject.get(key)!.push(f);
     });
-    // also show seeds if no docs
-    if (list.length === 0) {
-      seedExamples.forEach((s, i) => {
-        if (!allowed(s.roles)) return;
-        const key = s.subject;
-        if (!bySubject.has(key)) bySubject.set(key, []);
-        bySubject.get(key)!.push({ id: `seed-${i}`, ...s });
-      });
-    }
     return Array.from(bySubject.entries()).map(([subject, items]) => ({ subject, items }));
   }, [faqs, role, query]);
 
@@ -90,6 +85,8 @@ export default function FaqPage() {
     }
     setShowForm(false);
     setEditing(null);
+    setSubjectSelect("existing");
+    setNewSubject("");
   };
 
   const removeFaq = async (id: string) => {
@@ -103,6 +100,11 @@ export default function FaqPage() {
   };
 
   const rolesOptions: Role[] = ["Employee", "admin", "superAdmin"];
+  const allSubjects = useMemo(() => {
+    const s = new Set<string>();
+    [...defaultFaqs, ...faqs].forEach((f) => s.add(f.subject || "General"));
+    return Array.from(s).sort();
+  }, [faqs]);
 
   return (
     <div className="p-6">
@@ -117,7 +119,7 @@ export default function FaqPage() {
         />
         {canManage && (
           <button
-            onClick={() => { setEditing({ subject: "General", roles: ["Employee", "admin", "superAdmin"] }); setShowForm(true); }}
+            onClick={() => { setEditing({ subject: allSubjects[0] || "General", roles: ["Employee", "admin", "superAdmin"] }); setSubjectSelect("existing"); setNewSubject(""); setShowForm(true); }}
             className="px-3 py-2 bg-[#e40115] text-white rounded hover:bg-red-700"
           >
             + Add Q&A
@@ -180,13 +182,30 @@ export default function FaqPage() {
           <div className="bg-white rounded p-4 w-full max-w-lg space-y-3">
             <h3 className="text-lg font-semibold">{editing?.id ? "Edit Q&A" : "Add Q&A"}</h3>
             <div className="grid grid-cols-1 gap-3">
-              <label className="text-sm">Subject
-                <input
-                  value={editing?.subject || ""}
-                  onChange={(e) => setEditing((p) => ({ ...(p || {}), subject: e.target.value }))}
-                  className="mt-1 w-full border rounded px-3 py-2"
-                />
-              </label>
+              <div className="text-sm">
+                <div className="mb-1">Subject</div>
+                <div className="flex gap-2 items-center">
+                  <select
+                    value={subjectSelect === "new" ? "__new__" : (editing?.subject || "")}
+                    onChange={(e) => {
+                      if (e.target.value === "__new__") { setSubjectSelect("new"); setNewSubject(""); }
+                      else { setSubjectSelect("existing"); setEditing((p) => ({ ...(p || {}), subject: e.target.value })); }
+                    }}
+                    className="border rounded px-3 py-2"
+                  >
+                    {allSubjects.map((s) => (<option key={s} value={s}>{s}</option>))}
+                    <option value="__new__">Create New Topic…</option>
+                  </select>
+                  {subjectSelect === "new" && (
+                    <input
+                      value={newSubject}
+                      onChange={(e) => { setNewSubject(e.target.value); setEditing((p) => ({ ...(p || {}), subject: e.target.value })); }}
+                      placeholder="New topic name"
+                      className="border rounded px-3 py-2 flex-1"
+                    />
+                  )}
+                </div>
+              </div>
               <label className="text-sm">Question
                 <input
                   value={editing?.question || ""}
@@ -202,16 +221,25 @@ export default function FaqPage() {
                   className="mt-1 w-full border rounded px-3 py-2"
                 />
               </label>
-              <label className="text-sm">Visible to (roles)
-                <select multiple value={(editing?.roles as Role[] | undefined) || []} onChange={(e) => {
-                  const vals = Array.from(e.target.selectedOptions).map((o) => o.value as Role);
-                  setEditing((p) => ({ ...(p || {}), roles: vals }));
-                }} className="mt-1 w-full border rounded px-3 py-2 h-28">
+              <div className="text-sm">
+                <div className="mb-1">Visible to (roles)</div>
+                <div className="flex flex-wrap gap-4">
                   {rolesOptions.map((r) => (
-                    <option key={r} value={r}>{r}</option>
+                    <label key={r} className="inline-flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={((editing?.roles as Role[] | undefined) || []).includes(r)}
+                        onChange={(e) => {
+                          const prev = new Set((editing?.roles as Role[] | undefined) || []);
+                          if (e.target.checked) prev.add(r); else prev.delete(r);
+                          setEditing((p) => ({ ...(p || {}), roles: Array.from(prev) }));
+                        }}
+                      />
+                      {r}
+                    </label>
                   ))}
-                </select>
-              </label>
+                </div>
+              </div>
             </div>
             <div className="flex justify-end gap-2">
               <button onClick={() => { setShowForm(false); setEditing(null); }} className="px-3 py-2 border rounded">Cancel</button>
