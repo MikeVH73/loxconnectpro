@@ -20,6 +20,7 @@ const navItems = [
   { label: "Broadcast", href: "/notifications/broadcast" },
   { label: "Modifications", href: "/modifications" },
   { label: "Analytics", href: "/analytics" },
+  { label: "FAQs", href: "/faqs" },
   { label: "Profile", href: "/users/profile" },
   { label: "Security", href: "/users/security" },
 ];
