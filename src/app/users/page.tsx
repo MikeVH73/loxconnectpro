@@ -1611,7 +1611,8 @@ export default function UsersPage() {
                         }
                       } catch {}
                     }
-                    setUsers(refreshed);
+                    // Apply role-aware filter so Admins remain scoped to their countries
+                    setUsers(filterUsersForCurrentRole(refreshed));
                     setReviewCompleted(true);
                     setLastReviewMonth(monthKey);
                   } catch (e: any) {
