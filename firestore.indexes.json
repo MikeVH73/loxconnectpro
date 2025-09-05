@@ -95,7 +95,18 @@
           "order": "ASCENDING"
         }
       ]
-    }
-  ],
-  "fieldOverrides": []
-} 
+    },
+    {
+      "collectionGroup": "notifications",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "targetCountryKey",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    } 

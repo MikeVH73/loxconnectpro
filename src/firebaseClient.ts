@@ -49,9 +49,9 @@ function initializeFirebase() {
     }
 
     // Optional: Initialize App Check (feature-flagged, non-breaking)
-    // Set NEXT_PUBLIC_ENABLE_APP_CHECK=true and NEXT_PUBLIC_RECAPTCHA_KEY in env to enable
-    const enableAppCheck = (typeof process !== 'undefined') && (process as any)?.env?.NEXT_PUBLIC_ENABLE_APP_CHECK === 'true';
-    const recaptchaKey = (typeof process !== 'undefined') && (process as any)?.env?.NEXT_PUBLIC_RECAPTCHA_KEY;
+    // App Check is disabled for now to avoid process.env issues
+    const enableAppCheck = false;
+    const recaptchaKey = null;
     if (enableAppCheck && app && recaptchaKey) {
       // dynamic import to avoid hard dependency when disabled
       import('firebase/app-check').then(async ({ initializeAppCheck, ReCaptchaEnterpriseProvider, getToken, onTokenChanged }) => {
@@ -61,7 +61,7 @@ function initializeFirebase() {
             isTokenAutoRefreshEnabled: true,
           });
           // Optional debug logging when explicitly enabled
-          const debug = (typeof process !== 'undefined') && (process as any)?.env?.NEXT_PUBLIC_ENABLE_APP_CHECK_DEBUG === 'true';
+          const debug = false;
           if (debug) {
             try {
               const token = await getToken(appCheck, /* forceRefresh */ true);

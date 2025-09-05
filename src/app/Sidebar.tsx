@@ -4,8 +4,8 @@ import { usePathname } from "next/navigation";
 import { useAuth } from "./AuthProvider";
 import Image from "next/image";
 import NotificationBadge from "./components/NotificationBadge";
-import { useState } from "react";
-import { FiChevronDown, FiChevronRight, FiTag, FiGlobe, FiUsers, FiSearch, FiMegaphone, FiEdit3, FiBell, FiMonitor } from "react-icons/fi";
+import { useState, useEffect } from "react";
+import { FiChevronDown, FiChevronRight, FiTag, FiGlobe, FiUsers, FiSearch, FiSpeaker, FiEdit3, FiBell, FiMonitor } from "react-icons/fi";
 
 const navItems = [
   { label: "Dashboard", href: "/dashboard" },
@@ -27,7 +27,7 @@ const controlCenterItems = [
   { label: "Countries", href: "/countries", icon: FiGlobe },
   { label: "Users", href: "/users", icon: FiUsers },
   { label: "Scan Customers", href: "/customers/scan", icon: FiSearch },
-  { label: "Broadcast", href: "/notifications/broadcast", icon: FiMegaphone },
+  { label: "Broadcast", href: "/notifications/broadcast", icon: FiSpeaker },
   { label: "Modifications", href: "/modifications", icon: FiEdit3 },
   { label: "Notification Settings", href: "/admin/notification-settings", icon: FiBell },
   { label: "IT Overview", href: "/admin/it-overview", icon: FiMonitor },
@@ -35,22 +35,41 @@ const controlCenterItems = [
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const { user, userProfile } = useAuth();
+  const { user, userProfile, authLoading } = useAuth();
   const [isControlCenterOpen, setIsControlCenterOpen] = useState(false);
   console.log("[Sidebar] userProfile:", userProfile);
 
-  if (userProfile === null) {
-    // Optionally, show a spinner here
-    return null;
+  // Show loading state while auth is being determined
+  if (authLoading || userProfile === null) {
+    return (
+      <aside className="w-64 bg-white border-r border-gray-200 flex flex-col h-screen shadow-md">
+        <div className="flex flex-col items-center justify-center border-b border-gray-100 py-3">
+          <div className="w-44 h-44 relative -my-2">
+            <Image
+              src="/logo1.png"
+              alt="LoxConnect Logo"
+              fill
+              style={{ objectFit: 'contain' }}
+              priority
+            />
+          </div>
+        </div>
+        <div className="flex-1 flex items-center justify-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        </div>
+      </aside>
+    );
   }
 
   // Check if any Control Center item is active
   const isControlCenterActive = controlCenterItems.some(item => pathname.startsWith(item.href));
   
   // Auto-open Control Center if one of its items is active
-  if (isControlCenterActive && !isControlCenterOpen) {
-    setIsControlCenterOpen(true);
-  }
+  useEffect(() => {
+    if (isControlCenterActive && !isControlCenterOpen) {
+      setIsControlCenterOpen(true);
+    }
+  }, [isControlCenterActive, isControlCenterOpen]);
 
   return (
     <aside className="w-64 bg-white border-r border-gray-200 flex flex-col h-screen shadow-md">
