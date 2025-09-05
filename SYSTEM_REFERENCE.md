@@ -266,6 +266,7 @@ interface QuoteRequest {
   - On load, quote requests normalize products and drop rows with both empty `catClass` and `description`
   - On save, draft/empty rows are excluded from persistence
 - Leave protection uses a stable save-function reference and awaits save completion before navigating when user chooses to save
+- **Status Validation**: Won/Lost/Cancelled status requires Total Value EUR > 0; prevents saving without financial data
 
 ## 💬 **MESSAGING & NOTIFICATIONS**
 
@@ -376,11 +377,18 @@ const targetCountry = userCountry === creatorCountry
 - Shows "No Customer Assigned" for QRs without any customer data
 
 **Interactive Features**:
-- Clickable customer bars in "Top customers by Won EUR" section
+- Clickable customer bars in "Top 10 customers by Won EUR" section
 - Modal shows ONLY Won quote requests for selected customer (not all statuses)
 - Respects all current filters (year, countries, customers)
 - Direct links to quote request edit pages
 - Clear labeling: "Won Quote Requests for [Customer Name]"
+- Side-by-side visualization: Bar chart (EUR amounts) + Pie chart (QR counts)
+- Top 10 limit: Only shows top 10 customers, no "All" option
+
+**Validation Rules**:
+- Won/Lost/Cancelled status requires Total Value EUR > 0
+- Validation prevents saving without proper financial data
+- Clear error messages guide users to enter required values
 
 ## 🎨 **USER INTERFACE & UX**
 

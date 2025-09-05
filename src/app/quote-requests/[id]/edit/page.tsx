@@ -319,6 +319,16 @@ export default function EditQuoteRequest() {
       return;
     }
 
+    // Validation: Won/Lost/Cancelled status requires Total Value EUR
+    const finalStatus = (quoteRequest.status || '').toLowerCase();
+    if (['won', 'lost', 'cancelled'].includes(finalStatus)) {
+      const totalValueEUR = quoteRequest.totalValueEUR || 0;
+      if (!totalValueEUR || totalValueEUR <= 0) {
+        setError(`Cannot save with status "${quoteRequest.status}" - Total Value EUR is required. Please enter the total value before changing the status.`);
+        return;
+      }
+    }
+
     if (isAutoSave) {
       setSaving(true);
     } else {

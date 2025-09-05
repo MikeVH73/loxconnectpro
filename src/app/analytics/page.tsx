@@ -592,27 +592,93 @@ export default function AnalyticsPage() {
           </div>
 
           {/* Top Customers by Won EUR */}
-          <div className="p-4 bg-white rounded shadow">
-            <div className="text-sm text-gray-700 mb-2">Top customers by Won EUR — {year}</div>
-            {topCustomers.rows.length === 0 ? (
-              <div className="text-gray-500">No won revenue for selected filters</div>
-            ) : (
-              <div className="space-y-2">
-                {topCustomers.rows.slice(0, 10).map(r => (
-                  <div key={r.id} className="cursor-pointer hover:bg-gray-50 p-2 rounded transition-colors" onClick={() => setSelectedCustomerForDetails(r.name)}>
-                    <div className="flex justify-between text-sm">
-                      <div className="font-medium text-gray-800 truncate pr-2">{r.name}</div>
-                      <div className="text-gray-600">EUR {Math.round(r.wonEUR).toLocaleString()} • {r.share.toFixed(1)}%</div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Bar Chart - Top 10 Customers by Won EUR */}
+            <div className="p-4 bg-white rounded shadow">
+              <div className="text-sm text-gray-700 mb-2">Top 10 customers by Won EUR — {year}</div>
+              {topCustomers.rows.length === 0 ? (
+                <div className="text-gray-500">No won revenue for selected filters</div>
+              ) : (
+                <div className="space-y-2">
+                  {topCustomers.rows.slice(0, 10).map(r => (
+                    <div key={r.id} className="cursor-pointer hover:bg-gray-50 p-2 rounded transition-colors" onClick={() => setSelectedCustomerForDetails(r.name)}>
+                      <div className="flex justify-between text-sm">
+                        <div className="font-medium text-gray-800 truncate pr-2">{r.name}</div>
+                        <div className="text-gray-600">EUR {Math.round(r.wonEUR).toLocaleString()} • {r.share.toFixed(1)}%</div>
+                      </div>
+                      <div className="w-full bg-gray-100 h-2 rounded">
+                        <div className="bg-[#E40115] h-2 rounded" style={{ width: `${Math.min(100, r.share)}%` }} />
+                      </div>
                     </div>
-                    <div className="w-full bg-gray-100 h-2 rounded">
-                      <div className="bg-[#E40115] h-2 rounded" style={{ width: `${Math.min(100, r.share)}%` }} />
-                    </div>
-                  </div>
-                ))}
-                <div className="text-xs text-gray-500 mt-2">Total Won EUR: EUR {Math.round(topCustomers.totalWon).toLocaleString()}</div>
-                <div className="text-xs text-gray-500 mt-1">Click on a customer bar to see their quote requests</div>
-              </div>
-            )}
+                  ))}
+                  <div className="text-xs text-gray-500 mt-2">Total Won EUR: EUR {Math.round(topCustomers.totalWon).toLocaleString()}</div>
+                  <div className="text-xs text-gray-500 mt-1">Click on a customer bar to see their quote requests</div>
+                </div>
+              )}
+            </div>
+
+            {/* Pie Chart - Top 10 Customers by Won QR Count */}
+            <div className="p-4 bg-white rounded shadow">
+              <div className="text-sm text-gray-700 mb-2">Top 10 customers by Won QR count — {year}</div>
+              {topCustomers.rows.length === 0 ? (
+                <div className="text-gray-500">No won quote requests for selected filters</div>
+              ) : (
+                <div className="h-72">
+                  <Pie
+                    data={{
+                      labels: topCustomers.rows.slice(0, 10).map(r => r.name),
+                      datasets: [{
+                        label: 'Won QR Count',
+                        data: topCustomers.rows.slice(0, 10).map(r => {
+                          // Count actual Won QRs for this customer
+                          return filtered.filter(qr => {
+                            if ((qr.status || '').toLowerCase() !== 'won') return false;
+                            const customerId = qr.customer as string;
+                            if (customerId) {
+                              const foundCustomer = customers.find(c => c.id === customerId);
+                              return foundCustomer && foundCustomer.name === r.name;
+                            }
+                            const customerName = (qr as any).customerName || '';
+                            return customerName.toLowerCase().trim() === r.name.toLowerCase().trim();
+                          }).length;
+                        }),
+                        backgroundColor: [
+                          'rgba(228, 1, 21, 0.8)',   // Loxam Red
+                          'rgba(187, 189, 190, 0.8)', // Dark Grey
+                          'rgba(0, 0, 0, 0.8)',       // Black
+                          'rgba(34, 197, 94, 0.6)',   // Green
+                          'rgba(59, 130, 246, 0.6)',  // Blue
+                          'rgba(168, 85, 247, 0.6)',  // Purple
+                          'rgba(245, 158, 11, 0.6)',  // Yellow
+                          'rgba(239, 68, 68, 0.6)',   // Red
+                          'rgba(16, 185, 129, 0.6)',  // Emerald
+                          'rgba(139, 92, 246, 0.6)'   // Violet
+                        ],
+                        borderColor: [
+                          '#E40115', '#bbbdbe', '#000000', '#16a34a', '#3b82f6',
+                          '#a855f7', '#f59e0b', '#ef4444', '#10b981', '#8b5cf6'
+                        ],
+                        borderWidth: 1
+                      }]
+                    }}
+                    options={{ 
+                      responsive: true, 
+                      maintainAspectRatio: false, 
+                      plugins: { 
+                        legend: { 
+                          position: 'bottom',
+                          labels: {
+                            usePointStyle: true,
+                            padding: 15,
+                            font: { size: 10 }
+                          }
+                        } 
+                      } 
+                    }}
+                  />
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Customer Details Modal */}
