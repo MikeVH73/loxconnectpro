@@ -71,6 +71,8 @@ export default function DashboardNotifications() {
         return 'bg-yellow-50 border-yellow-500';
       case 'property_change':
         return 'bg-purple-50 border-purple-500';
+      case 'deadline_warning':
+        return 'bg-orange-100 border-orange-400 shadow-md';
       default:
         return 'bg-gray-50 border-gray-500';
     }
@@ -84,6 +86,8 @@ export default function DashboardNotifications() {
         return '🔄';
       case 'property_change':
         return '✏️';
+      case 'deadline_warning':
+        return '⚠️';
       default:
         return '📝';
     }
@@ -100,16 +104,11 @@ export default function DashboardNotifications() {
           <a
             key={notification.id}
             href={`/quote-requests/${notification.quoteRequestId}/edit`}
-            className={`flex items-start p-2 rounded ${
-              notification.type === 'message' ? 'bg-green-50' :
-              notification.type === 'status_change' ? 'bg-yellow-50' :
-              'bg-purple-50'
-            } hover:bg-opacity-80 transition-colors duration-200`}
+            className={`flex items-start p-2 rounded border ${getNotificationStyle(notification.type)} hover:bg-opacity-80 transition-colors duration-200`}
           >
             <div className="flex-shrink-0 mr-2">
               <span className="text-lg" role="img" aria-label="notification type">
-                {notification.type === 'message' ? '💬' :
-                 notification.type === 'status_change' ? '🔄' : '✏️'}
+                {getNotificationIcon(notification.type)}
               </span>
             </div>
             <div className="min-w-0 flex-1">

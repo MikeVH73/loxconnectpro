@@ -154,7 +154,11 @@ export default function NotificationsPage() {
               key={notification.id}
               href={`/quote-requests/${notification.quoteRequestId}/edit`}
               className={`block p-4 rounded-lg border ${
-                notification.isRead ? 'bg-white' : 'bg-blue-50'
+                notification.notificationType === 'deadline_warning' 
+                  ? 'bg-orange-100 border-orange-400 shadow-md' 
+                  : notification.isRead 
+                    ? 'bg-white' 
+                    : 'bg-blue-50'
               } hover:shadow-md transition-shadow`}
             >
               <div className="flex items-start justify-between gap-4">
@@ -163,22 +167,32 @@ export default function NotificationsPage() {
                     {notification.quoteRequestTitle}
                   </div>
                   <div className="text-sm text-gray-600 mt-1">
-                    <span className="font-medium text-blue-600">{notification.senderCountry}</span>
-                    {' '}
-                    {notification.notificationType === 'message' && 'sent a message: '}
-                    {notification.notificationType === 'status_change' && 'updated the status: '}
-                    {notification.notificationType === 'property_change' && 'made changes:'}
-                    {notification.notificationType !== 'property_change' ? (
-                      <span className="italic">{notification.content}</span>
+                    {notification.notificationType === 'deadline_warning' ? (
+                      <div className="flex items-center gap-2">
+                        <span className="text-orange-600">⚠️</span>
+                        <span className="font-medium text-orange-600">System Alert:</span>
+                        <span className="italic">{notification.content}</span>
+                      </div>
                     ) : (
-                      <ul className="list-disc ml-5 mt-1 text-[13px] space-y-1">
-                        {String(notification.content)
-                          .split(', ')
-                          .filter(Boolean)
-                          .map((line, i) => (
-                            <li key={i}>{line}</li>
-                          ))}
-                      </ul>
+                      <>
+                        <span className="font-medium text-blue-600">{notification.senderCountry}</span>
+                        {' '}
+                        {notification.notificationType === 'message' && 'sent a message: '}
+                        {notification.notificationType === 'status_change' && 'updated the status: '}
+                        {notification.notificationType === 'property_change' && 'made changes:'}
+                        {notification.notificationType !== 'property_change' ? (
+                          <span className="italic">{notification.content}</span>
+                        ) : (
+                          <ul className="list-disc ml-5 mt-1 text-[13px] space-y-1">
+                            {String(notification.content)
+                              .split(', ')
+                              .filter(Boolean)
+                              .map((line, i) => (
+                                <li key={i}>{line}</li>
+                              ))}
+                          </ul>
+                        )}
+                      </>
                     )}
                   </div>
                 </div>

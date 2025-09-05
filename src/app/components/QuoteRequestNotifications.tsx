@@ -157,9 +157,17 @@ export default function QuoteRequestNotifications({ quoteRequestId, userCountry 
                       <span className={`font-semibold ${
                         activity.activityType === 'message' ? 'text-green-600' :
                         activity.activityType === 'status_change' ? 'text-yellow-600' :
+                        activity.activityType === 'deadline_warning' ? 'text-orange-600' :
                         'text-purple-600'
                       }`}>
-                        {activity.content}
+                        {activity.activityType === 'deadline_warning' ? (
+                          <span className="flex items-center gap-1">
+                            <span>⚠️</span>
+                            <span>{activity.content}</span>
+                          </span>
+                        ) : (
+                          activity.content
+                        )}
                       </span>
                     </p>
                     <p className="mt-1 text-xs text-gray-500">
