@@ -188,16 +188,15 @@ interface UserProfile {
 
 **Role-Based Visibility**:
 - **All Roles**: Dashboard, Planning, Quote Requests, Archived, Customers, Products, Notifications, Analytics, FAQs, Profile, Security
-- **Admin & SuperAdmin**: Scan Customers, Notification Settings
-- **SuperAdmin Only**: Control Center
+- **SuperAdmin Only**: Control Center (at bottom of sidebar)
 
 **Control Center Access**:
 - **SuperAdmin**: Full access to Control Center with all administrative functions
 - **Admin/Employee**: No access to Control Center (menu item hidden)
 
 **Clean Interface**:
-- **Simplified Menu**: Removed individual admin items (Labels, Countries, Users, Broadcast, Modifications, IT Overview)
-- **Centralized Access**: All admin functions accessible through Control Center
+- **Simplified Menu**: All admin functions centralized in Control Center
+- **Bottom Placement**: Control Center appears at the bottom of the sidebar
 - **User-Friendly**: Clear role-based visibility prevents confusion
 
 ### **Quote Request Columns**

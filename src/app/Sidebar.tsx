@@ -12,14 +12,12 @@ const navItems = [
   { label: "Archived", href: "/archived" },
   { label: "Customers", href: "/customers" },
   { label: "Products", href: "/products" },
-  { label: "Scan Customers", href: "/customers/scan" },
-  { label: "Control Center", href: "/admin/control-center" },
   { label: "Notifications", href: "/notifications" },
   { label: "Analytics", href: "/analytics" },
   { label: "FAQs", href: "/faqs" },
   { label: "Profile", href: "/users/profile" },
   { label: "Security", href: "/users/security" },
-  { label: "Notification Settings", href: "/admin/notification-settings" },
+  { label: "Control Center", href: "/admin/control-center" },
 ];
 
 export default function Sidebar() {

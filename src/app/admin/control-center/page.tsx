@@ -2,10 +2,22 @@
 
 import { useAuth } from "../../AuthProvider";
 import Link from "next/link";
-import { FiSettings, FiUsers, FiGlobe, FiTag, FiMegaphone, FiEdit3, FiBell, FiMonitor } from "react-icons/fi";
+import { FiSettings, FiUsers, FiGlobe, FiTag, FiMegaphone, FiEdit3, FiBell, FiMonitor, FiSearch } from "react-icons/fi";
 
 export default function ControlCenterPage() {
-  const { userProfile } = useAuth();
+  const { userProfile, authLoading } = useAuth();
+
+  // Show loading state while auth is being determined
+  if (authLoading || userProfile === null) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="bg-white p-8 rounded-lg shadow-md text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   // Check if user has permission to access control center
   if (userProfile?.role !== 'superAdmin') {
@@ -40,6 +52,13 @@ export default function ControlCenterPage() {
       href: "/users",
       icon: FiUsers,
       color: "bg-purple-500"
+    },
+    {
+      title: "Scan Customers",
+      description: "Scan and manage customer data",
+      href: "/customers/scan",
+      icon: FiSearch,
+      color: "bg-indigo-500"
     },
     {
       title: "Broadcast Messages",
