@@ -349,6 +349,36 @@ const targetCountry = userCountry === creatorCountry
 - **Consistency**: Ensures only one label per functionality exists
 - **Case Handling**: System searches case-insensitive but maintains original case in database
 
+### **Analytics Page**
+**Location**: `src/app/analytics/page.tsx`
+
+**Core Features**:
+- **Year Filtering**: Filter analytics by specific years
+- **Country Filtering**: Filter by creator and involved countries
+- **Customer Filtering**: Filter by specific customers
+- **Role-based Access**: superAdmin can see all countries, others see their assigned countries
+- **KPI Cards**: Won, Lost, Cancelled counts and EUR totals
+- **Monthly Bar Chart**: Shows counts by month for different statuses
+- **Distribution Charts**: Pie charts for counts and EUR distribution
+- **Conversion Funnel**: Created → In Progress → New → Won with conversion percentage
+- **Top Customers by Won EUR**: Clickable customer bars showing EUR totals and percentages
+- **Customer Details Modal**: Click any customer bar to see their quote requests with current filters
+- **Country Pairs Table**: Top country pairs by wins with conversion rates
+- **Customer Comparison**: Year-over-year customer performance comparison
+- **KPIs Table**: Detailed breakdown by creator → involved country pairs
+
+**Customer Resolution Logic**:
+- Prioritizes customer ID lookup from customers collection
+- Falls back to customerName field if ID lookup fails
+- Uses normalized customer names for consistent grouping
+- Handles cases where customer ID doesn't match any customer record
+
+**Interactive Features**:
+- Clickable customer bars in "Top customers by Won EUR" section
+- Modal shows filtered quote requests for selected customer
+- Respects all current filters (year, countries, customers)
+- Direct links to quote request edit pages
+
 ## 🎨 **USER INTERFACE & UX**
 
 ### **Design Principles**

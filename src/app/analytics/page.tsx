@@ -96,6 +96,7 @@ export default function AnalyticsPage() {
   const [customers, setCustomers] = useState<{ id: string; name: string }[]>([]);
   const [customerSearch, setCustomerSearch] = useState<string>("");
   const [roleScope, setRoleScope] = useState<'my'|'all'>('my');
+  const [selectedCustomerForDetails, setSelectedCustomerForDetails] = useState<string | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -311,22 +312,60 @@ export default function AnalyticsPage() {
 
   // Top customers by Won EUR (and share % of total Won EUR)
   const topCustomers = useMemo(() => {
-    const map = new Map<string, { name: string; wonEUR: number }>();
+    const map = new Map<string, { name: string; wonEUR: number; customerId?: string }>();
     let totalWon = 0;
     filtered.forEach(q => {
       if ((q.status || '').toLowerCase() !== 'won') return;
       const eur = q.totalValueEUR || 0;
       totalWon += eur;
-      const id = (q.customer as string) || ((q as any).customerName || 'unknown');
-      const name = customers.find(c => c.id === q.customer)?.name || (q as any).customerName || 'Unknown';
-      const cur = map.get(id) || { name, wonEUR: 0 };
+      
+      // Improved customer resolution: prioritize customer ID lookup, then fallback to customerName
+      let customerId = q.customer as string;
+      let customerName = '';
+      
+      if (customerId) {
+        // Try to find customer by ID first
+        const foundCustomer = customers.find(c => c.id === customerId);
+        if (foundCustomer) {
+          customerName = foundCustomer.name;
+        } else {
+          // Fallback to customerName if ID lookup fails
+          customerName = (q as any).customerName || 'Unknown';
+        }
+      } else {
+        // No customer ID, use customerName as both ID and name
+        customerName = (q as any).customerName || 'Unknown';
+        customerId = customerName; // Use name as ID for grouping
+      }
+      
+      // Use customerName as the grouping key for consistency
+      const groupKey = customerName.toLowerCase().trim();
+      const cur = map.get(groupKey) || { name: customerName, wonEUR: 0, customerId };
       cur.wonEUR += eur;
-      map.set(id, cur);
+      map.set(groupKey, cur);
     });
-    const rows = Array.from(map.entries()).map(([id, v]) => ({ id, name: v.name, wonEUR: v.wonEUR, share: totalWon ? (v.wonEUR / totalWon) * 100 : 0 }));
+    const rows = Array.from(map.entries()).map(([key, v]) => ({ 
+      id: v.customerId || key, 
+      name: v.name, 
+      wonEUR: v.wonEUR, 
+      share: totalWon ? (v.wonEUR / totalWon) * 100 : 0 
+    }));
     rows.sort((a,b) => b.wonEUR - a.wonEUR);
     return { rows, totalWon };
   }, [filtered, customers]);
+
+  // Get quote requests for selected customer
+  const selectedCustomerQRs = useMemo(() => {
+    if (!selectedCustomerForDetails) return [];
+    return filtered.filter(qr => {
+      const customerId = qr.customer as string;
+      const customerName = (qr as any).customerName || '';
+      
+      // Match by customer ID or customer name
+      return customerId === selectedCustomerForDetails || 
+             customerName.toLowerCase().trim() === selectedCustomerForDetails.toLowerCase().trim();
+    });
+  }, [filtered, selectedCustomerForDetails]);
 
   // Conversion by country pair (creator -> involved)
   const pairFunnel = useMemo(() => {
@@ -527,7 +566,7 @@ export default function AnalyticsPage() {
             ) : (
               <div className="space-y-2">
                 {topCustomers.rows.slice(0, 10).map(r => (
-                  <div key={r.id} className="">{/* row */}
+                  <div key={r.id} className="cursor-pointer hover:bg-gray-50 p-2 rounded transition-colors" onClick={() => setSelectedCustomerForDetails(r.name)}>
                     <div className="flex justify-between text-sm">
                       <div className="font-medium text-gray-800 truncate pr-2">{r.name}</div>
                       <div className="text-gray-600">EUR {Math.round(r.wonEUR).toLocaleString()} • {r.share.toFixed(1)}%</div>
@@ -538,9 +577,62 @@ export default function AnalyticsPage() {
                   </div>
                 ))}
                 <div className="text-xs text-gray-500 mt-2">Total Won EUR: EUR {Math.round(topCustomers.totalWon).toLocaleString()}</div>
+                <div className="text-xs text-gray-500 mt-1">Click on a customer bar to see their quote requests</div>
               </div>
             )}
           </div>
+
+          {/* Customer Details Modal */}
+          {selectedCustomerForDetails && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+              <div className="bg-white rounded-lg p-6 max-w-4xl w-full max-h-[80vh] overflow-auto">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-lg font-semibold text-[#e40115]">Quote Requests for {selectedCustomerForDetails}</h3>
+                  <button
+                    onClick={() => setSelectedCustomerForDetails(null)}
+                    className="text-gray-500 hover:text-gray-700 text-xl"
+                  >
+                    ×
+                  </button>
+                </div>
+                
+                {selectedCustomerQRs.length === 0 ? (
+                  <div className="text-gray-500">No quote requests found for this customer with current filters.</div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="text-sm text-gray-600 mb-3">
+                      Showing {selectedCustomerQRs.length} quote request{selectedCustomerQRs.length !== 1 ? 's' : ''} for {selectedCustomerForDetails}
+                    </div>
+                    {selectedCustomerQRs.map(qr => (
+                      <div key={qr.id} className="border rounded-lg p-4 bg-gray-50">
+                        <div className="flex justify-between items-start mb-2">
+                          <div className="font-medium text-gray-800">{qr.title}</div>
+                          <div className="text-sm text-gray-600">{qr.status}</div>
+                        </div>
+                        <div className="text-sm text-gray-600 mb-1">
+                          {qr.creatorCountry} → {qr.involvedCountry}
+                        </div>
+                        <div className="text-sm text-gray-600 mb-2">
+                          EUR {Math.round(qr.totalValueEUR || 0).toLocaleString()}
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <div className="text-xs text-gray-500">
+                            Created: {parseDateValue(qr.createdAt)?.toLocaleDateString() || 'Unknown'}
+                          </div>
+                          <a 
+                            href={`/quote-requests/${qr.id}/edit`}
+                            className="text-[#e40115] underline text-sm hover:text-red-700"
+                          >
+                            View Details
+                          </a>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* By country pair - top 10 */}
           <div className="p-4 bg-white rounded shadow overflow-auto">
