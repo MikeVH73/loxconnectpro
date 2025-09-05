@@ -256,6 +256,9 @@ export default function DashboardPage() {
         const customerSnap = await getDocs(collection(db as Firestore, "customers"));
 
         // Process query results and deduplicate
+        const seenIds = new Set<string>();
+        const combinedQRs: QuoteRequest[] = [];
+        
         qrSnapshots.forEach(snapshot => {
           snapshot.docs.forEach(docSnap => {
             const data = docSnap.data();
