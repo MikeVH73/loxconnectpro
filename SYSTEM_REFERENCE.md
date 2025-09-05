@@ -249,6 +249,12 @@ interface QuoteRequest {
 - Automatic redirect to dashboard (not edit page)
 - No confusion about additional saving required
 
+**Status Locking During Creation**:
+- Status is automatically set to "New" and cannot be changed during creation
+- Visual indicator shows "Status will be 'New' until the involved country responds"
+- Prevents creators from accidentally changing status and losing "NEW" indicator
+- Status can be changed in edit page after creation
+
 ### **Edit Quote Request Page**
 **Features**:
 - **Auto-save**: Debounced changes to Firestore

@@ -78,7 +78,6 @@ interface Customer {
 }
 
 type StatusType = "New" | "In Progress" | "Snoozed" | "Won" | "Lost" | "Cancelled";
-const statuses: StatusType[] = ["New", "In Progress", "Won", "Lost", "Cancelled"];
 
 const NewQuoteRequestPage = () => {
   const router = useRouter();
@@ -93,7 +92,8 @@ const NewQuoteRequestPage = () => {
   const creatorCountry = userProfile?.businessUnit || "";
   const [involvedCountry, setInvolvedCountry] = useState("");
   const [customerId, setCustomerId] = useState("");
-  const [status, setStatus] = useState<StatusType>("New");
+  // Status is always "New" for new quote requests
+  const status: StatusType = "New";
   const [isArchived, setIsArchived] = useState(false);
   const [products, setProducts] = useState<Product[]>([
     { catClass: "", description: "", quantity: 1 },
@@ -356,20 +356,15 @@ const NewQuoteRequestPage = () => {
   return (
     <div className="w-full p-8 bg-white mt-8">
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Status */}
+        {/* Status - Locked to "New" during creation */}
         <div>
           <label className="block text-sm font-medium text-gray-700">Status</label>
-          <select
-            value={status}
-            onChange={(e) => setStatus(e.target.value as StatusType)}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-          >
-            {statuses.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
+          <div className="mt-1 p-3 bg-gray-50 border border-gray-300 rounded-md">
+            <div className="flex items-center">
+              <span className="text-gray-700 font-medium">New</span>
+              <span className="ml-2 text-sm text-gray-500">(Status will be "New" until the involved country responds)</span>
+            </div>
+          </div>
         </div>
 
         {/* Title */}
