@@ -247,6 +247,19 @@ const NewQuoteRequestPage = () => {
     setAttachments(prev => [...prev, ...newFiles]);
   };
 
+  // Handle adding notes
+  const handleAddNote = () => {
+    if (noteText.trim()) {
+      const newNote: Note = {
+        text: noteText.trim(),
+        author: user?.email || "Unknown",
+        dateTime: new Date().toISOString()
+      };
+      setNotes(prev => [...prev, newNote]);
+      setNoteText("");
+    }
+  };
+
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -645,6 +658,43 @@ const NewQuoteRequestPage = () => {
             >
               Add New Contact
             </button>
+          </div>
+        </div>
+
+        {/* Notes */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Notes
+          </label>
+          <div className="space-y-2">
+            {/* Existing Notes */}
+            {notes.map((note, idx) => (
+              <div key={idx} className="p-3 bg-gray-50 border border-gray-200 rounded-md">
+                <div className="text-sm text-gray-600 mb-1">
+                  {note.author} - {new Date(note.dateTime).toLocaleString()}
+                </div>
+                <div className="text-gray-800">{note.text}</div>
+              </div>
+            ))}
+            
+            {/* Add New Note */}
+            <div className="flex gap-2">
+              <textarea
+                value={noteText}
+                onChange={(e) => setNoteText(e.target.value)}
+                placeholder="Add a note..."
+                rows={3}
+                className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              />
+              <button
+                type="button"
+                onClick={handleAddNote}
+                disabled={!noteText.trim()}
+                className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed"
+              >
+                Add Note
+              </button>
+            </div>
           </div>
         </div>
 

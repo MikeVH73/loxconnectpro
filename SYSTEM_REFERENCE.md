@@ -208,7 +208,11 @@ interface QuoteRequest {
     uploadedBy: string;
   }>;
   customerNumber: string;  // Auto-generated based on country
-  notes: string;
+  notes: Array<{
+    text: string;
+    author: string;
+    dateTime: string;
+  }>;
   labels: {
     waitingForAnswer: boolean;
     urgent: boolean;
@@ -237,6 +241,9 @@ interface QuoteRequest {
 - Products (dynamic list with catClass field)
 - Attachments (file upload)
 - Customer Number (auto-filled)
+
+**Optional Fields**:
+- Notes (textarea with add functionality, shows author and timestamp)
 
 **Date Input UX (Unified)**:
 - Segmented day-month-year fields (dd-mm-yyyy) for fast keyboard entry
