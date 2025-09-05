@@ -357,15 +357,41 @@ export default function AnalyticsPage() {
   // Get quote requests for selected customer
   const selectedCustomerQRs = useMemo(() => {
     if (!selectedCustomerForDetails) return [];
-    return filtered.filter(qr => {
+    
+    console.log('[Analytics] Filtering for customer:', selectedCustomerForDetails);
+    console.log('[Analytics] Available customers:', customers.map(c => ({ id: c.id, name: c.name })));
+    console.log('[Analytics] Filtered QRs:', filtered.map(qr => ({ 
+      id: qr.id, 
+      customer: qr.customer, 
+      customerName: (qr as any).customerName,
+      title: qr.title 
+    })));
+    
+    const matches = filtered.filter(qr => {
       const customerId = qr.customer as string;
-      const customerName = (qr as any).customerName || '';
       
-      // Match by customer ID or customer name
-      return customerId === selectedCustomerForDetails || 
-             customerName.toLowerCase().trim() === selectedCustomerForDetails.toLowerCase().trim();
+      // First try to match by customer ID
+      if (customerId) {
+        const foundCustomer = customers.find(c => c.id === customerId);
+        if (foundCustomer && foundCustomer.name === selectedCustomerForDetails) {
+          console.log('[Analytics] Match found by ID:', customerId, '->', foundCustomer.name);
+          return true;
+        }
+      }
+      
+      // Fallback: try to match by customerName field if it exists
+      const customerName = (qr as any).customerName || '';
+      if (customerName && customerName.toLowerCase().trim() === selectedCustomerForDetails.toLowerCase().trim()) {
+        console.log('[Analytics] Match found by name:', customerName);
+        return true;
+      }
+      
+      return false;
     });
-  }, [filtered, selectedCustomerForDetails]);
+    
+    console.log('[Analytics] Found matches:', matches.length);
+    return matches;
+  }, [filtered, selectedCustomerForDetails, customers]);
 
   // Conversion by country pair (creator -> involved)
   const pairFunnel = useMemo(() => {
