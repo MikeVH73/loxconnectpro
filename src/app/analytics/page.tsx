@@ -329,12 +329,13 @@ export default function AnalyticsPage() {
         if (foundCustomer) {
           customerName = foundCustomer.name;
         } else {
-          // Fallback to customerName if ID lookup fails
-          customerName = (q as any).customerName || 'Unknown';
+          // Customer ID exists but not found in customers collection - this is the "Unknown" issue
+          console.log('[Analytics] Customer ID not found in customers collection:', customerId);
+          customerName = 'Unknown Customer (ID: ' + customerId + ')';
         }
       } else {
         // No customer ID, use customerName as both ID and name
-        customerName = (q as any).customerName || 'Unknown';
+        customerName = (q as any).customerName || 'No Customer Assigned';
         customerId = customerName; // Use name as ID for grouping
       }
       
@@ -354,7 +355,7 @@ export default function AnalyticsPage() {
     return { rows, totalWon };
   }, [filtered, customers]);
 
-  // Get quote requests for selected customer
+  // Get quote requests for selected customer (ONLY Won status for Won EUR analytics)
   const selectedCustomerQRs = useMemo(() => {
     if (!selectedCustomerForDetails) return [];
     
@@ -364,10 +365,16 @@ export default function AnalyticsPage() {
       id: qr.id, 
       customer: qr.customer, 
       customerName: (qr as any).customerName,
-      title: qr.title 
+      title: qr.title,
+      status: qr.status
     })));
     
     const matches = filtered.filter(qr => {
+      // Only include Won status QRs for Won EUR analytics
+      if ((qr.status || '').toLowerCase() !== 'won') {
+        return false;
+      }
+      
       const customerId = qr.customer as string;
       
       // First try to match by customer ID
@@ -389,7 +396,7 @@ export default function AnalyticsPage() {
       return false;
     });
     
-    console.log('[Analytics] Found matches:', matches.length);
+    console.log('[Analytics] Found Won matches:', matches.length);
     return matches;
   }, [filtered, selectedCustomerForDetails, customers]);
 
@@ -613,7 +620,7 @@ export default function AnalyticsPage() {
             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
               <div className="bg-white rounded-lg p-6 max-w-4xl w-full max-h-[80vh] overflow-auto">
                 <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-lg font-semibold text-[#e40115]">Quote Requests for {selectedCustomerForDetails}</h3>
+                  <h3 className="text-lg font-semibold text-[#e40115]">Won Quote Requests for {selectedCustomerForDetails}</h3>
                   <button
                     onClick={() => setSelectedCustomerForDetails(null)}
                     className="text-gray-500 hover:text-gray-700 text-xl"
@@ -623,11 +630,11 @@ export default function AnalyticsPage() {
                 </div>
                 
                 {selectedCustomerQRs.length === 0 ? (
-                  <div className="text-gray-500">No quote requests found for this customer with current filters.</div>
+                  <div className="text-gray-500">No Won quote requests found for this customer with current filters.</div>
                 ) : (
                   <div className="space-y-3">
                     <div className="text-sm text-gray-600 mb-3">
-                      Showing {selectedCustomerQRs.length} quote request{selectedCustomerQRs.length !== 1 ? 's' : ''} for {selectedCustomerForDetails}
+                      Showing {selectedCustomerQRs.length} Won quote request{selectedCustomerQRs.length !== 1 ? 's' : ''} for {selectedCustomerForDetails}
                     </div>
                     {selectedCustomerQRs.map(qr => (
                       <div key={qr.id} className="border rounded-lg p-4 bg-gray-50">

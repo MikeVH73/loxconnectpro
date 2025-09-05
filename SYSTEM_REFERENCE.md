@@ -372,12 +372,15 @@ const targetCountry = userCountry === creatorCountry
 - Falls back to customerName field if ID lookup fails
 - Uses normalized customer names for consistent grouping
 - Handles cases where customer ID doesn't match any customer record
+- Shows "Unknown Customer (ID: xyz)" for QRs with customer IDs not found in customers collection
+- Shows "No Customer Assigned" for QRs without any customer data
 
 **Interactive Features**:
 - Clickable customer bars in "Top customers by Won EUR" section
-- Modal shows filtered quote requests for selected customer
+- Modal shows ONLY Won quote requests for selected customer (not all statuses)
 - Respects all current filters (year, countries, customers)
 - Direct links to quote request edit pages
+- Clear labeling: "Won Quote Requests for [Customer Name]"
 
 ## 🎨 **USER INTERFACE & UX**
 
