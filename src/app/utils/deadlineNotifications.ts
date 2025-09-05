@@ -1,6 +1,9 @@
 import { collection, query, where, getDocs, addDoc, serverTimestamp, Firestore } from 'firebase/firestore';
 import { db } from '../../firebaseClient';
 
+// Admin SDK imports for server-side usage
+import * as admin from 'firebase-admin';
+
 interface DeadlineNotificationParams {
   quoteRequestId: string;
   quoteRequestTitle: string;
@@ -17,7 +20,20 @@ interface NotificationSettings {
 }
 
 /**
+ * Get Firebase Admin instance for server-side operations
+ */
+function getAdminDb() {
+  try {
+    const adminApp = admin.app();
+    return admin.firestore(adminApp);
+  } catch {
+    throw new Error('Firebase Admin not initialized');
+  }
+}
+
+/**
  * Create a deadline notification for upcoming Quote Request dates
+ * Works with both client-side and server-side Firebase
  */
 export async function createDeadlineNotification({
   quoteRequestId,
@@ -26,8 +42,10 @@ export async function createDeadlineNotification({
   deadlineType,
   daysUntilDeadline,
   deadlineDate
-}: DeadlineNotificationParams) {
-  if (!db) throw new Error('Firebase not initialized');
+}: DeadlineNotificationParams, useAdmin = false) {
+  const firestoreDb = useAdmin ? getAdminDb() : db;
+  
+  if (!firestoreDb) throw new Error('Firebase not initialized');
 
   try {
     console.log('Creating deadline notification:', { 
@@ -37,7 +55,7 @@ export async function createDeadlineNotification({
       targetCountry 
     });
 
-    const notificationsRef = collection(db as Firestore, 'notifications');
+    const notificationsRef = collection(firestoreDb as Firestore, 'notifications');
     const targetKey = normalizeCountryKey(targetCountry);
 
     // Create appropriate content based on deadline type
@@ -45,7 +63,7 @@ export async function createDeadlineNotification({
       ? `⚠️ Start date approaching: "${quoteRequestTitle}" starts in ${daysUntilDeadline} day${daysUntilDeadline === 1 ? '' : 's'} (${formatDate(deadlineDate)})`
       : `📅 End date approaching: "${quoteRequestTitle}" ends in ${daysUntilDeadline} day${daysUntilDeadline === 1 ? '' : 's'} (${formatDate(deadlineDate)})`;
 
-    await addDoc(notificationsRef, {
+    const notificationData = {
       quoteRequestId,
       quoteRequestTitle,
       sender: 'System',
@@ -57,9 +75,11 @@ export async function createDeadlineNotification({
       deadlineType,
       daysUntilDeadline,
       deadlineDate,
-      createdAt: serverTimestamp(),
+      createdAt: useAdmin ? admin.firestore.FieldValue.serverTimestamp() : serverTimestamp(),
       isRead: false,
-    });
+    };
+
+    await addDoc(notificationsRef, notificationData);
 
     console.log('Deadline notification created successfully');
   } catch (error) {
@@ -70,13 +90,16 @@ export async function createDeadlineNotification({
 
 /**
  * Get notification settings for a specific country
+ * Works with both client-side and server-side Firebase
  */
-export async function getNotificationSettings(country: string): Promise<NotificationSettings> {
-  if (!db) throw new Error('Firebase not initialized');
+export async function getNotificationSettings(country: string, useAdmin = false): Promise<NotificationSettings> {
+  const firestoreDb = useAdmin ? getAdminDb() : db;
+  
+  if (!firestoreDb) throw new Error('Firebase not initialized');
 
   try {
     const settingsDoc = await getDocs(query(
-      collection(db as Firestore, 'notificationSettings'),
+      collection(firestoreDb as Firestore, 'notificationSettings'),
       where('__name__', '==', country)
     ));
 
@@ -108,15 +131,18 @@ export async function getNotificationSettings(country: string): Promise<Notifica
 
 /**
  * Check for Quote Requests with upcoming deadlines and create notifications
+ * Works with both client-side and server-side Firebase
  */
-export async function checkAndCreateDeadlineNotifications() {
-  if (!db) throw new Error('Firebase not initialized');
+export async function checkAndCreateDeadlineNotifications(useAdmin = false) {
+  const firestoreDb = useAdmin ? getAdminDb() : db;
+  
+  if (!firestoreDb) throw new Error('Firebase not initialized');
 
   try {
     console.log('Checking for upcoming deadlines...');
     
     // Get all Quote Requests
-    const quoteRequestsRef = collection(db as Firestore, 'quoteRequests');
+    const quoteRequestsRef = collection(firestoreDb as Firestore, 'quoteRequests');
     const qrSnapshot = await getDocs(quoteRequestsRef);
     
     const today = new Date();
@@ -133,7 +159,7 @@ export async function checkAndCreateDeadlineNotifications() {
       const endDate = qrData.endDate.toDate ? qrData.endDate.toDate() : new Date(qrData.endDate);
       
       // Get notification settings for involved country
-      const settings = await getNotificationSettings(qrData.involvedCountry);
+      const settings = await getNotificationSettings(qrData.involvedCountry, useAdmin);
       
       if (!settings.enabled) continue;
 
@@ -147,7 +173,8 @@ export async function checkAndCreateDeadlineNotifications() {
             qrId, 
             qrData.involvedCountry, 
             'start_date', 
-            daysUntilStart
+            daysUntilStart,
+            useAdmin
           );
           
           if (!existingNotification) {
@@ -158,7 +185,7 @@ export async function checkAndCreateDeadlineNotifications() {
               deadlineType: 'start_date',
               daysUntilDeadline: daysUntilStart,
               deadlineDate: startDate.toISOString()
-            });
+            }, useAdmin);
             notificationsCreated.push(`${qrData.title} - Start date warning`);
           }
         }
@@ -174,7 +201,8 @@ export async function checkAndCreateDeadlineNotifications() {
             qrId, 
             qrData.involvedCountry, 
             'end_date', 
-            daysUntilEnd
+            daysUntilEnd,
+            useAdmin
           );
           
           if (!existingNotification) {
@@ -185,7 +213,7 @@ export async function checkAndCreateDeadlineNotifications() {
               deadlineType: 'end_date',
               daysUntilDeadline: daysUntilEnd,
               deadlineDate: endDate.toISOString()
-            });
+            }, useAdmin);
             notificationsCreated.push(`${qrData.title} - End date warning`);
           }
         }
@@ -207,12 +235,15 @@ async function checkExistingDeadlineNotification(
   quoteRequestId: string, 
   targetCountry: string, 
   deadlineType: string, 
-  daysUntilDeadline: number
+  daysUntilDeadline: number,
+  useAdmin = false
 ): Promise<boolean> {
-  if (!db) return false;
+  const firestoreDb = useAdmin ? getAdminDb() : db;
+  
+  if (!firestoreDb) return false;
 
   try {
-    const notificationsRef = collection(db as Firestore, 'notifications');
+    const notificationsRef = collection(firestoreDb as Firestore, 'notifications');
     const targetKey = normalizeCountryKey(targetCountry);
     
     const existingQuery = query(
