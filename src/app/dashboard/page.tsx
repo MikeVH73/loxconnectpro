@@ -214,30 +214,56 @@ export default function DashboardPage() {
         const snoozeLabelId = labelsData.find(l => l.name.toLowerCase() === 'snooze')?.id;
         const plannedLabelId = labelsData.find(l => l.name.toLowerCase() === 'planned')?.id;
 
-        // Fetch quote requests (all), then filter per visibility rules
-        const [qrSnapAll, customerSnap] = await Promise.all([
-          getDocs(collection(db as Firestore, "quoteRequests")),
-          getDocs(collection(db as Firestore, "customers")),
-        ]);
-
-        const seenIds = new Set<string>();
-        const combinedQRs: QuoteRequest[] = [];
-
-        // Process and apply visibility filter (respect superAdmin toggle)
+        // Fetch only active quote requests with proper filtering
         const shouldFilter = userProfile?.role !== 'superAdmin' || !showAllCountries;
-        const allowed = new Set<string>();
+        const allowedCountries = new Set<string>();
         if (shouldFilter) {
-          if (userProfile?.businessUnit) allowed.add(userProfile.businessUnit);
-          (userProfile?.countries || []).forEach(c => allowed.add(c));
+          if (userProfile?.businessUnit) allowedCountries.add(userProfile.businessUnit);
+          (userProfile?.countries || []).forEach(c => allowedCountries.add(c));
         }
 
-        qrSnapAll.docs.forEach(docSnap => {
-          const data = docSnap.data();
-          if (shouldFilter && allowed.size > 0 && !(allowed.has(data.creatorCountry) || allowed.has(data.involvedCountry))) {
-            return;
+        // Build optimized queries based on user permissions
+        const qrQueries = [];
+        if (shouldFilter && allowedCountries.size > 0) {
+          // Create queries for each allowed country (creator and involved)
+          for (const country of allowedCountries) {
+            qrQueries.push(
+              query(collection(db as Firestore, "quoteRequests"), 
+                where("creatorCountry", "==", country),
+                where("status", "in", ["New", "In Progress", "Snoozed"])
+              )
+            );
+            qrQueries.push(
+              query(collection(db as Firestore, "quoteRequests"), 
+                where("involvedCountry", "==", country),
+                where("status", "in", ["New", "In Progress", "Snoozed"])
+              )
+            );
           }
+        } else {
+          // SuperAdmin with showAllCountries - still filter by status
+          qrQueries.push(
+            query(collection(db as Firestore, "quoteRequests"), 
+              where("status", "in", ["New", "In Progress", "Snoozed"])
+            )
+          );
+        }
+
+        // Execute queries in parallel
+        const qrSnapshots = await Promise.all(qrQueries.map(q => getDocs(q)));
+        
+        // Fetch customers (only if needed for display)
+        const customerSnap = await getDocs(collection(db as Firestore, "customers"));
+
+        // Process query results and deduplicate
+        qrSnapshots.forEach(snapshot => {
+          snapshot.docs.forEach(docSnap => {
+            const data = docSnap.data();
+            if (seenIds.has(docSnap.id)) return; // Skip duplicates
+            
+            seenIds.add(docSnap.id);
             combinedQRs.push({
-            id: docSnap.id,
+              id: docSnap.id,
               ...data,
               labels: data.labels || [],
               urgent: Boolean(data.urgent) || (data.labels || []).includes(urgentLabelId || ''),
@@ -245,39 +271,19 @@ export default function DashboardPage() {
               waitingForAnswer: Boolean(data.waitingForAnswer) || (data.labels || []).includes(waitingLabelId || ''),
               planned: Boolean(data.planned) || (data.labels || []).includes(plannedLabelId || '')
             } as QuoteRequest);
+          });
         });
 
-        // Update Firestore to ensure consistency
-        const updatePromises = combinedQRs.map(async qr => {
-          const quoteRef = doc(db as Firestore, 'quoteRequests', qr.id);
-          const updateData = {
-            urgent: qr.urgent,
-            problems: qr.problems,
-            waitingForAnswer: qr.waitingForAnswer,
-            planned: qr.planned,
-            labels: qr.labels
-          };
-          try {
-            await updateDoc(quoteRef, updateData);
-    } catch (err) {
-            console.error('[DEBUG] Error updating quote request:', err);
-          }
-          return qr;
-        });
-
-        await Promise.all(updatePromises);
+        // Note: Removed unnecessary Firestore updates on every load
+        // These updates should only happen when labels are actually changed by users
 
         const customersData = customerSnap.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
+          id: doc.id,
+          ...doc.data()
         })) as Customer[];
 
-        // Filter active quotes
-        const activeQuotes = combinedQRs.filter(qr => 
-          qr.status === "New" || qr.status === "In Progress" || qr.status === "Snoozed"
-        );
-
-        setQuoteRequests(activeQuotes);
+        // combinedQRs already contains only active quotes from the optimized queries
+        setQuoteRequests(combinedQRs);
         setCustomers(customersData);
       } catch (err) {
         console.error('[DEBUG] Error fetching data:', err);

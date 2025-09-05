@@ -135,19 +135,49 @@ const QuoteRequestsPage = () => {
         const waitingLabelId = labelsData.find(l => l.name.toLowerCase() === 'waiting for answer')?.id;
         const plannedLabelId = labelsData.find(l => l.name.toLowerCase() === 'planned')?.id;
 
-        // Fetch all data in parallel
-        const [qrSnap, custSnap, usersSnap] = await Promise.all([
-          // Fetch without Firestore orderBy to avoid index/field issues; sort client-side below
-          getDocs(collection(db as Firestore, "quoteRequests")),
+        // Build optimized queries based on user permissions
+        const shouldFilter = userProfile.role !== 'superAdmin' || !showAllCountries;
+        const allowedCountries = new Set<string>();
+        if (shouldFilter) {
+          if (userProfile.businessUnit) allowedCountries.add(userProfile.businessUnit);
+          (userProfile.countries || []).forEach(c => allowedCountries.add(c));
+        }
+
+        // Create optimized queries for quote requests
+        const qrQueries = [];
+        if (shouldFilter && allowedCountries.size > 0) {
+          for (const country of allowedCountries) {
+            qrQueries.push(
+              query(collection(db as Firestore, "quoteRequests"), 
+                where("creatorCountry", "==", country)
+              )
+            );
+            qrQueries.push(
+              query(collection(db as Firestore, "quoteRequests"), 
+                where("involvedCountry", "==", country)
+              )
+            );
+          }
+        } else {
+          qrQueries.push(
+            query(collection(db as Firestore, "quoteRequests"))
+          );
+        }
+
+        // Execute queries in parallel
+        const qrSnapshots = await Promise.all(qrQueries.map(q => getDocs(q)));
+        
+        // Fetch other data in parallel
+        const [custSnap, usersSnap] = await Promise.all([
           getDocs(collection(db as Firestore, "customers")),
           getDocs(collection(db as Firestore, "users"))
         ]);
 
         const customersArr = custSnap.docs.map(doc => ({
-        id: doc.id, 
-        ...doc.data() 
+          id: doc.id, 
+          ...doc.data() 
         })) as Customer[];
-      setCustomers(customersArr);
+        setCustomers(customersArr);
 
         const usersArr = usersSnap.docs.map(doc => ({
           id: doc.id,
@@ -155,21 +185,20 @@ const QuoteRequestsPage = () => {
         })) as UserProfile[];
         setUsers(usersArr);
 
-        let allRequests = qrSnap.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        })) as QuoteRequest[];
-
-        // Visibility filtering (can be overridden by superAdmin toggle)
-        const shouldFilter = userProfile.role !== 'superAdmin' || !showAllCountries;
-        if (shouldFilter) {
-          const allowed = new Set<string>();
-          if (userProfile.businessUnit) allowed.add(userProfile.businessUnit);
-          (userProfile.countries || []).forEach(c => allowed.add(c));
-          if (allowed.size > 0) {
-            allRequests = allRequests.filter(qr => allowed.has(qr.creatorCountry) || allowed.has(qr.involvedCountry));
-          }
-        }
+        // Process and deduplicate quote request results
+        const seenIds = new Set<string>();
+        let allRequests: QuoteRequest[] = [];
+        
+        qrSnapshots.forEach(snapshot => {
+          snapshot.docs.forEach(doc => {
+            if (seenIds.has(doc.id)) return; // Skip duplicates
+            seenIds.add(doc.id);
+            allRequests.push({
+              id: doc.id,
+              ...doc.data()
+            } as QuoteRequest);
+          });
+        });
 
         // Filter out completed requests for all users (they should only appear in Archived)
         allRequests = allRequests.filter(qr => 
