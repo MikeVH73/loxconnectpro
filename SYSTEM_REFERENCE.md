@@ -62,9 +62,33 @@ interface UserProfile {
 - **No Automatic Sign-Out**: Prevents login loops
 
 ### **Role-Based Access**
-- **superAdmin**: Access to all countries and features
-- **admin**: Access to assigned countries
+- **superAdmin**: Access to all countries and features, Control Center access
+- **admin**: Access to assigned countries, Notification Settings access
 - **user**: Standard user permissions
+
+### **Control Center (SuperAdmin Only)**
+**Location**: `src/app/admin/control-center/page.tsx`
+
+**Core Features**:
+- **Centralized Management**: Single page access to all administrative functions
+- **Role-Based Access**: Only SuperAdmin users can access
+- **Organized Interface**: Clean grid layout with icons and descriptions
+- **Quick Access**: Direct links to all management functions
+
+**Available Functions**:
+- **Labels Management**: Create, edit, and manage system labels
+- **Countries Management**: Manage countries and configurations
+- **User Management**: Manage users, roles, and permissions
+- **Broadcast Messages**: Send broadcast notifications to all users
+- **Modifications Log**: View and manage system modifications
+- **Notification Settings**: Configure deadline notification preferences
+- **IT Overview**: System information, security, and technical details
+
+**UI Features**:
+- **Icon-Based Navigation**: Each function has a distinctive icon and color
+- **Hover Effects**: Interactive cards with smooth transitions
+- **System Status**: Quick overview of system health
+- **Responsive Design**: Works on all screen sizes
 
 ### **User Management System**
 **Location**: `src/app/users/page.tsx`
@@ -157,7 +181,24 @@ interface UserProfile {
 ### **Main Dashboard Layout**
 - **Top Section**: Real-time notifications container
 - **Main Content**: Quote requests organized in columns
-- **Sidebar**: Navigation and user controls
+- **Sidebar**: Role-based navigation and user controls
+
+### **Sidebar Navigation System**
+**Location**: `src/app/Sidebar.tsx`
+
+**Role-Based Visibility**:
+- **All Roles**: Dashboard, Planning, Quote Requests, Archived, Customers, Products, Notifications, Analytics, FAQs, Profile, Security
+- **Admin & SuperAdmin**: Scan Customers, Notification Settings
+- **SuperAdmin Only**: Control Center
+
+**Control Center Access**:
+- **SuperAdmin**: Full access to Control Center with all administrative functions
+- **Admin/Employee**: No access to Control Center (menu item hidden)
+
+**Clean Interface**:
+- **Simplified Menu**: Removed individual admin items (Labels, Countries, Users, Broadcast, Modifications, IT Overview)
+- **Centralized Access**: All admin functions accessible through Control Center
+- **User-Friendly**: Clear role-based visibility prevents confusion
 
 ### **Quote Request Columns**
 1. **Urgent/Problems** (Red/Orange): `urgent=true` OR `problems=true`

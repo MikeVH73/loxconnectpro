@@ -13,18 +13,13 @@ const navItems = [
   { label: "Customers", href: "/customers" },
   { label: "Products", href: "/products" },
   { label: "Scan Customers", href: "/customers/scan" },
-  { label: "Labels", href: "/labels" },
-  { label: "Countries", href: "/countries" },
-  { label: "Users", href: "/users" },
+  { label: "Control Center", href: "/admin/control-center" },
   { label: "Notifications", href: "/notifications" },
-  { label: "Broadcast", href: "/notifications/broadcast" },
-  { label: "Modifications", href: "/modifications" },
   { label: "Analytics", href: "/analytics" },
   { label: "FAQs", href: "/faqs" },
   { label: "Profile", href: "/users/profile" },
   { label: "Security", href: "/users/security" },
   { label: "Notification Settings", href: "/admin/notification-settings" },
-  { label: "IT Overview", href: "/admin/it-overview" },
 ];
 
 export default function Sidebar() {
@@ -37,18 +32,24 @@ export default function Sidebar() {
     return null;
   }
 
-  // Only show restricted items if not Employee
-  const restrictedLabels = ["Labels", "Countries", "Users", "Modifications", "Scan Customers", "Broadcast"];
+  // Filter navigation items based on user role
   const filteredNavItems = navItems.filter(item => {
-    if (restrictedLabels.includes(item.label)) {
-      return userProfile?.role !== "Employee";
-    }
-    if (item.label === 'IT Overview') {
+    // Control Center - only for SuperAdmin
+    if (item.label === 'Control Center') {
       return userProfile?.role === 'superAdmin';
     }
+    
+    // Notification Settings - for Admin and SuperAdmin
     if (item.label === 'Notification Settings') {
       return userProfile?.role === 'admin' || userProfile?.role === 'superAdmin';
     }
+    
+    // Scan Customers - not for Employee
+    if (item.label === 'Scan Customers') {
+      return userProfile?.role !== 'Employee';
+    }
+    
+    // All other items are visible to all roles
     return true;
   });
 
