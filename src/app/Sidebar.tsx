@@ -4,6 +4,8 @@ import { usePathname } from "next/navigation";
 import { useAuth } from "./AuthProvider";
 import Image from "next/image";
 import NotificationBadge from "./components/NotificationBadge";
+import { useState } from "react";
+import { FiChevronDown, FiChevronRight, FiTag, FiGlobe, FiUsers, FiSearch, FiMegaphone, FiEdit3, FiBell, FiMonitor } from "react-icons/fi";
 
 const navItems = [
   { label: "Dashboard", href: "/dashboard" },
@@ -17,12 +19,24 @@ const navItems = [
   { label: "FAQs", href: "/faqs" },
   { label: "Profile", href: "/users/profile" },
   { label: "Security", href: "/users/security" },
-  { label: "Control Center", href: "/admin/control-center" },
+];
+
+// Control Center submenu items for SuperAdmin
+const controlCenterItems = [
+  { label: "Labels", href: "/labels", icon: FiTag },
+  { label: "Countries", href: "/countries", icon: FiGlobe },
+  { label: "Users", href: "/users", icon: FiUsers },
+  { label: "Scan Customers", href: "/customers/scan", icon: FiSearch },
+  { label: "Broadcast", href: "/notifications/broadcast", icon: FiMegaphone },
+  { label: "Modifications", href: "/modifications", icon: FiEdit3 },
+  { label: "Notification Settings", href: "/admin/notification-settings", icon: FiBell },
+  { label: "IT Overview", href: "/admin/it-overview", icon: FiMonitor },
 ];
 
 export default function Sidebar() {
   const pathname = usePathname();
   const { user, userProfile } = useAuth();
+  const [isControlCenterOpen, setIsControlCenterOpen] = useState(false);
   console.log("[Sidebar] userProfile:", userProfile);
 
   if (userProfile === null) {
@@ -30,26 +44,13 @@ export default function Sidebar() {
     return null;
   }
 
-  // Filter navigation items based on user role
-  const filteredNavItems = navItems.filter(item => {
-    // Control Center - only for SuperAdmin
-    if (item.label === 'Control Center') {
-      return userProfile?.role === 'superAdmin';
-    }
-    
-    // Notification Settings - for Admin and SuperAdmin
-    if (item.label === 'Notification Settings') {
-      return userProfile?.role === 'admin' || userProfile?.role === 'superAdmin';
-    }
-    
-    // Scan Customers - not for Employee
-    if (item.label === 'Scan Customers') {
-      return userProfile?.role !== 'Employee';
-    }
-    
-    // All other items are visible to all roles
-    return true;
-  });
+  // Check if any Control Center item is active
+  const isControlCenterActive = controlCenterItems.some(item => pathname.startsWith(item.href));
+  
+  // Auto-open Control Center if one of its items is active
+  if (isControlCenterActive && !isControlCenterOpen) {
+    setIsControlCenterOpen(true);
+  }
 
   return (
     <aside className="w-64 bg-white border-r border-gray-200 flex flex-col h-screen shadow-md">
@@ -66,7 +67,7 @@ export default function Sidebar() {
       </div>
       <nav className="flex-1 py-3 overflow-y-auto">
         <ul className="space-y-1">
-          {filteredNavItems.map((item) => (
+          {navItems.map((item) => (
             <li key={item.href}>
               <Link
                 href={item.href}
@@ -81,6 +82,51 @@ export default function Sidebar() {
               </Link>
             </li>
           ))}
+          
+          {/* Control Center for SuperAdmin */}
+          {userProfile?.role === 'superAdmin' && (
+            <li>
+              <button
+                onClick={() => setIsControlCenterOpen(!isControlCenterOpen)}
+                className={`w-full flex items-center justify-between px-6 py-3 rounded-l-full font-medium transition-colors relative
+                  ${isControlCenterActive
+                    ? "bg-[#e40115] text-white shadow"
+                    : "text-gray-800 hover:bg-[#bbbdbe] hover:text-[#e40115]"}
+                `}
+              >
+                <span>Control Center</span>
+                {isControlCenterOpen ? (
+                  <FiChevronDown className="h-4 w-4" />
+                ) : (
+                  <FiChevronRight className="h-4 w-4" />
+                )}
+              </button>
+              
+              {/* Control Center Submenu */}
+              {isControlCenterOpen && (
+                <ul className="ml-4 mt-1 space-y-1">
+                  {controlCenterItems.map((item) => {
+                    const IconComponent = item.icon;
+                    return (
+                      <li key={item.href}>
+                        <Link
+                          href={item.href}
+                          className={`flex items-center px-4 py-2 rounded-l-full text-sm font-medium transition-colors
+                            ${pathname.startsWith(item.href)
+                              ? "bg-[#e40115] text-white shadow"
+                              : "text-gray-700 hover:bg-[#bbbdbe] hover:text-[#e40115]"}
+                          `}
+                        >
+                          <IconComponent className="h-4 w-4 mr-2" />
+                          {item.label}
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </li>
+          )}
         </ul>
       </nav>
       {/* Small welcome/user info at the bottom */}

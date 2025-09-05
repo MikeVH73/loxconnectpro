@@ -67,28 +67,30 @@ interface UserProfile {
 - **user**: Standard user permissions
 
 ### **Control Center (SuperAdmin Only)**
-**Location**: `src/app/admin/control-center/page.tsx`
+**Location**: `src/app/Sidebar.tsx` (Collapsible Submenu)
 
 **Core Features**:
-- **Centralized Management**: Single page access to all administrative functions
-- **Role-Based Access**: Only SuperAdmin users can access
-- **Organized Interface**: Clean grid layout with icons and descriptions
-- **Quick Access**: Direct links to all management functions
+- **Collapsible Submenu**: Foldable menu in sidebar for all administrative functions
+- **Role-Based Access**: Only SuperAdmin users can see Control Center
+- **Icon-Based Navigation**: Each function has a distinctive icon
+- **Auto-Expand**: Automatically opens when accessing any Control Center function
 
 **Available Functions**:
-- **Labels Management**: Create, edit, and manage system labels
-- **Countries Management**: Manage countries and configurations
-- **User Management**: Manage users, roles, and permissions
-- **Broadcast Messages**: Send broadcast notifications to all users
-- **Modifications Log**: View and manage system modifications
+- **Labels**: Create, edit, and manage system labels
+- **Countries**: Manage countries and configurations
+- **Users**: Manage users, roles, and permissions
+- **Scan Customers**: Scan and manage customer data
+- **Broadcast**: Send broadcast notifications to all users
+- **Modifications**: View and manage system modifications
 - **Notification Settings**: Configure deadline notification preferences
 - **IT Overview**: System information, security, and technical details
 
 **UI Features**:
-- **Icon-Based Navigation**: Each function has a distinctive icon and color
-- **Hover Effects**: Interactive cards with smooth transitions
-- **System Status**: Quick overview of system health
-- **Responsive Design**: Works on all screen sizes
+- **Collapsible Design**: Folded by default, expands when clicked
+- **Chevron Indicators**: Shows expand/collapse state
+- **Active State Highlighting**: Highlights when any submenu item is active
+- **Consistent Styling**: Matches main sidebar design
+- **Icon Integration**: Each submenu item has a relevant icon
 
 ### **User Management System**
 **Location**: `src/app/users/page.tsx`
@@ -188,16 +190,17 @@ interface UserProfile {
 
 **Role-Based Visibility**:
 - **All Roles**: Dashboard, Planning, Quote Requests, Archived, Customers, Products, Notifications, Analytics, FAQs, Profile, Security
-- **SuperAdmin Only**: Control Center (at bottom of sidebar)
+- **SuperAdmin Only**: Control Center (collapsible submenu with all admin functions)
 
 **Control Center Access**:
-- **SuperAdmin**: Full access to Control Center with all administrative functions
-- **Admin/Employee**: No access to Control Center (menu item hidden)
+- **SuperAdmin**: Collapsible submenu with all administrative functions
+- **Admin/Employee**: No Control Center access (menu item hidden)
 
 **Clean Interface**:
-- **Simplified Menu**: All admin functions centralized in Control Center
-- **Bottom Placement**: Control Center appears at the bottom of the sidebar
-- **User-Friendly**: Clear role-based visibility prevents confusion
+- **Collapsible Design**: Control Center folds/unfolds as needed
+- **Icon Integration**: Each admin function has a distinctive icon
+- **Auto-Expand**: Opens automatically when accessing any admin function
+- **User-Friendly**: Clean sidebar with organized admin functions
 
 ### **Quote Request Columns**
 1. **Urgent/Problems** (Red/Orange): `urgent=true` OR `problems=true`
