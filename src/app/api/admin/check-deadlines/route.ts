@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { checkAndCreateDeadlineNotifications } from '../../utils/deadlineNotifications';
+import { checkAndCreateDeadlineNotifications } from '../../../utils/deadlineNotifications';
 
 export async function POST(request: NextRequest) {
   try {

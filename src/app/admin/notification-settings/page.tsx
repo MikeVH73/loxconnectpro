@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { collection, doc, getDoc, setDoc, Firestore } from 'firebase/firestore';
-import { db } from '../../firebaseClient';
-import { useAuth } from '../AuthProvider';
+import { db } from '../../../firebaseClient';
+import { useAuth } from '../../AuthProvider';
 
 interface NotificationSettings {
   startDateWarningDays: number;  // Days before start date to warn (for non-Planned QRs)
