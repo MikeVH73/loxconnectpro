@@ -35,12 +35,13 @@ const controlCenterItems = [
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const { user, userProfile, authLoading } = useAuth();
+  const { user, userProfile, loading } = useAuth();
   const [isControlCenterOpen, setIsControlCenterOpen] = useState(false);
+  const [hasUserToggledControlCenter, setHasUserToggledControlCenter] = useState(false);
   console.log("[Sidebar] userProfile:", userProfile);
 
   // Show loading state while auth is being determined
-  if (authLoading || userProfile === null) {
+  if (loading || userProfile === null) {
     return (
       <aside className="w-64 bg-white border-r border-gray-200 flex flex-col h-screen shadow-md">
         <div className="flex flex-col items-center justify-center border-b border-gray-100 py-3">
@@ -64,12 +65,18 @@ export default function Sidebar() {
   // Check if any Control Center item is active
   const isControlCenterActive = controlCenterItems.some(item => pathname.startsWith(item.href));
   
-  // Auto-open Control Center if one of its items is active
+  // Auto-open Control Center if one of its items is active (only if user hasn't manually toggled it)
   useEffect(() => {
-    if (isControlCenterActive && !isControlCenterOpen) {
+    if (isControlCenterActive && !isControlCenterOpen && !hasUserToggledControlCenter) {
       setIsControlCenterOpen(true);
     }
-  }, [isControlCenterActive, isControlCenterOpen]);
+  }, [isControlCenterActive, isControlCenterOpen, hasUserToggledControlCenter]);
+
+  // Handle Control Center toggle
+  const handleControlCenterToggle = () => {
+    setHasUserToggledControlCenter(true);
+    setIsControlCenterOpen(!isControlCenterOpen);
+  };
 
   return (
     <aside className="w-64 bg-white border-r border-gray-200 flex flex-col h-screen shadow-md">
@@ -106,7 +113,7 @@ export default function Sidebar() {
           {userProfile?.role === 'superAdmin' && (
             <li>
               <button
-                onClick={() => setIsControlCenterOpen(!isControlCenterOpen)}
+                onClick={handleControlCenterToggle}
                 className={`w-full flex items-center justify-between px-6 py-3 rounded-l-full font-medium transition-colors relative
                   ${isControlCenterActive
                     ? "bg-[#e40115] text-white shadow"
