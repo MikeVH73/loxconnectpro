@@ -309,6 +309,25 @@ export default function AnalyticsPage() {
     return { created, won, wonEUR, inProgress, newly, conversion: created ? Math.round((won/created)*100) : 0, avgDaysToWin };
   }, [filtered]);
 
+  // Top customers by Won EUR (and share % of total Won EUR)
+  const topCustomers = useMemo(() => {
+    const map = new Map<string, { name: string; wonEUR: number }>();
+    let totalWon = 0;
+    filtered.forEach(q => {
+      if ((q.status || '').toLowerCase() !== 'won') return;
+      const eur = q.totalValueEUR || 0;
+      totalWon += eur;
+      const id = (q.customer as string) || ((q as any).customerName || 'unknown');
+      const name = customers.find(c => c.id === q.customer)?.name || (q as any).customerName || 'Unknown';
+      const cur = map.get(id) || { name, wonEUR: 0 };
+      cur.wonEUR += eur;
+      map.set(id, cur);
+    });
+    const rows = Array.from(map.entries()).map(([id, v]) => ({ id, name: v.name, wonEUR: v.wonEUR, share: totalWon ? (v.wonEUR / totalWon) * 100 : 0 }));
+    rows.sort((a,b) => b.wonEUR - a.wonEUR);
+    return { rows, totalWon };
+  }, [filtered, customers]);
+
   // Conversion by country pair (creator -> involved)
   const pairFunnel = useMemo(() => {
     const map = new Map<string, { label: string; created: number; won: number; lost: number; cancelled: number; inProgress: number; newly: number }>();
@@ -498,6 +517,29 @@ export default function AnalyticsPage() {
                 )}
               </div>
             </div>
+          </div>
+
+          {/* Top Customers by Won EUR */}
+          <div className="p-4 bg-white rounded shadow">
+            <div className="text-sm text-gray-700 mb-2">Top customers by Won EUR — {year}</div>
+            {topCustomers.rows.length === 0 ? (
+              <div className="text-gray-500">No won revenue for selected filters</div>
+            ) : (
+              <div className="space-y-2">
+                {topCustomers.rows.slice(0, 10).map(r => (
+                  <div key={r.id} className="">{/* row */}
+                    <div className="flex justify-between text-sm">
+                      <div className="font-medium text-gray-800 truncate pr-2">{r.name}</div>
+                      <div className="text-gray-600">EUR {Math.round(r.wonEUR).toLocaleString()} • {r.share.toFixed(1)}%</div>
+                    </div>
+                    <div className="w-full bg-gray-100 h-2 rounded">
+                      <div className="bg-[#E40115] h-2 rounded" style={{ width: `${Math.min(100, r.share)}%` }} />
+                    </div>
+                  </div>
+                ))}
+                <div className="text-xs text-gray-500 mt-2">Total Won EUR: EUR {Math.round(topCustomers.totalWon).toLocaleString()}</div>
+              </div>
+            )}
           </div>
 
           {/* By country pair - top 10 */}

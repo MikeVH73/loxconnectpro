@@ -20,10 +20,10 @@ const navItems = [
   { label: "Broadcast", href: "/notifications/broadcast" },
   { label: "Modifications", href: "/modifications" },
   { label: "Analytics", href: "/analytics" },
-  { label: "IT Overview", href: "/admin/it-overview" },
   { label: "FAQs", href: "/faqs" },
   { label: "Profile", href: "/users/profile" },
   { label: "Security", href: "/users/security" },
+  { label: "IT Overview", href: "/admin/it-overview" },
 ];
 
 export default function Sidebar() {
