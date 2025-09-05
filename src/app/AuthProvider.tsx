@@ -165,12 +165,20 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
             console.log('User profile loaded successfully:', profile);
           } catch (err) {
             console.error('Error ensuring user profile:', err);
+            // If user doesn't have a profile (e.g., newly created user), sign them out
+            // This prevents React errors from trying to render with incomplete user data
+            if (err instanceof Error && err.message.includes('No profile found')) {
+              console.log('User has no profile, signing out to prevent errors');
+              await signOut(auth);
+              return;
+            }
             setError('Error loading user profile. Please try again.');
-        }
-      } else {
-        setUserProfile(null);
+            setUserProfile(null);
+          }
+        } else {
+          setUserProfile(null);
           setError(null);
-      }
+        }
       
       setLoading(false);
     });

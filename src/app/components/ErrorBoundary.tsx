@@ -1,84 +1,76 @@
-'use client';
+"use client";
 
-import React, { Component, ErrorInfo, ReactNode } from 'react';
+import React from 'react';
 
-interface Props {
-  children: ReactNode;
-}
-
-interface State {
+interface ErrorBoundaryState {
   hasError: boolean;
-  error: Error | null;
-  errorInfo: ErrorInfo | null;
+  error?: Error;
 }
 
-class ErrorBoundary extends Component<Props, State> {
-  public state: State = {
-    hasError: false,
-    error: null,
-    errorInfo: null
+interface ErrorBoundaryProps {
+  children: React.ReactNode;
+  fallback?: React.ComponentType<{ error?: Error; resetError: () => void }>;
+}
+
+class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error('ErrorBoundary caught an error:', error, errorInfo);
+  }
+
+  resetError = () => {
+    this.setState({ hasError: false, error: undefined });
   };
 
-  public static getDerivedStateFromError(error: Error): State {
-    return { hasError: true, error, errorInfo: null };
-  }
-
-  public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    this.setState({
-      error,
-      errorInfo
-    });
-    console.error('Uncaught error:', error, errorInfo);
-  }
-
-  private getErrorMessage(error: Error | null): string {
-    if (!error) return 'An unexpected error occurred';
-
-    // Handle specific React errors
-    if (error.message.includes('Objects are not valid as a React child')) {
-      return 'There was an error rendering the content. This is usually caused by trying to display an object directly. Please refresh the page or try again later.';
-    }
-
-    return error.message;
-  }
-
-  public render() {
+  render() {
     if (this.state.hasError) {
+      if (this.props.fallback) {
+        const FallbackComponent = this.props.fallback;
+        return <FallbackComponent error={this.state.error} resetError={this.resetError} />;
+      }
+
       return (
         <div className="min-h-screen flex items-center justify-center bg-gray-50">
-          <div className="max-w-md w-full p-6">
-            <div className="text-center">
-              <h2 className="text-2xl font-semibold text-gray-900 mb-2">Something went wrong</h2>
-              <p className="text-gray-600 mb-4">
-                {this.getErrorMessage(this.state.error)}
-              </p>
-              <div className="space-y-4">
-                <button
-                  onClick={() => window.location.reload()}
-                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                >
-                  Reload page
-                </button>
-                <button
-                  onClick={() => window.history.back()}
-                  className="block w-full text-sm text-gray-600 hover:text-gray-900"
-                >
-                  Go back to previous page
-                </button>
-              </div>
-              {typeof window !== 'undefined' && this.state.errorInfo && (
-                <details className="mt-4 text-left">
-                  <summary className="text-sm text-gray-600 cursor-pointer hover:text-gray-900">
-                    Technical Details
-                  </summary>
-                  <pre className="mt-2 text-xs bg-gray-100 p-4 rounded overflow-auto">
-                    {this.state.error && this.state.error.toString()}
-                    <br />
-                    {this.state.errorInfo.componentStack}
-                  </pre>
-                </details>
-              )}
+          <div className="max-w-md w-full bg-white shadow-lg rounded-lg p-6">
+            <div className="flex items-center justify-center w-12 h-12 mx-auto bg-red-100 rounded-full mb-4">
+              <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+              </svg>
             </div>
+            <h2 className="text-lg font-medium text-gray-900 text-center mb-2">
+              Something went wrong
+            </h2>
+            <p className="text-sm text-gray-600 text-center mb-4">
+              An error occurred while processing your request. This might be a temporary issue.
+            </p>
+            <div className="flex space-x-3">
+              <button
+                onClick={this.resetError}
+                className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                Try Again
+              </button>
+              <button
+                onClick={() => window.location.href = '/dashboard'}
+                className="flex-1 bg-gray-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500"
+              >
+                Go to Dashboard
+              </button>
+            </div>
+            {process.env.NODE_ENV === 'development' && this.state.error && (
+              <details className="mt-4 p-3 bg-gray-100 rounded text-xs">
+                <summary className="cursor-pointer font-medium">Error Details</summary>
+                <pre className="mt-2 whitespace-pre-wrap">{this.state.error.stack}</pre>
+              </details>
+            )}
           </div>
         </div>
       );
@@ -88,4 +80,4 @@ class ErrorBoundary extends Component<Props, State> {
   }
 }
 
-export default ErrorBoundary; 
+export default ErrorBoundary;

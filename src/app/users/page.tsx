@@ -7,6 +7,7 @@ import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, setDoc, Firesto
 import { createUserWithEmailAndPassword, updateProfile, signInWithEmailAndPassword, signOut } from "firebase/auth";
 import { db, auth } from "../../firebaseClient";
 import { checkAndFixUserProfiles } from "../utils/userProfileFixer";
+import ErrorBoundary from "../components/ErrorBoundary";
 
 export default function UsersPage() {
   const { user, loading, userProfile } = useAuth();
@@ -277,7 +278,8 @@ export default function UsersPage() {
       });
       
       // Create Firestore user document with the Firebase Auth UID as document ID
-      await setDoc(doc(db as Firestore, "users", userCredential.user.uid), {
+      // Do this immediately to prevent race conditions with AuthProvider
+      const userProfileData = {
         displayName: newUser.displayName.trim(),
         name: newUser.displayName.trim(), // Add name field for compatibility
         email: newUser.email.trim(),
@@ -286,13 +288,31 @@ export default function UsersPage() {
         businessUnit: newUser.countries.length > 0 ? newUser.countries[0] : 'Unknown', // Add businessUnit
         uid: userCredential.user.uid,
         createdAt: new Date()
-      });
+      };
       
-      // Sign out the newly created user
-      await signOut(auth as any);
+      await setDoc(doc(db as Firestore, "users", userCredential.user.uid), userProfileData);
       
-      // Re-authenticate the original admin user
-      await signInWithEmailAndPassword(auth as any, currentUserEmail, adminPassword);
+      // Small delay to ensure Firestore write completes before auth state change
+      await new Promise(resolve => setTimeout(resolve, 50));
+      
+      // Handle auth state changes gracefully
+      try {
+        // Sign out the newly created user
+        await signOut(auth as any);
+        
+        // Small delay to let auth state settle
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        // Re-authenticate the original admin user
+        await signInWithEmailAndPassword(auth as any, currentUserEmail, adminPassword);
+        
+        // Additional delay to ensure auth state is stable
+        await new Promise(resolve => setTimeout(resolve, 100));
+      } catch (authError) {
+        console.warn('Auth state change error (user was still created successfully):', authError);
+        // Don't fail the entire operation if auth switching fails
+        // The user was created successfully, which is the main goal
+      }
       
       // Reset form and close modals
       setNewUser({
@@ -793,7 +813,8 @@ export default function UsersPage() {
   }
 
   return (
-    <div className="p-8">
+    <ErrorBoundary>
+      <div className="p-8">
       {needsMonthlyReview && (
         <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 text-yellow-800 rounded text-sm flex items-center justify-between">
           <span>Monthly Access Review for {monthKey} is due. Please confirm active users.</span>
@@ -1657,6 +1678,7 @@ export default function UsersPage() {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </ErrorBoundary>
   );
 } 

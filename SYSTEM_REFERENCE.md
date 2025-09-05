@@ -76,6 +76,15 @@ interface UserProfile {
 - **Profile Fixing**: Utility to repair existing user profiles with missing fields
 - **Temporary Password Creation**: Generate temporary passwords for users who forgot their password
 
+**User Creation Process**:
+- Creates Firebase Authentication account (automatically signs in new user)
+- Updates user profile with display name
+- Creates Firestore user document immediately to prevent race conditions
+- Handles auth state changes gracefully with proper error handling
+- Includes React ErrorBoundary to catch and handle any React errors
+- Re-authenticates original admin user after user creation
+- Prevents React error #300 by ensuring proper auth state management
+
 **Admin Actions UI (Buttons, Order, Colors, Icons)**
 - **Order (most used → least used)**:
   1. Edit
