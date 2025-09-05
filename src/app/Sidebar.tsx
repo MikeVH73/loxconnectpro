@@ -23,6 +23,7 @@ const navItems = [
   { label: "FAQs", href: "/faqs" },
   { label: "Profile", href: "/users/profile" },
   { label: "Security", href: "/users/security" },
+  { label: "Notification Settings", href: "/admin/notification-settings" },
   { label: "IT Overview", href: "/admin/it-overview" },
 ];
 
@@ -44,6 +45,9 @@ export default function Sidebar() {
     }
     if (item.label === 'IT Overview') {
       return userProfile?.role === 'superAdmin';
+    }
+    if (item.label === 'Notification Settings') {
+      return userProfile?.role === 'admin' || userProfile?.role === 'superAdmin';
     }
     return true;
   });

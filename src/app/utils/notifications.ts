@@ -8,7 +8,7 @@ interface CreateNotificationParams {
   senderCountry: string;
   targetCountry: string;
   content: string;
-  notificationType: 'message' | 'status_change' | 'property_change' | 'deletion';
+  notificationType: 'message' | 'status_change' | 'property_change' | 'deletion' | 'deadline_warning';
 }
 
 function normalizeCountryKey(name: string | undefined): string {

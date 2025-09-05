@@ -304,6 +304,7 @@ interface QuoteRequest {
 2. **status_change**: Quote request status updates
 3. **property_change**: Field modifications
 4. **deletion**: Quote request deletion notifications
+5. **deadline_warning**: Upcoming start/end date notifications
 
 ### **Notification Targeting Logic**
 ```typescript
@@ -325,9 +326,47 @@ const targetCountry = userCountry === creatorCountry
 - Read‑only view: Replaced legacy label checkboxes with non‑interactive badges; all label toggling remains in the edit page only.
 - Messaging UX: Dashboard panel autoscrolls to newest message on open/switch; panel width widened to `410px` to fully cover page scrollbar.
 - Autosave policy: Debounce set to 5 seconds from the last change to consolidate updates; after successful save state is marked clean and baseline is refreshed to prevent repeating diffs.
-- Leave protection: When unsaved changes exist, users are prompted “Want to SAVE your changes before leaving this Quote Request?” with Save/Continue options.
+- Leave protection: When unsaved changes exist, users are prompted "Want to SAVE your changes before leaving this Quote Request?" with Save/Continue options.
   - After manual save, the autosave baseline is refreshed to avoid later autosaves re-introducing old state
   - Navigation prompt save uses an internal ref and reliably awaits the save before leaving
+
+### **Deadline Notification System**
+**Location**: `src/app/utils/deadlineNotifications.ts`, `src/app/admin/notification-settings/page.tsx`
+
+**Core Features**:
+- **Start Date Warnings**: Notify users when Quote Requests that are not yet "Planned" have approaching start dates
+- **End Date Warnings**: Notify users when "Won" Quote Requests have approaching end dates
+- **Country-Specific Settings**: Each country can configure their own notification preferences
+- **Automatic Scheduling**: Notifications are created automatically based on Quote Request dates
+- **Admin Configuration**: Admin and SuperAdmin users can set warning days (1-30 days)
+
+**Notification Settings**:
+- **Start Date Warning Days**: Days before start date to warn (default: 7 days)
+- **End Date Warning Days**: Days before end date to warn (default: 3 days)
+- **Enable/Disable**: Toggle deadline notifications on/off per country
+- **Country-Specific**: Settings stored per country in `notificationSettings` collection
+
+**Deadline Logic**:
+- **Start Date Notifications**: Triggered for QRs that are NOT "Planned" and have status other than Won/Lost/Cancelled
+- **End Date Notifications**: Triggered for QRs with status "Won"
+- **Deduplication**: Prevents duplicate notifications for the same deadline
+- **Date Calculation**: Uses current date vs QR start/end dates to determine warning timing
+
+**API Endpoints**:
+- `POST /api/admin/check-deadlines`: Manually trigger deadline check (for testing/scheduling)
+- `GET /api/admin/check-deadlines`: Same as POST (for easy testing)
+
+**Admin Interface**:
+- **Settings Page**: `/admin/notification-settings` (Admin/SuperAdmin only)
+- **Test Function**: Manual trigger to test deadline notifications
+- **Country Context**: Settings apply to the admin's country
+- **Real-time Testing**: Immediate feedback on notification creation
+
+**Integration Points**:
+- **Notification System**: Uses existing notification infrastructure
+- **Sidebar Navigation**: Added "Notification Settings" link for Admin/SuperAdmin
+- **Dashboard Integration**: Deadline notifications appear in standard notification areas
+- **Quote Request Data**: Reads startDate, endDate, status, and labels.planned fields
 
 ## 🏷️ **LABEL SYSTEM**
 
