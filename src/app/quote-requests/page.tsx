@@ -325,12 +325,20 @@ const QuoteRequestsPage = () => {
 
   const getCustomerName = (id: string | undefined): string => {
     if (!id) return 'Unknown Customer';
+    if (!customers || customers.length === 0) {
+      console.warn('[QuoteRequests] Customers not loaded yet, showing ID:', id);
+      return id; // Show ID as fallback
+    }
     const customer = customers.find(c => c.id === id);
     return customer ? customer.name : id;
   };
 
   const getLabelName = (id: string | undefined): string => {
     if (!id) return 'Unknown Label';
+    if (!labels || labels.length === 0) {
+      console.warn('[QuoteRequests] Labels not loaded yet, showing ID:', id);
+      return id; // Show ID as fallback
+    }
     const label = labels.find(l => l.id === id);
     return label ? label.name : id;
   };
@@ -421,6 +429,18 @@ const QuoteRequestsPage = () => {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <LoadingSpinner />
+      </div>
+    );
+  }
+
+  // Additional check: Don't render cards if essential data isn't loaded
+  if (!customers || customers.length === 0 || !labels || labels.length === 0) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-gray-900 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading customer and label data...</p>
+        </div>
       </div>
     );
   }

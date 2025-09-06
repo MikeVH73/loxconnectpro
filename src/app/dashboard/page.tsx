@@ -99,15 +99,23 @@ export default function DashboardPage() {
     }
   }, [userProfile?.role]);
 
-  // Helper functions
+  // Helper functions with better error handling
   const getCustomerName = (id: string | undefined) => {
     if (!id) return '';
+    if (!customers || customers.length === 0) {
+      console.warn('[Dashboard] Customers not loaded yet, showing ID:', id);
+      return id; // Show ID as fallback
+    }
     const customer = customers.find(c => c.id === id);
     return customer ? customer.name : id;
   };
 
   const getLabelName = (id: string | undefined) => {
     if (!id) return '';
+    if (!labels || labels.length === 0) {
+      console.warn('[Dashboard] Labels not loaded yet, showing ID:', id);
+      return id; // Show ID as fallback
+    }
     const label = labels.find(l => l.id === id);
     return label ? label.name : id;
   };
@@ -351,6 +359,18 @@ export default function DashboardPage() {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-gray-900"></div>
+      </div>
+    );
+  }
+
+  // Additional check: Don't render cards if essential data isn't loaded
+  if (!customers || customers.length === 0 || !labels || labels.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-gray-900 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading customer and label data...</p>
+        </div>
       </div>
     );
   }
