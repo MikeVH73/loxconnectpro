@@ -45,7 +45,15 @@ export default function ITOverviewPage() {
         <h2 className="text-xl font-semibold mb-2">Security</h2>
         <ul className="list-disc ml-6 text-gray-800">
           <li>Authentication: Firebase Auth (email/password + optional MFA TOTP)</li>
-          <li>App Check: reCAPTCHA Enterprise tokens (enforced in production)</li>
+          <li>App Check: reCAPTCHA Enterprise tokens (enforced in production)
+            <ul className="list-disc ml-6">
+              <li>Status: Enabled with reCAPTCHA Enterprise provider</li>
+              <li>Protection: Billing fraud, phishing attacks, automated abuse</li>
+              <li>User Impact: Completely invisible to users (no CAPTCHA puzzles)</li>
+              <li>Enforcement: Automatic token validation on all Firebase API calls</li>
+              <li>Configuration: Site key configured in firebaseClient.ts</li>
+            </ul>
+          </li>
           <li>Blocking Functions (per environment): optional domain allowlist & email‑verified requirement</li>
           <li>Session: HttpOnly cookie flow (server endpoints mint/clear cookie)</li>
           <li>Authorization:
@@ -56,6 +64,7 @@ export default function ITOverviewPage() {
             </ul>
           </li>
           <li>Data targeting: normalized <code>targetCountryKey</code> for notifications for consistent querying</li>
+          <li>Email Templates: Firebase-managed with customizable sender name and content</li>
         </ul>
       </section>
 
