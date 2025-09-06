@@ -1538,6 +1538,7 @@ export default function EditQuoteRequest() {
                       onChange={(e) => handleInputChange("endDate", e.target.value)}
                       className="w-full p-2 border border-gray-300 rounded-md"
                       disabled={isReadOnly || quoteRequest.customerDecidesEnd}
+                      min={quoteRequest.startDate || undefined}
                     />
                   </div>
                 </div>

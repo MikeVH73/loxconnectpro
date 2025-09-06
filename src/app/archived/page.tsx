@@ -30,6 +30,12 @@ export default function ArchivedPage() {
   const { userProfile, user, loading: authLoading } = useAuth();
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [deleteQuery, setDeleteQuery] = useState('test');
+  
+  // Filter states
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [countryFilter, setCountryFilter] = useState<string>('all');
+  const [dateFilter, setDateFilter] = useState<string>('all');
+  const [searchTerm, setSearchTerm] = useState<string>('');
 
   useEffect(() => {
     const fetchData = async () => {
@@ -79,6 +85,57 @@ export default function ArchivedPage() {
     fetchLabels();
     fetchCustomers();
   }, [userProfile]);
+
+  // Apply filters to quote requests
+  const getFilteredQuoteRequests = (allRequests: QuoteRequest[]): QuoteRequest[] => {
+    let filtered = [...allRequests];
+    
+    // Apply status filter
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter(qr => qr.status === statusFilter);
+    }
+    
+    // Apply country filter
+    if (countryFilter !== 'all') {
+      filtered = filtered.filter(qr => 
+        qr.creatorCountry === countryFilter || qr.involvedCountry === countryFilter
+      );
+    }
+    
+    // Apply date filter
+    if (dateFilter !== 'all') {
+      const now = new Date();
+      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+      
+      filtered = filtered.filter(qr => {
+        const createdAt = qr.createdAt?.toDate ? qr.createdAt.toDate() : new Date(qr.createdAt);
+        switch (dateFilter) {
+          case 'last30days':
+            return createdAt >= thirtyDaysAgo;
+          case 'last90days':
+            return createdAt >= ninetyDaysAgo;
+          case 'older':
+            return createdAt < ninetyDaysAgo;
+          default:
+            return true;
+        }
+      });
+    }
+    
+    // Apply search term
+    if (searchTerm.trim()) {
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter(qr => 
+        (qr.title || '').toLowerCase().includes(term) ||
+        (qr.customer || '').toLowerCase().includes(term) ||
+        (qr.creatorCountry || '').toLowerCase().includes(term) ||
+        (qr.involvedCountry || '').toLowerCase().includes(term)
+      );
+    }
+    
+    return filtered;
+  };
 
   const handleBulkDeleteTests = async () => {
     if (userProfile?.role !== 'superAdmin') return;
@@ -219,9 +276,90 @@ export default function ArchivedPage() {
           </div>
         )}
       </div>
+      
+      {/* Filter Controls */}
+      <div className="bg-gray-50 p-4 rounded-lg mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+          {/* Search */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Search</label>
+            <input
+              type="text"
+              placeholder="Title, customer, or country..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          
+          {/* Status Filter */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="all">All Status</option>
+              <option value="Won">Won</option>
+              <option value="Lost">Lost</option>
+              <option value="Cancelled">Cancelled</option>
+            </select>
+          </div>
+          
+          {/* Country Filter */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Country</label>
+            <select
+              value={countryFilter}
+              onChange={(e) => setCountryFilter(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="all">All Countries</option>
+              {Array.from(new Set([
+                ...quoteRequests.map(qr => qr.creatorCountry),
+                ...quoteRequests.map(qr => qr.involvedCountry)
+              ])).sort().map(country => (
+                <option key={country} value={country}>{country}</option>
+              ))}
+            </select>
+          </div>
+          
+          {/* Date Filter */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Date Range</label>
+            <select
+              value={dateFilter}
+              onChange={(e) => setDateFilter(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="all">All Dates</option>
+              <option value="last30days">Last 30 Days</option>
+              <option value="last90days">Last 90 Days</option>
+              <option value="older">Older than 90 Days</option>
+            </select>
+          </div>
+          
+          {/* Clear Filters */}
+          <div className="flex items-end">
+            <button
+              onClick={() => {
+                setStatusFilter('all');
+                setCountryFilter('all');
+                setDateFilter('all');
+                setSearchTerm('');
+              }}
+              className="w-full px-3 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500"
+            >
+              Clear Filters
+            </button>
+          </div>
+        </div>
+      </div>
+      
       {loading ? (
         <div className="text-center py-20 text-gray-500">Loading archived quote requests...</div>
-      ) : quoteRequests.length === 0 ? (
+      ) : getFilteredQuoteRequests(quoteRequests).length === 0 ? (
         <div className="text-center py-20 text-gray-500">No archived requests found</div>
       ) : (
         <div className="overflow-x-auto">
@@ -237,7 +375,7 @@ export default function ArchivedPage() {
               </tr>
             </thead>
             <tbody>
-              {quoteRequests.map(qr => (
+              {getFilteredQuoteRequests(quoteRequests).map(qr => (
                 <tr key={qr.id} className="border-t align-top">
                   <td colSpan={6} className="px-4 py-4">
                     <Link href={`/quote-requests/${qr.id}/edit`} className="block group">

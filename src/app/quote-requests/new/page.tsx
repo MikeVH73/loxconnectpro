@@ -548,7 +548,13 @@ const NewQuoteRequestPage = () => {
             <DateInput label="Start Date" value={startDate} onChange={(iso)=>{ setStartDate(iso); setSd(iso?iso.slice(8,10):''); setSm(iso?iso.slice(5,7):''); setSy(iso?iso.slice(0,4):''); }} required />
           </div>
           <div>
-            <DateInput label="End Date" value={endDate} onChange={setEndDate} disabled={customerDecidesEnd} />
+            <DateInput 
+              label="End Date" 
+              value={endDate} 
+              onChange={setEndDate} 
+              disabled={customerDecidesEnd}
+              min={startDate || undefined}
+            />
             <div className="mt-2">
               <label className="inline-flex items-center">
                 <input
