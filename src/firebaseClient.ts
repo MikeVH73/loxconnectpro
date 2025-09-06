@@ -51,9 +51,9 @@ function initializeFirebase() {
     // Optional: Initialize App Check (feature-flagged, non-breaking)
     // App Check is now enabled with hardcoded reCAPTCHA key to avoid process.env issues
     const enableAppCheck = true;
-    const recaptchaKey = "6LfXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // TODO: Replace with actual reCAPTCHA Enterprise site key from Firebase Console
+    const recaptchaKey = "6Lf7-aArAAAAAAhOpt4i9r18QGU_ny4JRvC_NZB_"; // TODO: Replace with actual reCAPTCHA Enterprise site key from Firebase Console
     
-    if (enableAppCheck && app && recaptchaKey && recaptchaKey !== "6LfXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX") {
+    if (enableAppCheck && app && recaptchaKey && recaptchaKey !== "6Lf7-aArAAAAAAhOpt4i9r18QGU_ny4JRvC_NZB_") {
       // dynamic import to avoid hard dependency when disabled
       import('firebase/app-check').then(async ({ initializeAppCheck, ReCaptchaEnterpriseProvider, getToken, onTokenChanged }) => {
         try {
