@@ -61,10 +61,21 @@ function formatDate(dateString: string): string {
  */
 async function getNotificationSettings(db: admin.firestore.Firestore, country: string): Promise<NotificationSettings> {
   try {
-    const settingsDoc = await db.collection('notificationSettings').doc(country).get();
+    console.log(`[DEBUG] Looking up notification settings for country: "${country}"`);
+    
+    // Try the exact country name first (how settings are stored)
+    let settingsDoc = await db.collection('notificationSettings').doc(country).get();
+    
+    if (!settingsDoc.exists) {
+      console.log(`[DEBUG] No settings found for exact country name "${country}", trying normalized key`);
+      // Try normalized key as fallback
+      const normalizedKey = normalizeCountryKey(country);
+      settingsDoc = await db.collection('notificationSettings').doc(normalizedKey).get();
+    }
     
     if (settingsDoc.exists) {
       const data = settingsDoc.data() as NotificationSettings;
+      console.log(`[DEBUG] Found settings for "${country}":`, data);
       return {
         startDateWarningDays: data.startDateWarningDays || 7,
         endDateWarningDays: data.endDateWarningDays || 3,
@@ -72,6 +83,7 @@ async function getNotificationSettings(db: admin.firestore.Firestore, country: s
       };
     }
 
+    console.log(`[DEBUG] No notification settings found for "${country}", using defaults`);
     // Return default settings if none exist
     return {
       startDateWarningDays: 7,
@@ -208,7 +220,16 @@ async function checkAndCreateDeadlineNotifications(): Promise<string[]> {
       // Get notification settings for involved country
       const settings = await getNotificationSettings(db, qrData.involvedCountry);
       
-      if (!settings.enabled) continue;
+      console.log(`[DEBUG] Settings for ${qrData.involvedCountry}:`, {
+        enabled: settings.enabled,
+        startDateWarningDays: settings.startDateWarningDays,
+        endDateWarningDays: settings.endDateWarningDays
+      });
+      
+      if (!settings.enabled) {
+        console.log(`[DEBUG] Skipping QR ${qrId} - notifications disabled for ${qrData.involvedCountry}`);
+        continue;
+      }
 
       // Check start date deadline (for non-Planned QRs)
       if (!qrData.planned && qrData.status !== 'Won' && qrData.status !== 'Lost' && qrData.status !== 'Cancelled') {
