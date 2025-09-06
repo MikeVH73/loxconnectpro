@@ -196,20 +196,28 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     try {
+      // Clear user state immediately to prevent components from accessing stale data
+      setUser(null);
+      setUserProfile(null);
+      setError(null);
+      
       // Clear secure session cookie first (best-effort)
       try {
         await fetch('/api/auth/session', { method: 'DELETE' });
       } catch (e) {
         // ignore network errors; proceed to client sign out
       }
+      
+      // Sign out from Firebase
       await signOut(auth);
-      setUser(null);
-      setUserProfile(null);
-      setError(null);
+      
+      // Redirect to login page
       window.location.href = '/login';
     } catch (err) {
       console.error('Error signing out:', err);
       setError('Error signing out');
+      // Even if there's an error, redirect to login
+      window.location.href = '/login';
     }
   };
 
