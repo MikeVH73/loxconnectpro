@@ -187,8 +187,20 @@ async function checkAndCreateDeadlineNotifications(): Promise<string[]> {
       const qrData = qrDoc.data();
       const qrId = qrDoc.id;
       
+      console.log(`[DEBUG] Checking QR: ${qrData.title}`, {
+        id: qrId,
+        planned: qrData.planned,
+        status: qrData.status,
+        involvedCountry: qrData.involvedCountry,
+        startDate: qrData.startDate,
+        endDate: qrData.endDate
+      });
+      
       // Skip if no dates
-      if (!qrData.startDate || !qrData.endDate) continue;
+      if (!qrData.startDate || !qrData.endDate) {
+        console.log(`[DEBUG] Skipping QR ${qrId} - missing dates`);
+        continue;
+      }
 
       const startDate = qrData.startDate.toDate ? qrData.startDate.toDate() : new Date(qrData.startDate);
       const endDate = qrData.endDate.toDate ? qrData.endDate.toDate() : new Date(qrData.endDate);
@@ -199,8 +211,16 @@ async function checkAndCreateDeadlineNotifications(): Promise<string[]> {
       if (!settings.enabled) continue;
 
       // Check start date deadline (for non-Planned QRs)
-      if (!qrData.labels?.planned && qrData.status !== 'Won' && qrData.status !== 'Lost' && qrData.status !== 'Cancelled') {
+      if (!qrData.planned && qrData.status !== 'Won' && qrData.status !== 'Lost' && qrData.status !== 'Cancelled') {
         const daysUntilStart = Math.ceil((startDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+        
+        console.log(`[DEBUG] Start date check for ${qrData.title}:`, {
+          startDate: startDate.toISOString(),
+          today: today.toISOString(),
+          daysUntilStart,
+          startDateWarningDays: settings.startDateWarningDays,
+          shouldNotify: daysUntilStart >= 0 && daysUntilStart <= settings.startDateWarningDays
+        });
         
         if (daysUntilStart >= 0 && daysUntilStart <= settings.startDateWarningDays) {
           // Check if notification already exists for this deadline
