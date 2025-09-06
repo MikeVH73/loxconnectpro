@@ -433,8 +433,11 @@ const NewQuoteRequestPage = () => {
               <option value="">Select a customer</option>
               {customers
                 ?.filter((c: any) => {
+                  // Use same filtering logic as Customers page
                   const owner = (c as any).ownerCountry || '';
-                  return owner === creatorCountry; // only creator's customers
+                  const related = new Set<string>([owner, ...Object.keys(c.customerNumbers || {})]);
+                  const match = Array.from(related).some(country => country === creatorCountry);
+                  return match;
                 })
                 .sort((a: any, b: any) => String(a.name).localeCompare(String(b.name)))
                 .map((customer: Customer) => (
