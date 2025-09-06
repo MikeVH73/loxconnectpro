@@ -21,15 +21,19 @@ const navItems = [
   { label: "Security", href: "/users/security" },
 ];
 
-// Control Center submenu items for SuperAdmin
+// Admin-only menu items (visible to both admin and superAdmin)
+const adminNavItems = [
+  { label: "Users", href: "/users" },
+  { label: "Notification Settings", href: "/admin/notification-settings" },
+];
+
+// Control Center submenu items for SuperAdmin only
 const controlCenterItems = [
   { label: "Labels", href: "/labels", icon: FiTag },
   { label: "Countries", href: "/countries", icon: FiGlobe },
-  { label: "Users", href: "/users", icon: FiUsers },
   { label: "Scan Customers", href: "/customers/scan", icon: FiSearch },
   { label: "Broadcast", href: "/notifications/broadcast", icon: FiSpeaker },
   { label: "Modifications", href: "/modifications", icon: FiEdit3 },
-  { label: "Notification Settings", href: "/admin/notification-settings", icon: FiBell },
   { label: "IT Overview", href: "/admin/it-overview", icon: FiMonitor },
 ];
 
@@ -108,6 +112,26 @@ export default function Sidebar() {
               </Link>
             </li>
           ))}
+
+          {/* Admin menu items (visible to both admin and superAdmin) */}
+          {(userProfile?.role === 'admin' || userProfile?.role === 'superAdmin') && (
+            <>
+              {adminNavItems.map((item) => (
+                <li key={item.href}>
+                  <Link
+                    href={item.href}
+                    className={`block px-6 py-3 rounded-l-full font-medium transition-colors relative
+                      ${pathname.startsWith(item.href)
+                        ? "bg-[#e40115] text-white shadow"
+                        : "text-gray-800 hover:bg-[#bbbdbe] hover:text-[#e40115]"}
+                    `}
+                  >
+                    {item.label}
+                  </Link>
+                </li>
+              ))}
+            </>
+          )}
           
           {/* Control Center for SuperAdmin */}
           {userProfile?.role === 'superAdmin' && (
