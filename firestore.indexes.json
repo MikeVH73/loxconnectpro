@@ -147,7 +147,14 @@
           "order": "ASCENDING"
         }
       ]
-    }
-  ],
-  "fieldOverrides": []
-} 
+    },
+    {
+      "collectionGroup": "users",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "email",
+          "order": "ASCENDING"
+        }
+      ]
+    } 

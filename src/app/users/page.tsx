@@ -41,6 +41,12 @@ export default function UsersPage() {
   const [reviewCompleted, setReviewCompleted] = useState(false);
 	const [lastReviewMonth, setLastReviewMonth] = useState<string | null>(null);
 	const [archiving, setArchiving] = useState(false);
+  
+  // Filter states
+  const [roleFilter, setRoleFilter] = useState<string>('all');
+  const [countryFilter, setCountryFilter] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [searchTerm, setSearchTerm] = useState<string>('');
 
   // Helper: deduplicate countries by normalized name (trimmed, case-insensitive)
   const dedupeCountriesByName = (list: any[]) => {
@@ -61,6 +67,92 @@ export default function UsersPage() {
     if (!myCountries || myCountries.length === 0) return all;
     return all.filter((u: any) => Array.isArray(u?.countries) && u.countries.some((c: string) => myCountries.includes(c)));
   };
+
+  // Apply all filters to users
+  const getFilteredUsers = (allUsers: any[]): any[] => {
+    let filtered = filterUsersForCurrentRole(allUsers);
+    
+    // Apply role filter
+    if (roleFilter !== 'all') {
+      filtered = filtered.filter(user => {
+        const normalizedRole = user.role === 'readOnly' || user.role === 'user' ? 'Employee' : user.role;
+        return normalizedRole === roleFilter;
+      });
+    }
+    
+    // Apply country filter
+    if (countryFilter !== 'all') {
+      filtered = filtered.filter(user => 
+        user.countries && user.countries.includes(countryFilter)
+      );
+    }
+    
+    // Apply status filter
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter(user => {
+        const isDisabled = user.disabled || user.accessDisabled;
+        if (statusFilter === 'active') return !isDisabled;
+        if (statusFilter === 'disabled') return isDisabled;
+        return true;
+      });
+    }
+    
+    // Apply search term
+    if (searchTerm.trim()) {
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter(user => 
+        (user.displayName || '').toLowerCase().includes(term) ||
+        (user.email || '').toLowerCase().includes(term) ||
+        (user.countries || []).some((country: string) => country.toLowerCase().includes(term))
+      );
+    }
+    
+    return filtered;
+  };
+
+  // Reapply filters when filter states change
+  useEffect(() => {
+    if (users.length > 0) {
+      // Get all users from the database and reapply filters
+      const fetchAndFilter = async () => {
+        try {
+          const usersSnap = await getDocs(collection(db as Firestore, "users"));
+          let allUsers = usersSnap.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) }));
+          
+          // SuperAdmin: augment with MFA status via Admin SDK API route
+          if (userProfile?.role === 'superAdmin' && allUsers.length > 0) {
+            try {
+              const uids = allUsers.map(u => u.id);
+              const emails = allUsers.map(u => (u.email || '').toLowerCase());
+              const res = await fetch('/api/admin/auth-status', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ uids, emails }) });
+              const data = await res.json();
+              if (res.ok && (data?.statusesByUid || data?.statusesByEmail)) {
+                allUsers = allUsers.map(u => {
+                  const byUid = data.statusesByUid?.[u.id];
+                  const byEmail = data.statusesByEmail?.[(u.email || '').toLowerCase()];
+                  const src = byUid || byEmail || {};
+                  return {
+                    ...u,
+                    mfaEnabled: Boolean(src.mfaEnabled),
+                    disabled: Boolean(src.disabled),
+                    emailVerified: Boolean(src.emailVerified),
+                  };
+                });
+              }
+            } catch (e) {
+              console.warn('Failed to fetch auth status for filtering:', e);
+            }
+          }
+          
+          setUsers(getFilteredUsers(allUsers));
+        } catch (error) {
+          console.error("Error refiltering users:", error);
+        }
+      };
+      
+      fetchAndFilter();
+    }
+  }, [roleFilter, countryFilter, statusFilter, searchTerm, userProfile?.role]);
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -114,7 +206,7 @@ export default function UsersPage() {
         }
         
         // Role-aware filtering (admins see only their countries)
-        setUsers(filterUsersForCurrentRole(allUsers));
+        setUsers(getFilteredUsers(allUsers));
       } catch (error) {
         console.error("Error fetching users:", error);
       } finally {
@@ -330,7 +422,7 @@ export default function UsersPage() {
       // Refresh users list and reapply role filter
       const usersSnap = await getDocs(collection(db as Firestore, "users"));
       const allUsers = usersSnap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
-      setUsers(filterUsersForCurrentRole(allUsers));
+      setUsers(getFilteredUsers(allUsers));
       
     } catch (error: any) {
       console.error("Error creating user:", error);
@@ -388,7 +480,7 @@ export default function UsersPage() {
       // Refresh users list and reapply role filter
       const usersSnap = await getDocs(collection(db as Firestore, "users"));
       const allUsers = usersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setUsers(filterUsersForCurrentRole(allUsers));
+      setUsers(getFilteredUsers(allUsers));
     } catch (error) {
       console.error("Error deleting user:", error);
     }
@@ -436,7 +528,7 @@ export default function UsersPage() {
       }
 
       // Reapply role-aware filtering after fixes
-      setUsers(filterUsersForCurrentRole(allUsers));
+      setUsers(getFilteredUsers(allUsers));
       
     } catch (error) {
       console.error("Error fixing user profiles:", error);
@@ -926,6 +1018,82 @@ export default function UsersPage() {
               </button>
                 </>
             )}
+            </div>
+          </div>
+          
+          {/* Filter Controls */}
+          <div className="bg-gray-50 p-4 rounded-lg mb-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+              {/* Search */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Search</label>
+                <input
+                  type="text"
+                  placeholder="Name, email, or country..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              
+              {/* Role Filter */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
+                <select
+                  value={roleFilter}
+                  onChange={(e) => setRoleFilter(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="all">All Roles</option>
+                  <option value="superAdmin">SuperAdmin</option>
+                  <option value="admin">Admin</option>
+                  <option value="Employee">Employee</option>
+                </select>
+              </div>
+              
+              {/* Country Filter */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Country</label>
+                <select
+                  value={countryFilter}
+                  onChange={(e) => setCountryFilter(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="all">All Countries</option>
+                  {countries.map(country => (
+                    <option key={country.id} value={country.name}>{country.name}</option>
+                  ))}
+                </select>
+              </div>
+              
+              {/* Status Filter */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="all">All Status</option>
+                  <option value="active">Active</option>
+                  <option value="disabled">Disabled</option>
+                </select>
+              </div>
+              
+              {/* Clear Filters */}
+              <div className="flex items-end">
+                <button
+                  onClick={() => {
+                    setRoleFilter('all');
+                    setCountryFilter('all');
+                    setStatusFilter('all');
+                    setSearchTerm('');
+                  }}
+                  className="w-full px-3 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500"
+                >
+                  Clear Filters
+                </button>
+              </div>
             </div>
           </div>
           
@@ -1661,7 +1829,7 @@ export default function UsersPage() {
                       } catch {}
                     }
                     // Apply role-aware filter so Admins remain scoped to their countries
-                    setUsers(filterUsersForCurrentRole(refreshed));
+                    setUsers(getFilteredUsers(refreshed));
                     setReviewCompleted(true);
                     setLastReviewMonth(monthKey);
                   } catch (e: any) {

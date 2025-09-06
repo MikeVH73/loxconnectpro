@@ -53,7 +53,10 @@ function initializeFirebase() {
     const enableAppCheck = true;
     const recaptchaKey = "6Lf7-aArAAAAAAhOpt4i9r18QGU_ny4JRvC_NZB_"; // TODO: Replace with actual reCAPTCHA Enterprise site key from Firebase Console
     
-    if (enableAppCheck && app && recaptchaKey && recaptchaKey !== "6Lf7-aArAAAAAAhOpt4i9r18QGU_ny4JRvC_NZB_") {
+    // Check if we have a real reCAPTCHA key (not placeholder)
+    const isPlaceholderKey = recaptchaKey.includes("XXXX") || recaptchaKey === "6Lf7-aArAAAAAAhOpt4i9r18QGU_ny4JRvC_NZB_";
+    
+    if (enableAppCheck && app && recaptchaKey && !isPlaceholderKey) {
       // dynamic import to avoid hard dependency when disabled
       import('firebase/app-check').then(async ({ initializeAppCheck, ReCaptchaEnterpriseProvider, getToken, onTokenChanged }) => {
         try {
@@ -82,7 +85,7 @@ function initializeFirebase() {
       }).catch(() => {
         // no-op
       });
-    } else if (enableAppCheck && recaptchaKey === "6LfXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX") {
+    } else if (enableAppCheck && isPlaceholderKey) {
       console.warn('[App Check] Please replace the placeholder reCAPTCHA key with your actual site key from Firebase Console');
     }
 
