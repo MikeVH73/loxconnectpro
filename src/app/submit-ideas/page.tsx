@@ -26,8 +26,23 @@ export default function SubmitIdeasPage() {
   useEffect(() => {
     if (!userProfile || !db) return;
 
-    // Ensure monthly points are available
+    // Ensure monthly points are available and listen for changes
     ensureMonthlyPoints(userProfile.id).then(setMonthlyPoints);
+    
+    // Listen to monthly points changes
+    const monthlyPointsQuery = query(
+      collection(db!, 'monthlyPoints'),
+      where('userId', '==', userProfile.id),
+      where('month', '==', currentMonth),
+      where('year', '==', currentYear)
+    );
+    
+    const unsubscribeMonthlyPoints = onSnapshot(monthlyPointsQuery, (snapshot) => {
+      if (!snapshot.empty) {
+        const monthlyPointsData = snapshot.docs[0].data() as MonthlyPoints;
+        setMonthlyPoints(monthlyPointsData);
+      }
+    });
 
     // Load ideas
     const ideasQuery = query(
@@ -77,6 +92,7 @@ export default function SubmitIdeasPage() {
     return () => {
       unsubscribeIdeas();
       unsubscribeVotes();
+      unsubscribeMonthlyPoints();
     };
   }, [userProfile, currentMonth, currentYear]);
 
@@ -220,8 +236,16 @@ export default function SubmitIdeasPage() {
         remainingPoints: monthlyPoints.remainingPoints - pointsDifference
       });
 
-      // Show success feedback
-      alert(`Vote submitted successfully! You used ${pointsDifference} points.`);
+      // Show success feedback with clear messaging
+      if (pointsDifference > 0) {
+        alert(`Vote submitted successfully! You deducted ${pointsDifference} points.`);
+      } else if (pointsDifference < 0) {
+        alert(`Vote updated successfully! You refunded ${Math.abs(pointsDifference)} points.`);
+      } else {
+        alert(`Vote submitted successfully! No point change.`);
+      }
+
+      // Monthly points will be updated automatically via real-time listener
 
     } catch (error: any) {
       console.error('Error during voting process:', error);
@@ -424,7 +448,7 @@ export default function SubmitIdeasPage() {
                   <span className="font-medium">Submitted by:</span> {idea.userEmail} • 
                   <span className="font-medium ml-2">Points:</span> {idea.totalPoints} ⭐ • 
                   <span className="font-medium ml-2">Votes:</span> {idea.voteCount} • 
-                  <span className="font-medium ml-2">Date:</span> {idea.createdAt ? new Date(idea.createdAt instanceof Date ? idea.createdAt : idea.createdAt.seconds * 1000).toLocaleDateString() : 'Unknown'}
+                  <span className="font-medium ml-2">Date:</span> {idea.createdAt ? new Date(idea.createdAt instanceof Date ? idea.createdAt : (idea.createdAt as any).seconds * 1000).toLocaleDateString() : 'Unknown'}
                 </div>
                 
                 <p className="text-gray-700 mb-4">{idea.description}</p>
