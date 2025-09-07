@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from 'react';
 import { useAuth } from '../AuthProvider';
-import { collection, addDoc, query, orderBy, onSnapshot } from 'firebase/firestore';
+import { collection, addDoc, query, orderBy, onSnapshot, where, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../../firebaseClient';
 import { Idea } from '../../types';
 
@@ -17,14 +17,25 @@ export default function SubmitIdeasPage() {
     description: ''
   });
 
-  // Load ideas
+  // Load ideas - show all for superAdmin, only approved for others
   useEffect(() => {
-    if (!db) return;
+    if (!db || !userProfile) return;
 
-    const ideasQuery = query(
-      collection(db, 'ideas'),
-      orderBy('createdAt', 'desc')
-    );
+    let ideasQuery;
+    if (userProfile.role === 'superAdmin') {
+      // SuperAdmin sees all ideas (pending, approved, rejected)
+      ideasQuery = query(
+        collection(db, 'ideas'),
+        orderBy('createdAt', 'desc')
+      );
+    } else {
+      // Regular users only see approved ideas
+      ideasQuery = query(
+        collection(db, 'ideas'),
+        where('status', '==', 'Approved'),
+        orderBy('createdAt', 'desc')
+      );
+    }
 
     const unsubscribe = onSnapshot(ideasQuery, (snapshot) => {
       const ideasData = snapshot.docs.map(doc => ({
@@ -37,7 +48,7 @@ export default function SubmitIdeasPage() {
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [userProfile]);
 
   const handleSubmitIdea = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,7 +63,7 @@ export default function SubmitIdeasPage() {
         title: formData.title,
         description: formData.description,
         category: formData.category,
-        status: 'Under Review',
+        status: 'Pending Approval',
         totalPoints: 0,
         voteCount: 0,
         createdAt: new Date()
@@ -62,12 +73,48 @@ export default function SubmitIdeasPage() {
       
       setFormData({ category: 'New Feature', title: '', description: '' });
       setShowForm(false);
-      alert('Idea submitted successfully!');
+      alert('Idea submitted successfully! It will be reviewed by a superAdmin before being visible to other users.');
     } catch (error) {
       console.error('Error submitting idea:', error);
       alert('Failed to submit idea. Please try again.');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleApproveIdea = async (ideaId: string) => {
+    if (!db || !userProfile || userProfile.role !== 'superAdmin') return;
+    
+    try {
+      await updateDoc(doc(db, 'ideas', ideaId), {
+        status: 'Approved',
+        approvedBy: userProfile.email,
+        approvedAt: new Date()
+      });
+      alert('Idea approved successfully!');
+    } catch (error) {
+      console.error('Error approving idea:', error);
+      alert('Failed to approve idea. Please try again.');
+    }
+  };
+
+  const handleRejectIdea = async (ideaId: string) => {
+    if (!db || !userProfile || userProfile.role !== 'superAdmin') return;
+    
+    const reason = prompt('Please provide a reason for rejection:');
+    if (!reason) return;
+    
+    try {
+      await updateDoc(doc(db, 'ideas', ideaId), {
+        status: 'Rejected',
+        rejectedBy: userProfile.email,
+        rejectedAt: new Date(),
+        rejectionReason: reason
+      });
+      alert('Idea rejected successfully!');
+    } catch (error) {
+      console.error('Error rejecting idea:', error);
+      alert('Failed to reject idea. Please try again.');
     }
   };
 
@@ -84,11 +131,12 @@ export default function SubmitIdeasPage() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'Under Review': return 'bg-yellow-100 text-yellow-800';
+      case 'Pending Approval': return 'bg-yellow-100 text-yellow-800';
+      case 'Approved': return 'bg-green-100 text-green-800';
+      case 'Rejected': return 'bg-red-100 text-red-800';
       case 'Planned': return 'bg-blue-100 text-blue-800';
       case 'In Development': return 'bg-purple-100 text-purple-800';
       case 'Implemented': return 'bg-green-100 text-green-800';
-      case 'Rejected': return 'bg-red-100 text-red-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
@@ -109,7 +157,7 @@ export default function SubmitIdeasPage() {
       <div className="max-w-4xl mx-auto px-4 py-8">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Submit Ideas</h1>
-          <p className="text-gray-600">Share your ideas to improve LoxConnect PRO</p>
+          <p className="text-gray-600">Share your ideas to improve LoxConnect PRO. Ideas are reviewed by superAdmins before being visible to all users.</p>
         </div>
 
         <div className="mb-6">
@@ -219,7 +267,36 @@ export default function SubmitIdeasPage() {
                 <div className="text-sm text-gray-500">
                   <p>Submitted by: {idea.userEmail}</p>
                   <p>Date: {idea.createdAt instanceof Date ? idea.createdAt.toLocaleDateString() : new Date(idea.createdAt).toLocaleDateString()}</p>
+                  {idea.status === 'Approved' && idea.approvedBy && (
+                    <p>Approved by: {idea.approvedBy}</p>
+                  )}
+                  {idea.status === 'Rejected' && idea.rejectedBy && (
+                    <div>
+                      <p>Rejected by: {idea.rejectedBy}</p>
+                      {idea.rejectionReason && (
+                        <p className="text-red-600">Reason: {idea.rejectionReason}</p>
+                      )}
+                    </div>
+                  )}
                 </div>
+                
+                {/* Approval buttons for superAdmins */}
+                {userProfile?.role === 'superAdmin' && idea.status === 'Pending Approval' && (
+                  <div className="mt-4 flex space-x-2">
+                    <button
+                      onClick={() => handleApproveIdea(idea.id)}
+                      className="bg-green-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-green-700"
+                    >
+                      Approve
+                    </button>
+                    <button
+                      onClick={() => handleRejectIdea(idea.id)}
+                      className="bg-red-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-red-700"
+                    >
+                      Reject
+                    </button>
+                  </div>
+                )}
               </div>
             ))
           )}
