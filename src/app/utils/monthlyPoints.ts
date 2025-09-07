@@ -1,5 +1,5 @@
 // Monthly Points Management Utility
-import { collection, query, where, getDocs, addDoc, updateDoc, doc } from 'firebase/firestore';
+import { collection, query, where, getDocs, addDoc, updateDoc, doc, getDoc } from 'firebase/firestore';
 import { db } from '../../firebaseClient';
 import { MonthlyPoints } from '../types';
 
@@ -61,25 +61,33 @@ export async function updateMonthlyPoints(
   try {
     const monthlyPointsRef = doc(db, 'monthlyPoints', monthlyPointsId);
     
-    // Get current points
-    const currentPoints = await getDocs(query(
-      collection(db, 'monthlyPoints'),
-      where('__name__', '==', monthlyPointsId)
-    ));
+    // Get current points using getDoc
+    const docSnapshot = await getDoc(monthlyPointsRef);
     
-    if (currentPoints.docs.length === 0) {
+    if (!docSnapshot.exists()) {
       throw new Error('Monthly points not found');
     }
     
-    const currentData = currentPoints.docs[0].data() as MonthlyPoints;
+    const currentData = docSnapshot.data() as MonthlyPoints;
     const newUsedPoints = Math.max(0, currentData.usedPoints + pointsDifference);
     const newRemainingPoints = Math.max(0, POINTS_PER_MONTH - newUsedPoints);
     
+    console.log('Updating monthly points:', {
+      monthlyPointsId,
+      pointsDifference,
+      currentUsedPoints: currentData.usedPoints,
+      currentRemainingPoints: currentData.remainingPoints,
+      newUsedPoints,
+      newRemainingPoints
+    });
+
     await updateDoc(monthlyPointsRef, {
       usedPoints: newUsedPoints,
       remainingPoints: newRemainingPoints,
       updatedAt: new Date()
     });
+    
+    console.log('Monthly points updated successfully');
   } catch (error) {
     console.error('Error updating monthly points:', error);
     throw error;

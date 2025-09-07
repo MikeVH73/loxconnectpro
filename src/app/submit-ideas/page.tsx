@@ -164,6 +164,14 @@ export default function SubmitIdeasPage() {
 
       // Update monthly points using utility function
       await updateMonthlyPoints(monthlyPoints.id, pointsDifference);
+      
+      console.log('Vote successful:', {
+        ideaId,
+        points,
+        pointsDifference,
+        monthlyPointsId: monthlyPoints.id,
+        remainingPoints: monthlyPoints.remainingPoints - pointsDifference
+      });
 
     } catch (error) {
       console.error('Error voting:', error);
