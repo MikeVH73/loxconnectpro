@@ -144,6 +144,7 @@ export default function SubmitIdeasPage() {
       console.error('Missing userProfile or monthlyPoints');
       console.log('userProfile:', userProfile);
       console.log('monthlyPoints:', monthlyPoints);
+      alert('System not ready. Please refresh the page and try again.');
       return;
     }
 
@@ -175,10 +176,9 @@ export default function SubmitIdeasPage() {
       monthlyPointsRemaining: monthlyPoints.remainingPoints
     });
 
-    // Check if user can vote with these points
-    if (!canUserVote(monthlyPoints, points, currentVotePoints)) {
-      const remainingAfterVote = getRemainingPointsAfterVote(monthlyPoints, points, currentVotePoints);
-      alert(`You only have ${monthlyPoints.remainingPoints} points remaining this month. This vote would require ${pointsDifference} points.`);
+    // Simple validation: if pointsDifference is positive, check if user has enough points
+    if (pointsDifference > 0 && pointsDifference > monthlyPoints.remainingPoints) {
+      alert(`You only have ${monthlyPoints.remainingPoints} points remaining. This vote would require ${pointsDifference} points.`);
       return;
     }
 
@@ -498,15 +498,9 @@ export default function SubmitIdeasPage() {
                           const currentVote = getUserVoteForIdea(idea.id);
                           console.log('Button render - ideaId:', idea.id, 'points:', points, 'currentVote:', currentVote, 'monthlyPoints:', monthlyPoints);
                           
-                          let canVote = false;
-                          if (monthlyPoints && typeof monthlyPoints === 'object') {
-                            try {
-                              canVote = canUserVote(monthlyPoints, points, currentVote);
-                            } catch (error) {
-                              console.error('Error in canUserVote:', error);
-                              canVote = false;
-                            }
-                          }
+                          // Simple validation: can vote if pointsDifference <= remainingPoints
+                          const pointsDifference = points - currentVote;
+                          const canVote = monthlyPoints && pointsDifference <= monthlyPoints.remainingPoints;
                           
                           return (
                             <button
