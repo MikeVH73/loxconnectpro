@@ -7,7 +7,7 @@ import { Idea, UserVote, MonthlyPoints } from '../../types';
 import { ensureMonthlyPoints, updateMonthlyPoints, canUserVote, getRemainingPointsAfterVote } from '../utils/monthlyPoints';
 
 export default function SubmitIdeasPage() {
-  const { userProfile, authLoading } = useAuth();
+  const { userProfile } = useAuth();
   const [ideas, setIdeas] = useState<Idea[]>([]);
   const [userVotes, setUserVotes] = useState<UserVote[]>([]);
   const [monthlyPoints, setMonthlyPoints] = useState<MonthlyPoints | null>(null);
@@ -24,11 +24,14 @@ export default function SubmitIdeasPage() {
 
   // Load ideas and user's voting data
   useEffect(() => {
-    if (!userProfile) return;
+    if (!userProfile || !db) return;
+
+    // Ensure monthly points are available
+    ensureMonthlyPoints(userProfile.id).then(setMonthlyPoints);
 
     // Load ideas
     const ideasQuery = query(
-      collection(db, 'ideas'),
+      collection(db!, 'ideas'),
       orderBy('totalPoints', 'desc')
     );
 
@@ -43,7 +46,7 @@ export default function SubmitIdeasPage() {
 
     // Load user's votes for current month
     const votesQuery = query(
-      collection(db, 'userVotes'),
+      collection(db!, 'userVotes'),
       where('userId', '==', userProfile.id),
       where('month', '==', currentMonth),
       where('year', '==', currentYear)
@@ -79,7 +82,7 @@ export default function SubmitIdeasPage() {
 
   const handleSubmitIdea = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!userProfile) return;
+    if (!userProfile || !db) return;
 
     try {
       const newIdea: Omit<Idea, 'id'> = {
@@ -97,7 +100,7 @@ export default function SubmitIdeasPage() {
         updatedAt: new Date()
       };
 
-      await addDoc(collection(db, 'ideas'), newIdea);
+      await addDoc(collection(db!, 'ideas'), newIdea);
       
       // Reset form
       setFormData({
@@ -115,11 +118,29 @@ export default function SubmitIdeasPage() {
   };
 
   const handleVote = async (ideaId: string, points: number) => {
-    if (!userProfile || !monthlyPoints) return;
+    if (!userProfile || !monthlyPoints) {
+      console.error('Missing userProfile or monthlyPoints');
+      return;
+    }
+
+    // Check Firebase connection first
+    if (!db) {
+      console.error('Firebase database not initialized');
+      alert('Database connection error. Please refresh the page and try again.');
+      return;
+    }
 
     const existingVote = userVotes.find(vote => vote.ideaId === ideaId);
     const currentVotePoints = existingVote?.points || 0;
     const pointsDifference = points - currentVotePoints;
+
+    console.log('Starting vote process:', {
+      ideaId,
+      points,
+      currentVotePoints,
+      pointsDifference,
+      monthlyPointsRemaining: monthlyPoints.remainingPoints
+    });
 
     // Check if user can vote with these points
     if (!canUserVote(monthlyPoints, points, currentVotePoints)) {
@@ -128,15 +149,26 @@ export default function SubmitIdeasPage() {
       return;
     }
 
+    // Show loading state
+    const voteButton = document.querySelector(`[data-idea-id="${ideaId}"]`) as HTMLElement;
+    if (voteButton) {
+      voteButton.style.opacity = '0.5';
+      voteButton.style.pointerEvents = 'none';
+    }
+
     try {
+      console.log('Starting Firebase operations...');
+      
+      // Step 1: Update or create vote
       if (existingVote) {
-        // Update existing vote
-        await updateDoc(doc(db, 'userVotes', existingVote.id), {
+        console.log('Updating existing vote:', existingVote.id);
+        await updateDoc(doc(db!, 'userVotes', existingVote.id), {
           points: points,
           updatedAt: new Date()
         });
+        console.log('Vote updated successfully');
       } else {
-        // Create new vote
+        console.log('Creating new vote');
         const newVote: Omit<UserVote, 'id'> = {
           userId: userProfile.id,
           ideaId: ideaId,
@@ -146,26 +178,41 @@ export default function SubmitIdeasPage() {
           createdAt: new Date()
         };
 
-        await addDoc(collection(db, 'userVotes'), newVote);
+        await addDoc(collection(db!, 'userVotes'), newVote);
+        console.log('New vote created successfully');
       }
       
-      // Update idea total points
+      // Step 2: Update idea total points
       const idea = ideas.find(i => i.id === ideaId);
       if (idea) {
         const newTotalPoints = idea.totalPoints + pointsDifference;
         const newVoteCount = existingVote ? idea.voteCount : idea.voteCount + 1;
         
-        await updateDoc(doc(db, 'ideas', ideaId), {
+        console.log('Updating idea points:', {
+          ideaId,
+          currentTotalPoints: idea.totalPoints,
+          newTotalPoints,
+          currentVoteCount: idea.voteCount,
+          newVoteCount
+        });
+        
+        await updateDoc(doc(db!, 'ideas', ideaId), {
           totalPoints: newTotalPoints,
           voteCount: newVoteCount,
           updatedAt: new Date()
         });
+        console.log('Idea points updated successfully');
       }
 
-      // Update monthly points using utility function
+      // Step 3: Update monthly points using utility function
+      console.log('Updating monthly points:', {
+        monthlyPointsId: monthlyPoints.id,
+        pointsDifference
+      });
       await updateMonthlyPoints(monthlyPoints.id, pointsDifference);
+      console.log('Monthly points updated successfully');
       
-      console.log('Vote successful:', {
+      console.log('Vote process completed successfully:', {
         ideaId,
         points,
         pointsDifference,
@@ -173,9 +220,28 @@ export default function SubmitIdeasPage() {
         remainingPoints: monthlyPoints.remainingPoints - pointsDifference
       });
 
-    } catch (error) {
-      console.error('Error voting:', error);
-      alert('Failed to vote. Please try again.');
+      // Show success feedback
+      alert(`Vote submitted successfully! You used ${pointsDifference} points.`);
+
+    } catch (error: any) {
+      console.error('Error during voting process:', error);
+      
+      // Provide specific error messages based on error type
+      if (error.code === 'permission-denied') {
+        alert('Permission denied. Please make sure you are logged in correctly.');
+      } else if (error.code === 'unavailable') {
+        alert('Service temporarily unavailable. Please try again in a moment.');
+      } else if (error.code === 'deadline-exceeded') {
+        alert('Request timed out. Please check your internet connection and try again.');
+      } else {
+        alert(`Failed to vote: ${error.message || 'Unknown error'}. Please try again.`);
+      }
+    } finally {
+      // Restore button state
+      if (voteButton) {
+        voteButton.style.opacity = '1';
+        voteButton.style.pointerEvents = 'auto';
+      }
     }
   };
 
@@ -205,7 +271,7 @@ export default function SubmitIdeasPage() {
     return userVotes.find(vote => vote.ideaId === ideaId)?.points || 0;
   };
 
-  if (authLoading) {
+  if (loading) {
     return (
       <div className="p-8">
         <div className="animate-pulse">
@@ -358,7 +424,7 @@ export default function SubmitIdeasPage() {
                   <span className="font-medium">Submitted by:</span> {idea.userEmail} • 
                   <span className="font-medium ml-2">Points:</span> {idea.totalPoints} ⭐ • 
                   <span className="font-medium ml-2">Votes:</span> {idea.voteCount} • 
-                  <span className="font-medium ml-2">Date:</span> {idea.createdAt ? new Date(idea.createdAt.seconds ? idea.createdAt.seconds * 1000 : idea.createdAt).toLocaleDateString() : 'Unknown'}
+                  <span className="font-medium ml-2">Date:</span> {idea.createdAt ? new Date(idea.createdAt instanceof Date ? idea.createdAt : idea.createdAt.seconds * 1000).toLocaleDateString() : 'Unknown'}
                 </div>
                 
                 <p className="text-gray-700 mb-4">{idea.description}</p>
@@ -371,6 +437,7 @@ export default function SubmitIdeasPage() {
                       {[1, 2, 3, 4, 5].map(points => (
                         <button
                           key={points}
+                          data-idea-id={idea.id}
                           onClick={() => handleVote(idea.id, points)}
                           className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
                             getUserVoteForIdea(idea.id) === points
