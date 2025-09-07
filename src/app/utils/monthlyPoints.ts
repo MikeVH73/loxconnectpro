@@ -1,6 +1,6 @@
 // Monthly Points Management Utility
 import { collection, query, where, getDocs, addDoc, updateDoc, doc } from 'firebase/firestore';
-import { db } from '../firebaseClient';
+import { db } from '../../firebaseClient';
 import { MonthlyPoints } from '../types';
 
 export const POINTS_PER_MONTH = 10;
