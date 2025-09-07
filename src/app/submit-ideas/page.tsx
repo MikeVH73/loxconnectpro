@@ -4,7 +4,7 @@ import { useAuth } from '../AuthProvider';
 import { collection, addDoc, query, orderBy, onSnapshot, where, doc, updateDoc, getDocs } from 'firebase/firestore';
 import { db } from '../../firebaseClient';
 import { Idea, UserVote, MonthlyPoints } from '../../types';
-import { ensureMonthlyPoints, updateMonthlyPoints } from '../utils/monthlyPoints';
+import { ensureMonthlyPoints } from '../utils/monthlyPoints';
 
 export default function SubmitIdeasPage() {
   const { userProfile } = useAuth();
@@ -134,85 +134,39 @@ export default function SubmitIdeasPage() {
   };
 
   const handleVote = async (ideaId: string, points: number) => {
-    console.log('=== VOTE DEBUG START ===');
-    console.log('Input parameters:', { ideaId, points });
-    console.log('User profile:', userProfile);
-    console.log('Monthly points:', monthlyPoints);
-    console.log('Database:', db);
-    
-    if (!userProfile || !monthlyPoints) {
-      console.error('Missing userProfile or monthlyPoints');
-      console.log('userProfile:', userProfile);
-      console.log('monthlyPoints:', monthlyPoints);
+    if (!userProfile || !monthlyPoints || !db) {
       alert('System not ready. Please refresh the page and try again.');
       return;
     }
 
-    // Check Firebase connection first
-    if (!db) {
-      console.error('Firebase database not initialized');
-      alert('Database connection error. Please refresh the page and try again.');
-      return;
-    }
-
-    console.log('Finding existing vote for ideaId:', ideaId);
-    console.log('Available userVotes:', userVotes);
-    
-    const existingVote = userVotes.find(vote => {
-      console.log('Checking vote:', vote, 'against ideaId:', ideaId);
-      return vote.ideaId === ideaId;
-    });
-    
-    console.log('Existing vote found:', existingVote);
-    
+    // Find existing vote
+    const existingVote = userVotes.find(vote => vote.ideaId === ideaId);
     const currentVotePoints = existingVote?.points || 0;
     const pointsDifference = points - currentVotePoints;
 
-    console.log('Vote calculation:', {
-      ideaId,
-      points,
-      currentVotePoints,
-      pointsDifference,
-      monthlyPointsRemaining: monthlyPoints.remainingPoints
-    });
-
-    // Simple validation: if pointsDifference is positive, check if user has enough points
-    if (pointsDifference > 0 && pointsDifference > monthlyPoints.remainingPoints) {
+    // Simple validation
+    if (pointsDifference > monthlyPoints.remainingPoints) {
       alert(`You only have ${monthlyPoints.remainingPoints} points remaining. This vote would require ${pointsDifference} points.`);
       return;
     }
 
-    // Show loading state
-    const voteButton = document.querySelector(`[data-idea-id="${ideaId}"]`) as HTMLElement;
-    if (voteButton) {
-      voteButton.style.opacity = '0.5';
-      voteButton.style.pointerEvents = 'none';
-    }
-
     try {
-      console.log('Starting Firebase operations...');
-      
       // Step 1: Update or create vote
       if (existingVote) {
-        console.log('Updating existing vote:', existingVote.id);
-        await updateDoc(doc(db!, 'userVotes', existingVote.id), {
+        await updateDoc(doc(db, 'userVotes', existingVote.id), {
           points: points,
           updatedAt: new Date()
         });
-        console.log('Vote updated successfully');
       } else {
-        console.log('Creating new vote');
-        const newVote: Omit<UserVote, 'id'> = {
+        const newVote = {
           userId: userProfile.id,
           ideaId: ideaId,
           points: points,
-          month: currentMonth,
-          year: currentYear,
+          month: new Date().getMonth() + 1,
+          year: new Date().getFullYear(),
           createdAt: new Date()
         };
-
-        await addDoc(collection(db!, 'userVotes'), newVote);
-        console.log('New vote created successfully');
+        await addDoc(collection(db, 'userVotes'), newVote);
       }
       
       // Step 2: Update idea total points
@@ -221,73 +175,31 @@ export default function SubmitIdeasPage() {
         const newTotalPoints = idea.totalPoints + pointsDifference;
         const newVoteCount = existingVote ? idea.voteCount : idea.voteCount + 1;
         
-        console.log('Updating idea points:', {
-          ideaId,
-          currentTotalPoints: idea.totalPoints,
-          newTotalPoints,
-          currentVoteCount: idea.voteCount,
-          newVoteCount
-        });
-        
-        await updateDoc(doc(db!, 'ideas', ideaId), {
+        await updateDoc(doc(db, 'ideas', ideaId), {
           totalPoints: newTotalPoints,
           voteCount: newVoteCount,
           updatedAt: new Date()
         });
-        console.log('Idea points updated successfully');
       }
-
-      // Step 3: Update monthly points using utility function
-      console.log('Updating monthly points:', {
-        monthlyPointsId: monthlyPoints.id,
-        pointsDifference
-      });
-      await updateMonthlyPoints(monthlyPoints.id, pointsDifference);
-      console.log('Monthly points updated successfully');
       
-      console.log('Vote process completed successfully:', {
-        ideaId,
-        points,
-        pointsDifference,
-        monthlyPointsId: monthlyPoints.id,
-        remainingPoints: monthlyPoints.remainingPoints - pointsDifference
+      // Step 3: Update monthly points - SIMPLE APPROACH
+      const monthlyPointsRef = doc(db, 'monthlyPoints', monthlyPoints.id);
+      const newUsedPoints = monthlyPoints.usedPoints + pointsDifference;
+      const newRemainingPoints = 10 - newUsedPoints; // Always 10 total points per month
+      
+      await updateDoc(monthlyPointsRef, {
+        usedPoints: newUsedPoints,
+        remainingPoints: newRemainingPoints,
+        updatedAt: new Date()
       });
-
-      // Show success feedback with clear messaging
-      if (pointsDifference > 0) {
-        alert(`Vote submitted successfully! You deducted ${pointsDifference} points.`);
-      } else if (pointsDifference < 0) {
-        alert(`Vote updated successfully! You refunded ${Math.abs(pointsDifference)} points.`);
-      } else {
-        alert(`Vote submitted successfully! No point change.`);
-      }
-
-      // Monthly points will be updated automatically via real-time listener
-
+      
+      // Show success message
+      const action = pointsDifference > 0 ? 'deducted' : 'refunded';
+      alert(`Vote successful! ${Math.abs(pointsDifference)} points ${action}.`);
+      
     } catch (error: any) {
-      console.error('=== VOTE ERROR DEBUG ===');
-      console.error('Error during voting process:', error);
-      console.error('Error stack:', error.stack);
-      console.error('Error message:', error.message);
-      console.error('Error code:', error.code);
-      console.error('Full error object:', error);
-      
-      // Provide specific error messages based on error type
-      if (error.code === 'permission-denied') {
-        alert('Permission denied. Please make sure you are logged in correctly.');
-      } else if (error.code === 'unavailable') {
-        alert('Service temporarily unavailable. Please try again in a moment.');
-      } else if (error.code === 'deadline-exceeded') {
-        alert('Request timed out. Please check your internet connection and try again.');
-      } else {
-        alert(`Failed to vote: ${error.message || 'Unknown error'}. Please try again.`);
-      }
-    } finally {
-      // Restore button state
-      if (voteButton) {
-        voteButton.style.opacity = '1';
-        voteButton.style.pointerEvents = 'auto';
-      }
+      console.error('Voting error:', error);
+      alert(`Failed to vote: ${error.message}. Please try again.`);
     }
   };
 
@@ -494,49 +406,26 @@ export default function SubmitIdeasPage() {
                     <span className="text-sm font-medium text-gray-700">Vote with points:</span>
                     <div className="flex space-x-2">
                       {[1, 2, 3, 4, 5].map(points => {
-                        try {
-                          const currentVote = getUserVoteForIdea(idea.id);
-                          console.log('Button render - ideaId:', idea.id, 'points:', points, 'currentVote:', currentVote, 'monthlyPoints:', monthlyPoints);
-                          
-                          // Simple validation: can vote if pointsDifference <= remainingPoints
-                          const pointsDifference = points - currentVote;
-                          const canVote = monthlyPoints && pointsDifference <= monthlyPoints.remainingPoints;
-                          
-                          return (
-                            <button
-                              key={points}
-                              data-idea-id={idea.id}
-                              onClick={() => {
-                                try {
-                                  console.log('Button clicked - ideaId:', idea.id, 'points:', points);
-                                  handleVote(idea.id, points);
-                                } catch (error) {
-                                  console.error('Error in button click handler:', error);
-                                  alert('An error occurred. Please try again.');
-                                }
-                              }}
-                              className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
-                                currentVote === points
-                                  ? 'bg-[#e40115] text-white'
-                                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                              }`}
-                              disabled={!canVote}
-                            >
-                              {points}
-                            </button>
-                          );
-                        } catch (error) {
-                          console.error('Error in button render:', error);
-                          return (
-                            <button
-                              key={points}
-                              disabled
-                              className="px-3 py-1 rounded text-sm font-medium bg-gray-300 text-gray-500"
-                            >
-                              {points}
-                            </button>
-                          );
-                        }
+                        const currentVote = getUserVoteForIdea(idea.id);
+                        const pointsDifference = points - currentVote;
+                        const canVote = monthlyPoints && pointsDifference <= monthlyPoints.remainingPoints;
+                        
+                        return (
+                          <button
+                            key={points}
+                            onClick={() => handleVote(idea.id, points)}
+                            className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                              currentVote === points
+                                ? 'bg-[#e40115] text-white'
+                                : canVote
+                                ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                : 'bg-gray-300 text-gray-500'
+                            }`}
+                            disabled={!canVote}
+                          >
+                            {points}
+                          </button>
+                        );
                       })}
                     </div>
                     <span className="text-xs text-gray-500">

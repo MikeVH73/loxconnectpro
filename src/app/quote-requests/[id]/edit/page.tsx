@@ -537,11 +537,11 @@ export default function EditQuoteRequest() {
             modChanges.push({ field: 'products', from: oldProducts, to: newProducts });
           }
         } catch {
-          if (JSON.stringify(originalData.products) !== JSON.stringify(quoteRequest.products)) {
-            changes.push('Products updated');
+        if (JSON.stringify(originalData.products) !== JSON.stringify(quoteRequest.products)) {
+          changes.push('Products updated');
             modChanges.push({ field: 'products', from: originalData.products || [], to: quoteRequest.products || [] });
           }
-        }
+      }
       
       // Check for date changes
       if (originalData.startDate !== quoteRequest.startDate) {
@@ -607,7 +607,7 @@ export default function EditQuoteRequest() {
           try {
             const modsRef = collection(db as Firestore, 'modifications');
             await addDoc(modsRef, {
-              quoteRequestId: id,
+            quoteRequestId: id,
               user: user?.email || '',
               dateTime: serverTimestamp(),
               changes: modChanges,
@@ -763,7 +763,7 @@ export default function EditQuoteRequest() {
 
     setIsDirty(true);
     setQuoteRequest(prev => ({
-      ...prev,
+        ...prev,
       [field]: value,
     }));
 
@@ -1411,26 +1411,26 @@ export default function EditQuoteRequest() {
                           placeholder="Product Code"
                           className="w-28 p-2 border border-gray-300 rounded"
                         />
-                        <button
-                          onClick={async () => {
-                            const code = normalizeCode(quoteRequest.products[index].catClass);
-                            if (!code) return;
-                            const p = await getProductByCode(code);
-                            if (p) {
-                              handleInputChange(`products.${index}.catClass`, p.catClass);
-                              handleInputChange(`products.${index}.description`, p.description);
-                            } else {
-                              const confirmAdd = confirm('Product not found. Add to catalog?');
-                              if (!confirmAdd) return;
-                              setQuickAdd({ index, code });
-                              setQuickAddCode(code);
-                            }
-                          }}
+                          <button
+                            onClick={async () => {
+                              const code = normalizeCode(quoteRequest.products[index].catClass);
+                              if (!code) return;
+                              const p = await getProductByCode(code);
+                              if (p) {
+                                handleInputChange(`products.${index}.catClass`, p.catClass);
+                                handleInputChange(`products.${index}.description`, p.description);
+                              } else {
+                                const confirmAdd = confirm('Product not found. Add to catalog?');
+                                if (!confirmAdd) return;
+                                setQuickAdd({ index, code });
+                                setQuickAddCode(code);
+                              }
+                            }}
                           className="shrink-0 text-blue-600 underline text-xs"
-                          title="Lookup description"
-                        >
-                          Lookup
-                        </button>
+                            title="Lookup description"
+                          >
+                            Lookup
+                          </button>
                         <input
                           type="text"
                           value={product.description}
@@ -1450,15 +1450,15 @@ export default function EditQuoteRequest() {
                           className="w-16 p-2 border border-gray-300 rounded text-right"
                           min="0"
                         />
-                        <button
-                          onClick={() => handleRemoveProduct(index)}
+                          <button
+                            onClick={() => handleRemoveProduct(index)}
                           className="shrink-0 text-red-500 hover:text-red-700 p-2"
-                          title="Remove product"
-                        >
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                        </button>
+                            title="Remove product"
+                          >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
                       </div>
                     ))}
                     {!isReadOnly && (

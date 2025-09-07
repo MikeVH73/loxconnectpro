@@ -30,7 +30,7 @@ export default function ArchivedPage() {
   const { userProfile, user, loading: authLoading } = useAuth();
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [deleteQuery, setDeleteQuery] = useState('test');
-  
+
   // Filter states
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [countryFilter, setCountryFilter] = useState<string>('all');
