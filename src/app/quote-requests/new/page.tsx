@@ -434,8 +434,8 @@ const NewQuoteRequestPage = () => {
               {customers
                 ?.filter((c: any) => {
                   // Only show customers created by the current user's country
-                  const creatorCountry = (c as any).creatorCountry || (c as any).createdBy || '';
-                  return creatorCountry === userProfile?.businessUnit;
+                  const ownerCountry = (c as any).ownerCountry || '';
+                  return ownerCountry === userProfile?.businessUnit;
                 })
                 .sort((a: any, b: any) => String(a.name).localeCompare(String(b.name)))
                 .map((customer: Customer) => (
