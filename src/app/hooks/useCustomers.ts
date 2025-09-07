@@ -30,8 +30,6 @@ export function useCustomers() {
       const snapshot = await getDocs(customersCollection);
       const customersData = snapshot.docs.map(doc => {
         const data: any = doc.data();
-        const nums = (data.customerNumbers || {}) as Record<string, string>;
-        const firstCountry = Object.keys(nums).find(k => nums[k]) || '';
         return {
           id: doc.id,
           name: data.name,
@@ -40,7 +38,7 @@ export function useCustomers() {
           phone: data.phone,
           email: data.email,
           customerNumbers: data.customerNumbers || {},
-          ownerCountry: data.ownerCountry || data.creatorCountry || firstCountry
+          ownerCountry: data.ownerCountry || data.creatorCountry || (Array.isArray(data.countries) && data.countries.length ? data.countries[0] : undefined)
         } as Customer;
       });
       setCustomers(customersData);
