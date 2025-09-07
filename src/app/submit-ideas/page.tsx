@@ -4,6 +4,7 @@ import { useAuth } from '../AuthProvider';
 import { collection, addDoc, query, orderBy, onSnapshot, where, doc, updateDoc, getDocs } from 'firebase/firestore';
 import { db } from '../../firebaseClient';
 import { Idea, UserVote, MonthlyPoints } from '../../types';
+import { ensureMonthlyPoints, updateMonthlyPoints, canUserVote, getRemainingPointsAfterVote } from '../utils/monthlyPoints';
 
 export default function SubmitIdeasPage() {
   const { userProfile, authLoading } = useAuth();
@@ -57,52 +58,24 @@ export default function SubmitIdeasPage() {
       setUserVotes(votesData);
     });
 
-    // Load user's monthly points
-    const pointsQuery = query(
-      collection(db, 'monthlyPoints'),
-      where('userId', '==', userProfile.id),
-      where('month', '==', currentMonth),
-      where('year', '==', currentYear)
-    );
-
-    const unsubscribePoints = onSnapshot(pointsQuery, (snapshot) => {
-      if (snapshot.docs.length > 0) {
-        const pointsData = snapshot.docs[0].data() as MonthlyPoints;
-        setMonthlyPoints({ id: snapshot.docs[0].id, ...pointsData });
-      } else {
-        // Create monthly points if they don't exist
-        createMonthlyPoints();
+    // Load user's monthly points using the utility function
+    const loadMonthlyPoints = async () => {
+      try {
+        const points = await ensureMonthlyPoints(userProfile.id);
+        setMonthlyPoints(points);
+      } catch (error) {
+        console.error('Error loading monthly points:', error);
       }
       setLoading(false);
-    });
+    };
+
+    loadMonthlyPoints();
 
     return () => {
       unsubscribeIdeas();
       unsubscribeVotes();
-      unsubscribePoints();
     };
   }, [userProfile, currentMonth, currentYear]);
-
-  const createMonthlyPoints = async () => {
-    if (!userProfile) return;
-
-    try {
-      const newMonthlyPoints: Omit<MonthlyPoints, 'id'> = {
-        userId: userProfile.id,
-        month: currentMonth,
-        year: currentYear,
-        totalPoints: 10,
-        usedPoints: 0,
-        remainingPoints: 10,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      };
-
-      await addDoc(collection(db, 'monthlyPoints'), newMonthlyPoints);
-    } catch (error) {
-      console.error('Error creating monthly points:', error);
-    }
-  };
 
   const handleSubmitIdea = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -148,9 +121,10 @@ export default function SubmitIdeasPage() {
     const currentVotePoints = existingVote?.points || 0;
     const pointsDifference = points - currentVotePoints;
 
-    // Check if user has enough points for the new vote
-    if (pointsDifference > monthlyPoints.remainingPoints) {
-      alert(`You only have ${monthlyPoints.remainingPoints} points remaining this month.`);
+    // Check if user can vote with these points
+    if (!canUserVote(monthlyPoints, points, currentVotePoints)) {
+      const remainingAfterVote = getRemainingPointsAfterVote(monthlyPoints, points, currentVotePoints);
+      alert(`You only have ${monthlyPoints.remainingPoints} points remaining this month. This vote would require ${pointsDifference} points.`);
       return;
     }
 
@@ -188,15 +162,8 @@ export default function SubmitIdeasPage() {
         });
       }
 
-      // Update monthly points
-      const newUsedPoints = monthlyPoints.usedPoints + pointsDifference;
-      const newRemainingPoints = monthlyPoints.totalPoints - newUsedPoints;
-      
-      await updateDoc(doc(db, 'monthlyPoints', monthlyPoints.id), {
-        usedPoints: newUsedPoints,
-        remainingPoints: newRemainingPoints,
-        updatedAt: new Date()
-      });
+      // Update monthly points using utility function
+      await updateMonthlyPoints(monthlyPoints.id, pointsDifference);
 
     } catch (error) {
       console.error('Error voting:', error);
@@ -402,7 +369,7 @@ export default function SubmitIdeasPage() {
                               ? 'bg-[#e40115] text-white'
                               : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                           }`}
-                          disabled={points > (monthlyPoints?.remainingPoints || 0) + getUserVoteForIdea(idea.id)}
+                          disabled={!canUserVote(monthlyPoints, points, getUserVoteForIdea(idea.id))}
                         >
                           {points}
                         </button>
