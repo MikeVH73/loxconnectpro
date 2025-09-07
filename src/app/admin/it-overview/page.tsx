@@ -80,11 +80,102 @@ export default function ITOverviewPage() {
               <p className="text-xs text-gray-500 mt-1">Real-time data, authentication, file storage</p>
             </div>
             <div className="text-center">
-              <div className="bg-purple-100 rounded-lg p-4 mb-2">
+              <div className="bg-purple-100 rounded-lg p-4 mb-4">
                 <h3 className="font-semibold text-purple-800">Hosting</h3>
               </div>
               <p className="text-sm text-gray-600">Vercel (Automatic)</p>
               <p className="text-xs text-gray-500 mt-1">Global CDN, instant deployments</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Closed System Architecture */}
+      <section className="mb-8">
+        <h2 className="text-2xl font-semibold mb-4 text-gray-800">🏢 Multi-ERP Compatibility & Closed System Architecture</h2>
+        <div className="bg-white border rounded-lg p-6 shadow-sm">
+          <div className="mb-6">
+            <p className="text-gray-700 mb-4">
+              <strong>LoxConnect PRO works with ANY ERP system - no integration required!</strong>
+            </p>
+            <p className="text-gray-600 text-sm mb-4">
+              Each Business Unit can use their own ERP system (SAP, Oracle, Microsoft Dynamics, etc.) without any technical dependencies or API connections.
+            </p>
+          </div>
+          
+          {/* Visual Architecture Diagram */}
+          <div className="bg-gray-50 rounded-lg p-6 mb-6">
+            <h3 className="font-semibold text-gray-800 mb-4 text-center">🏗️ System Architecture</h3>
+            <div className="grid md:grid-cols-2 gap-8">
+              {/* Left Side - ERP Systems */}
+              <div>
+                <h4 className="font-semibold text-gray-700 mb-3 text-center">Business Units & Their ERP Systems</h4>
+                <div className="space-y-3">
+                  <div className="bg-blue-100 rounded-lg p-3 text-center">
+                    <div className="font-semibold text-blue-800">Loxcall Netherlands</div>
+                    <div className="text-sm text-blue-600">SAP ERP</div>
+                  </div>
+                  <div className="bg-green-100 rounded-lg p-3 text-center">
+                    <div className="font-semibold text-green-800">Loxcall Germany</div>
+                    <div className="text-sm text-green-600">Oracle ERP</div>
+                  </div>
+                  <div className="bg-purple-100 rounded-lg p-3 text-center">
+                    <div className="font-semibold text-purple-800">Loxcall France</div>
+                    <div className="text-sm text-purple-600">Microsoft Dynamics</div>
+                  </div>
+                  <div className="bg-yellow-100 rounded-lg p-3 text-center">
+                    <div className="font-semibold text-yellow-800">Ramirent Finland</div>
+                    <div className="text-sm text-yellow-600">Custom ERP</div>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Right Side - LoxConnect PRO */}
+              <div>
+                <h4 className="font-semibold text-gray-700 mb-3 text-center">LoxConnect PRO</h4>
+                <div className="bg-red-50 border-2 border-red-200 rounded-lg p-4 text-center">
+                  <div className="font-semibold text-red-800 text-lg mb-2">🔒 CLOSED SYSTEM</div>
+                  <div className="text-sm text-red-600 mb-3">No External Dependencies</div>
+                  <div className="space-y-2 text-xs text-red-700">
+                    <div>✅ No ERP API connections</div>
+                    <div>✅ No external email providers</div>
+                    <div>✅ No third-party AI services</div>
+                    <div>✅ No external data sources</div>
+                    <div>✅ Self-contained & secure</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            {/* Connection Arrows */}
+            <div className="flex justify-center items-center mt-6">
+              <div className="flex items-center space-x-2">
+                <div className="w-8 h-0.5 bg-gray-400"></div>
+                <div className="text-gray-500 text-sm">Manual Data Entry</div>
+                <div className="w-8 h-0.5 bg-gray-400"></div>
+              </div>
+            </div>
+          </div>
+
+          {/* Benefits */}
+          <div className="grid md:grid-cols-3 gap-6">
+            <div className="text-center">
+              <div className="bg-green-100 rounded-lg p-4 mb-2">
+                <h3 className="font-semibold text-green-800">🛡️ Security</h3>
+              </div>
+              <p className="text-sm text-gray-600">No external connections = no attack vectors</p>
+            </div>
+            <div className="text-center">
+              <div className="bg-blue-100 rounded-lg p-4 mb-2">
+                <h3 className="font-semibold text-blue-800">🔄 Flexibility</h3>
+              </div>
+              <p className="text-sm text-gray-600">Works with any ERP system</p>
+            </div>
+            <div className="text-center">
+              <div className="bg-purple-100 rounded-lg p-4 mb-2">
+                <h3 className="font-semibold text-purple-800">⚡ Reliability</h3>
+              </div>
+              <p className="text-sm text-gray-600">No dependency on external services</p>
             </div>
           </div>
         </div>
