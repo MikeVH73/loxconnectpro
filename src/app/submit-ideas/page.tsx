@@ -134,8 +134,16 @@ export default function SubmitIdeasPage() {
   };
 
   const handleVote = async (ideaId: string, points: number) => {
+    console.log('=== VOTE DEBUG START ===');
+    console.log('Input parameters:', { ideaId, points });
+    console.log('User profile:', userProfile);
+    console.log('Monthly points:', monthlyPoints);
+    console.log('Database:', db);
+    
     if (!userProfile || !monthlyPoints) {
       console.error('Missing userProfile or monthlyPoints');
+      console.log('userProfile:', userProfile);
+      console.log('monthlyPoints:', monthlyPoints);
       return;
     }
 
@@ -146,11 +154,20 @@ export default function SubmitIdeasPage() {
       return;
     }
 
-    const existingVote = userVotes.find(vote => vote.ideaId === ideaId);
+    console.log('Finding existing vote for ideaId:', ideaId);
+    console.log('Available userVotes:', userVotes);
+    
+    const existingVote = userVotes.find(vote => {
+      console.log('Checking vote:', vote, 'against ideaId:', ideaId);
+      return vote.ideaId === ideaId;
+    });
+    
+    console.log('Existing vote found:', existingVote);
+    
     const currentVotePoints = existingVote?.points || 0;
     const pointsDifference = points - currentVotePoints;
 
-    console.log('Starting vote process:', {
+    console.log('Vote calculation:', {
       ideaId,
       points,
       currentVotePoints,
@@ -248,7 +265,12 @@ export default function SubmitIdeasPage() {
       // Monthly points will be updated automatically via real-time listener
 
     } catch (error: any) {
+      console.error('=== VOTE ERROR DEBUG ===');
       console.error('Error during voting process:', error);
+      console.error('Error stack:', error.stack);
+      console.error('Error message:', error.message);
+      console.error('Error code:', error.code);
+      console.error('Full error object:', error);
       
       // Provide specific error messages based on error type
       if (error.code === 'permission-denied') {
