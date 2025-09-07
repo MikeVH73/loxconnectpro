@@ -4,7 +4,7 @@ import { useAuth } from '../AuthProvider';
 import { collection, addDoc, query, orderBy, onSnapshot, where, doc, updateDoc, getDocs } from 'firebase/firestore';
 import { db } from '../../firebaseClient';
 import { Idea, UserVote, MonthlyPoints } from '../../types';
-import { ensureMonthlyPoints, updateMonthlyPoints, canUserVote, getRemainingPointsAfterVote } from '../utils/monthlyPoints';
+import { ensureMonthlyPoints, updateMonthlyPoints } from '../utils/monthlyPoints';
 
 export default function SubmitIdeasPage() {
   const { userProfile } = useAuth();

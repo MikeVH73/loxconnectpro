@@ -142,7 +142,7 @@ export default function SecurityPage() {
                 if (!user) return;
                 try {
                   setVerifying(true); setError(null); setSuccess(null);
-                  const base = (typeof process !== 'undefined' && (process as any)?.env?.NEXT_PUBLIC_APP_BASE_URL) || 'https://loxconnectpro.vercel.app';
+                  const base = 'https://loxconnectpro.vercel.app';
                   const url = `${base}/users/security`;
                   await sendEmailVerification(user, { url, handleCodeInApp: false } as any);
                   setSuccess('Verification email sent. Check your inbox, then come back and press Refresh.');
