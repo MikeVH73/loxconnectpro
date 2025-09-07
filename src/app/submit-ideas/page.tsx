@@ -1,13 +1,14 @@
 "use client";
 import { useState, useEffect } from 'react';
 import { useAuth } from '../AuthProvider';
-import { collection, addDoc, query, orderBy, onSnapshot, where, doc, updateDoc } from 'firebase/firestore';
+import { collection, addDoc, query, orderBy, onSnapshot, where, doc, updateDoc, getDocs } from 'firebase/firestore';
 import { db } from '../../firebaseClient';
 import { Idea } from '../../types';
 
 export default function SubmitIdeasPage() {
   const { userProfile } = useAuth();
   const [ideas, setIdeas] = useState<Idea[]>([]);
+  const [userLikes, setUserLikes] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -37,8 +38,8 @@ export default function SubmitIdeasPage() {
       // Filter based on user role
       let filteredIdeas;
       if (userProfile.role === 'superAdmin') {
-        // SuperAdmin sees all ideas
-        filteredIdeas = allIdeas;
+        // SuperAdmin sees all ideas except archived
+        filteredIdeas = allIdeas.filter(idea => idea.status !== 'Archived');
       } else {
         // Regular users only see approved ideas
         filteredIdeas = allIdeas.filter(idea => idea.status === 'Approved');
@@ -50,6 +51,73 @@ export default function SubmitIdeasPage() {
 
     return () => unsubscribe();
   }, [userProfile]);
+
+  // Load user's likes
+  useEffect(() => {
+    if (!db || !userProfile) return;
+
+    const likesQuery = query(
+      collection(db, 'ideaLikes'),
+      where('userId', '==', userProfile.id)
+    );
+
+    const unsubscribe = onSnapshot(likesQuery, (snapshot) => {
+      const likedIdeas = snapshot.docs.map(doc => doc.data().ideaId);
+      setUserLikes(likedIdeas);
+    });
+
+    return () => unsubscribe();
+  }, [userProfile]);
+
+  const handleLikeIdea = async (ideaId: string) => {
+    if (!db || !userProfile) return;
+
+    const isLiked = userLikes.includes(ideaId);
+    
+    try {
+      if (isLiked) {
+        // Unlike: find and delete the like document
+        const likesQuery = query(
+          collection(db, 'ideaLikes'),
+          where('userId', '==', userProfile.id),
+          where('ideaId', '==', ideaId)
+        );
+        const likesSnapshot = await getDocs(likesQuery);
+        if (!likesSnapshot.empty) {
+          await updateDoc(doc(db, 'ideaLikes', likesSnapshot.docs[0].id), {
+            deleted: true,
+            deletedAt: new Date()
+          });
+        }
+        
+        // Update idea like count
+        const idea = ideas.find(i => i.id === ideaId);
+        if (idea) {
+          await updateDoc(doc(db, 'ideas', ideaId), {
+            likeCount: (idea.likeCount || 0) - 1
+          });
+        }
+      } else {
+        // Like: create new like document
+        await addDoc(collection(db, 'ideaLikes'), {
+          userId: userProfile.id,
+          ideaId: ideaId,
+          createdAt: new Date()
+        });
+        
+        // Update idea like count
+        const idea = ideas.find(i => i.id === ideaId);
+        if (idea) {
+          await updateDoc(doc(db, 'ideas', ideaId), {
+            likeCount: (idea.likeCount || 0) + 1
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error liking idea:', error);
+      alert('Failed to like idea. Please try again.');
+    }
+  };
 
   const handleSubmitIdea = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -80,6 +148,41 @@ export default function SubmitIdeasPage() {
       alert('Failed to submit idea. Please try again.');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleImplementIdea = async (ideaId: string) => {
+    if (!db || !userProfile || userProfile.role !== 'superAdmin') return;
+    
+    try {
+      await updateDoc(doc(db, 'ideas', ideaId), {
+        status: 'Being Implemented',
+        implementedBy: userProfile.email,
+        implementedAt: new Date()
+      });
+      alert('Idea marked as being implemented!');
+    } catch (error) {
+      console.error('Error implementing idea:', error);
+      alert('Failed to mark idea as being implemented. Please try again.');
+    }
+  };
+
+  const handleDeleteIdea = async (ideaId: string) => {
+    if (!db || !userProfile || userProfile.role !== 'superAdmin') return;
+    
+    const confirmDelete = confirm('Are you sure you want to delete this idea? It will be archived.');
+    if (!confirmDelete) return;
+    
+    try {
+      await updateDoc(doc(db, 'ideas', ideaId), {
+        status: 'Archived',
+        deletedBy: userProfile.email,
+        deletedAt: new Date()
+      });
+      alert('Idea deleted and archived successfully!');
+    } catch (error) {
+      console.error('Error deleting idea:', error);
+      alert('Failed to delete idea. Please try again.');
     }
   };
 
@@ -135,6 +238,8 @@ export default function SubmitIdeasPage() {
       case 'Pending Approval': return 'bg-yellow-100 text-yellow-800';
       case 'Approved': return 'bg-green-100 text-green-800';
       case 'Rejected': return 'bg-red-100 text-red-800';
+      case 'Being Implemented': return 'bg-purple-100 text-purple-800';
+      case 'Archived': return 'bg-gray-100 text-gray-800';
       case 'Planned': return 'bg-blue-100 text-blue-800';
       case 'In Development': return 'bg-purple-100 text-purple-800';
       case 'Implemented': return 'bg-green-100 text-green-800';
@@ -279,23 +384,67 @@ export default function SubmitIdeasPage() {
                       )}
                     </div>
                   )}
+                  {idea.status === 'Being Implemented' && idea.implementedBy && (
+                    <p>Being implemented by: {idea.implementedBy}</p>
+                  )}
                 </div>
                 
-                {/* Approval buttons for superAdmins */}
-                {userProfile?.role === 'superAdmin' && idea.status === 'Pending Approval' && (
-                  <div className="mt-4 flex space-x-2">
+                {/* Like button for approved ideas */}
+                {idea.status === 'Approved' && userProfile && (
+                  <div className="mt-3 flex items-center space-x-2">
                     <button
-                      onClick={() => handleApproveIdea(idea.id)}
-                      className="bg-green-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-green-700"
+                      onClick={() => handleLikeIdea(idea.id)}
+                      disabled={userLikes.includes(idea.id)}
+                      className={`flex items-center space-x-1 px-3 py-1 rounded-md text-sm font-medium transition-colors ${
+                        userLikes.includes(idea.id)
+                          ? 'bg-red-100 text-red-600 cursor-not-allowed'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
                     >
-                      Approve
+                      <span>❤️</span>
+                      <span>{userLikes.includes(idea.id) ? 'Liked' : 'Like'}</span>
                     </button>
-                    <button
-                      onClick={() => handleRejectIdea(idea.id)}
-                      className="bg-red-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-red-700"
-                    >
-                      Reject
-                    </button>
+                    <span className="text-sm text-gray-500">
+                      {idea.likeCount || 0} likes
+                    </span>
+                  </div>
+                )}
+                
+                {/* SuperAdmin controls */}
+                {userProfile?.role === 'superAdmin' && (
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {idea.status === 'Pending Approval' && (
+                      <>
+                        <button
+                          onClick={() => handleApproveIdea(idea.id)}
+                          className="bg-green-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-green-700"
+                        >
+                          Approve
+                        </button>
+                        <button
+                          onClick={() => handleRejectIdea(idea.id)}
+                          className="bg-red-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-red-700"
+                        >
+                          Reject
+                        </button>
+                      </>
+                    )}
+                    {idea.status === 'Approved' && (
+                      <button
+                        onClick={() => handleImplementIdea(idea.id)}
+                        className="bg-purple-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-purple-700"
+                      >
+                        Start Implementing
+                      </button>
+                    )}
+                    {idea.status !== 'Archived' && idea.status !== 'Being Implemented' && (
+                      <button
+                        onClick={() => handleDeleteIdea(idea.id)}
+                        className="bg-gray-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-700"
+                      >
+                        Delete
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
