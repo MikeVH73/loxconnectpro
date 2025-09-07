@@ -314,7 +314,20 @@ export default function SubmitIdeasPage() {
   };
 
   const getUserVoteForIdea = (ideaId: string) => {
-    return userVotes.find(vote => vote.ideaId === ideaId)?.points || 0;
+    if (!userVotes || !Array.isArray(userVotes)) {
+      console.warn('userVotes is not properly initialized:', userVotes);
+      return 0;
+    }
+    
+    const vote = userVotes.find(vote => {
+      if (!vote || typeof vote.ideaId !== 'string') {
+        console.warn('Invalid vote object:', vote);
+        return false;
+      }
+      return vote.ideaId === ideaId;
+    });
+    
+    return vote?.points || 0;
   };
 
   if (loading) {
@@ -480,21 +493,33 @@ export default function SubmitIdeasPage() {
                   <div className="flex items-center space-x-4">
                     <span className="text-sm font-medium text-gray-700">Vote with points:</span>
                     <div className="flex space-x-2">
-                      {[1, 2, 3, 4, 5].map(points => (
-                        <button
-                          key={points}
-                          data-idea-id={idea.id}
-                          onClick={() => handleVote(idea.id, points)}
-                          className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
-                            getUserVoteForIdea(idea.id) === points
-                              ? 'bg-[#e40115] text-white'
-                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                          }`}
-                          disabled={!canUserVote(monthlyPoints, points, getUserVoteForIdea(idea.id))}
-                        >
-                          {points}
-                        </button>
-                      ))}
+                      {[1, 2, 3, 4, 5].map(points => {
+                        const currentVote = getUserVoteForIdea(idea.id);
+                        const canVote = monthlyPoints && canUserVote(monthlyPoints, points, currentVote);
+                        
+                        return (
+                          <button
+                            key={points}
+                            data-idea-id={idea.id}
+                            onClick={() => {
+                              try {
+                                handleVote(idea.id, points);
+                              } catch (error) {
+                                console.error('Error in button click handler:', error);
+                                alert('An error occurred. Please try again.');
+                              }
+                            }}
+                            className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                              currentVote === points
+                                ? 'bg-[#e40115] text-white'
+                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                            }`}
+                            disabled={!canVote}
+                          >
+                            {points}
+                          </button>
+                        );
+                      })}
                     </div>
                     <span className="text-xs text-gray-500">
                       Your vote: {getUserVoteForIdea(idea.id)} points
