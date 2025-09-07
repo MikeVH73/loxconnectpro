@@ -494,31 +494,55 @@ export default function SubmitIdeasPage() {
                     <span className="text-sm font-medium text-gray-700">Vote with points:</span>
                     <div className="flex space-x-2">
                       {[1, 2, 3, 4, 5].map(points => {
-                        const currentVote = getUserVoteForIdea(idea.id);
-                        const canVote = monthlyPoints && canUserVote(monthlyPoints, points, currentVote);
-                        
-                        return (
-                          <button
-                            key={points}
-                            data-idea-id={idea.id}
-                            onClick={() => {
-                              try {
-                                handleVote(idea.id, points);
-                              } catch (error) {
-                                console.error('Error in button click handler:', error);
-                                alert('An error occurred. Please try again.');
-                              }
-                            }}
-                            className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
-                              currentVote === points
-                                ? 'bg-[#e40115] text-white'
-                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                            }`}
-                            disabled={!canVote}
-                          >
-                            {points}
-                          </button>
-                        );
+                        try {
+                          const currentVote = getUserVoteForIdea(idea.id);
+                          console.log('Button render - ideaId:', idea.id, 'points:', points, 'currentVote:', currentVote, 'monthlyPoints:', monthlyPoints);
+                          
+                          let canVote = false;
+                          if (monthlyPoints && typeof monthlyPoints === 'object') {
+                            try {
+                              canVote = canUserVote(monthlyPoints, points, currentVote);
+                            } catch (error) {
+                              console.error('Error in canUserVote:', error);
+                              canVote = false;
+                            }
+                          }
+                          
+                          return (
+                            <button
+                              key={points}
+                              data-idea-id={idea.id}
+                              onClick={() => {
+                                try {
+                                  console.log('Button clicked - ideaId:', idea.id, 'points:', points);
+                                  handleVote(idea.id, points);
+                                } catch (error) {
+                                  console.error('Error in button click handler:', error);
+                                  alert('An error occurred. Please try again.');
+                                }
+                              }}
+                              className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                                currentVote === points
+                                  ? 'bg-[#e40115] text-white'
+                                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                              }`}
+                              disabled={!canVote}
+                            >
+                              {points}
+                            </button>
+                          );
+                        } catch (error) {
+                          console.error('Error in button render:', error);
+                          return (
+                            <button
+                              key={points}
+                              disabled
+                              className="px-3 py-1 rounded text-sm font-medium bg-gray-300 text-gray-500"
+                            >
+                              {points}
+                            </button>
+                          );
+                        }
                       })}
                     </div>
                     <span className="text-xs text-gray-500">

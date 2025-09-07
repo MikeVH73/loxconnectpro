@@ -102,10 +102,34 @@ export function canUserVote(
   pointsToVote: number, 
   currentVotePoints: number
 ): boolean {
-  if (!monthlyPoints) return false;
+  console.log('canUserVote called with:', { monthlyPoints, pointsToVote, currentVotePoints });
+  
+  if (!monthlyPoints) {
+    console.log('canUserVote: monthlyPoints is null/undefined');
+    return false;
+  }
+  
+  if (typeof monthlyPoints.remainingPoints !== 'number') {
+    console.log('canUserVote: remainingPoints is not a number:', monthlyPoints.remainingPoints);
+    return false;
+  }
+  
+  if (typeof pointsToVote !== 'number') {
+    console.log('canUserVote: pointsToVote is not a number:', pointsToVote);
+    return false;
+  }
+  
+  if (typeof currentVotePoints !== 'number') {
+    console.log('canUserVote: currentVotePoints is not a number:', currentVotePoints);
+    return false;
+  }
   
   const pointsDifference = pointsToVote - currentVotePoints;
-  return pointsDifference <= monthlyPoints.remainingPoints;
+  const result = pointsDifference <= monthlyPoints.remainingPoints;
+  
+  console.log('canUserVote result:', { pointsDifference, remainingPoints: monthlyPoints.remainingPoints, result });
+  
+  return result;
 }
 
 /**
@@ -116,8 +140,22 @@ export function getRemainingPointsAfterVote(
   pointsToVote: number,
   currentVotePoints: number
 ): number {
-  if (!monthlyPoints) return 0;
+  console.log('getRemainingPointsAfterVote called with:', { monthlyPoints, pointsToVote, currentVotePoints });
+  
+  if (!monthlyPoints) {
+    console.log('getRemainingPointsAfterVote: monthlyPoints is null/undefined');
+    return 0;
+  }
+  
+  if (typeof monthlyPoints.remainingPoints !== 'number') {
+    console.log('getRemainingPointsAfterVote: remainingPoints is not a number:', monthlyPoints.remainingPoints);
+    return 0;
+  }
   
   const pointsDifference = pointsToVote - currentVotePoints;
-  return Math.max(0, monthlyPoints.remainingPoints - pointsDifference);
+  const result = Math.max(0, monthlyPoints.remainingPoints - pointsDifference);
+  
+  console.log('getRemainingPointsAfterVote result:', { pointsDifference, remainingPoints: monthlyPoints.remainingPoints, result });
+  
+  return result;
 }
