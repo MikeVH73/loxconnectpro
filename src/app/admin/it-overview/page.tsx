@@ -106,11 +106,11 @@ export default function ITOverviewPage() {
           {/* Visual Architecture Diagram */}
           <div className="bg-gray-50 rounded-lg p-6 mb-6">
             <h3 className="font-semibold text-gray-800 mb-4 text-center">🏗️ System Architecture</h3>
-            <div className="grid md:grid-cols-2 gap-8">
+            <div className="grid md:grid-cols-2 gap-8 items-stretch">
               {/* Left Side - ERP Systems */}
-              <div>
+              <div className="flex flex-col">
                 <h4 className="font-semibold text-gray-700 mb-3 text-center">Business Units & Their ERP Systems</h4>
-                <div className="space-y-3">
+                <div className="space-y-3 flex-1">
                   <div className="bg-blue-100 rounded-lg p-3 text-center">
                     <div className="font-semibold text-blue-800">Loxcall Netherlands</div>
                     <div className="text-sm text-blue-600">Local ERP System</div>
@@ -131,9 +131,9 @@ export default function ITOverviewPage() {
               </div>
               
               {/* Right Side - LoxConnect PRO */}
-              <div>
+              <div className="flex flex-col">
                 <h4 className="font-semibold text-gray-700 mb-3 text-center">LoxConnect PRO</h4>
-                <div className="bg-red-50 border-2 border-red-200 rounded-lg p-4 text-center">
+                <div className="bg-red-50 border-2 border-red-200 rounded-lg p-4 text-center flex-1 flex flex-col justify-center">
                   <div className="font-semibold text-red-800 text-lg mb-2">🔒 CLOSED SYSTEM</div>
                   <div className="text-sm text-red-600 mb-3">No External Dependencies</div>
                   <div className="space-y-2 text-xs text-red-700">
