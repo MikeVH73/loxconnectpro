@@ -663,6 +663,62 @@ const useCustomers = () => {
 - **Retry Mechanisms**: Automatic retry for failed operations
 - **Loading States**: Visual feedback during operations
 
+### **Error Reporting & Ideas System**
+**Location**: `src/app/report-issues/page.tsx`, `src/app/submit-ideas/page.tsx`
+
+**Core Features**:
+- **Error Reporting**: Users can report bugs, improvements, design issues, and performance problems
+- **Ideas Submission**: Users can submit new feature ideas with voting system
+- **Monthly Voting Points**: All users get 10 points per month to vote on ideas
+- **SuperAdmin Management**: Complete management dashboards for both systems
+- **Separate Notification System**: Distinct notification types that don't interfere with existing system
+
+**Error Report Categories** (Simple Language):
+- **Bug Report**: Something isn't working right
+- **Improvement**: Make something better  
+- **Design Issue**: Looks wrong or confusing
+- **Performance**: App is slow or laggy
+- **Other**: Something else
+
+**Idea Categories** (Simple Language):
+- **Bug Report**: Something isn't working right
+- **Improvement**: Make something better
+- **New Feature**: Add something new
+- **Design Issue**: Looks wrong or confusing
+- **Performance**: App is slow or laggy
+
+**Voting System**:
+- **Monthly Points**: All users (including admin/superAdmin) get 10 points per month
+- **Point Distribution**: Users can distribute points across multiple ideas
+- **Automatic Reset**: Points reset monthly (1st of each month)
+- **Ranking**: Ideas ranked by total points received (highest at top)
+- **Status Tracking**: Ideas move through Under Review → Planned → In Development → Implemented
+
+**Database Collections**:
+- **errorReports**: User-submitted error reports with status tracking
+- **ideas**: User-submitted ideas with voting and status tracking
+- **userVotes**: Individual user votes with point allocation
+- **monthlyPoints**: Monthly point allocation and usage tracking
+
+**SuperAdmin Management**:
+- **Error Reports Dashboard**: Filter by status, priority, user, date, page
+- **Ideas Management Dashboard**: Filter by status, category, votes, date
+- **Response System**: Reply directly to users within the app
+- **Status Management**: Mark as resolved/implemented with notifications to users
+- **Rejection Handling**: Provide reasons when rejecting ideas
+
+**Notification Types**:
+- **error_report**: New error reports (to superAdmins)
+- **new_idea**: New ideas submitted (to superAdmins)
+- **error_resolved**: Error report resolved (to user)
+- **idea_response**: Idea status changed (to user)
+- **idea_implemented**: Idea implemented (to all users)
+
+**Authorization Rules**:
+- **All Users**: Can submit error reports and ideas, vote on ideas
+- **SuperAdmin**: Full management access to both systems
+- **Admin**: Standard user permissions (can vote and submit)
+
 ## 🔑 **CRITICAL REMINDERS**
 
 ### **Database Field Names**
