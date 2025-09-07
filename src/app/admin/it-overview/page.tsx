@@ -99,7 +99,7 @@ export default function ITOverviewPage() {
               <strong>LoxConnect PRO works with ANY ERP system - no integration required!</strong>
             </p>
             <p className="text-gray-600 text-sm mb-4">
-              Each Business Unit can use their own ERP system (SAP, Oracle, Microsoft Dynamics, etc.) without any technical dependencies or API connections.
+              Each Business Unit can use their own ERP system without any technical dependencies or API connections.
             </p>
           </div>
           
@@ -113,19 +113,19 @@ export default function ITOverviewPage() {
                 <div className="space-y-3">
                   <div className="bg-blue-100 rounded-lg p-3 text-center">
                     <div className="font-semibold text-blue-800">Loxcall Netherlands</div>
-                    <div className="text-sm text-blue-600">SAP ERP</div>
+                    <div className="text-sm text-blue-600">Local ERP System</div>
                   </div>
                   <div className="bg-green-100 rounded-lg p-3 text-center">
                     <div className="font-semibold text-green-800">Loxcall Germany</div>
-                    <div className="text-sm text-green-600">Oracle ERP</div>
+                    <div className="text-sm text-green-600">Local ERP System</div>
                   </div>
                   <div className="bg-purple-100 rounded-lg p-3 text-center">
                     <div className="font-semibold text-purple-800">Loxcall France</div>
-                    <div className="text-sm text-purple-600">Microsoft Dynamics</div>
+                    <div className="text-sm text-purple-600">Local ERP System</div>
                   </div>
                   <div className="bg-yellow-100 rounded-lg p-3 text-center">
                     <div className="font-semibold text-yellow-800">Ramirent Finland</div>
-                    <div className="text-sm text-yellow-600">Custom ERP</div>
+                    <div className="text-sm text-yellow-600">Local ERP System</div>
                   </div>
                 </div>
               </div>
@@ -387,6 +387,78 @@ export default function ITOverviewPage() {
                 <li>Feature requests</li>
                 <li>Analytics interpretation</li>
               </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* IT Takeover & Self-Hosting */}
+      <section className="mb-8">
+        <h2 className="text-2xl font-semibold mb-4 text-gray-800">🏠 IT Takeover & Self-Hosting Options</h2>
+        <div className="bg-white border rounded-lg p-6 shadow-sm">
+          <p className="text-gray-700 mb-4">
+            <strong>Complete ownership and control is possible.</strong> If your IT team wants to take over the entire application and host it on your own infrastructure, here's what you need to know:
+          </p>
+          
+          <div className="grid md:grid-cols-2 gap-6 mb-6">
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+              <h3 className="font-semibold text-green-800 mb-3">✅ What You Get</h3>
+              <ul className="list-disc ml-6 text-gray-700 space-y-1 text-sm">
+                <li><strong>Complete Source Code:</strong> Full access to all application code</li>
+                <li><strong>Database Export:</strong> All Firestore data can be exported</li>
+                <li><strong>Configuration Files:</strong> All settings and environment variables</li>
+                <li><strong>Documentation:</strong> Complete technical documentation</li>
+                <li><strong>No Vendor Lock-in:</strong> You own everything</li>
+              </ul>
+            </div>
+            
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <h3 className="font-semibold text-blue-800 mb-3">🔧 What You Need</h3>
+              <ul className="list-disc ml-6 text-gray-700 space-y-1 text-sm">
+                <li><strong>Server Infrastructure:</strong> Node.js hosting environment</li>
+                <li><strong>Database:</strong> MongoDB or PostgreSQL (to replace Firestore)</li>
+                <li><strong>File Storage:</strong> AWS S3, Google Cloud Storage, or local storage</li>
+                <li><strong>Authentication:</strong> Custom auth system or Auth0</li>
+                <li><strong>Domain & SSL:</strong> Your own domain with SSL certificates</li>
+              </ul>
+            </div>
+          </div>
+
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+            <h3 className="font-semibold text-yellow-800 mb-2">⚠️ Migration Process</h3>
+            <p className="text-gray-700 text-sm mb-2">
+              <strong>Step-by-step migration:</strong>
+            </p>
+            <ol className="list-decimal ml-6 text-gray-700 space-y-1 text-sm">
+              <li><strong>Export Data:</strong> Download all Firestore collections as JSON</li>
+              <li><strong>Setup Infrastructure:</strong> Deploy servers, database, and storage</li>
+              <li><strong>Modify Code:</strong> Replace Firebase services with your chosen alternatives</li>
+              <li><strong>Import Data:</strong> Load exported data into your new database</li>
+              <li><strong>Test & Deploy:</strong> Verify functionality and go live</li>
+            </ol>
+          </div>
+
+          <div className="bg-gray-50 border rounded-lg p-4">
+            <h3 className="font-semibold text-gray-800 mb-2">💡 Benefits of Self-Hosting</h3>
+            <div className="grid md:grid-cols-3 gap-4">
+              <div className="text-center">
+                <div className="bg-green-100 rounded-lg p-3 mb-2">
+                  <h4 className="font-semibold text-green-800">🔒 Complete Control</h4>
+                </div>
+                <p className="text-sm text-gray-600">Full control over data, security, and infrastructure</p>
+              </div>
+              <div className="text-center">
+                <div className="bg-blue-100 rounded-lg p-3 mb-2">
+                  <h4 className="font-semibold text-blue-800">💰 Cost Control</h4>
+                </div>
+                <p className="text-sm text-gray-600">No monthly SaaS fees, only infrastructure costs</p>
+              </div>
+              <div className="text-center">
+                <div className="bg-purple-100 rounded-lg p-3 mb-2">
+                  <h4 className="font-semibold text-purple-800">🔧 Customization</h4>
+                </div>
+                <p className="text-sm text-gray-600">Modify and extend the system as needed</p>
+              </div>
             </div>
           </div>
         </div>
