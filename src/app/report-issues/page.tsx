@@ -265,7 +265,7 @@ export default function ReportIssuesPage() {
                 <div className="text-sm text-gray-600 mb-2">
                   <span className="font-medium">Category:</span> {report.category} • 
                   <span className="font-medium ml-2">Page:</span> {report.page} • 
-                  <span className="font-medium ml-2">Submitted:</span> {new Date(report.createdAt).toLocaleDateString()}
+                  <span className="font-medium ml-2">Submitted:</span> {report.createdAt ? new Date(report.createdAt.seconds ? report.createdAt.seconds * 1000 : report.createdAt).toLocaleDateString() : 'Unknown'}
                 </div>
                 
                 <p className="text-gray-700 mb-3">{report.description}</p>

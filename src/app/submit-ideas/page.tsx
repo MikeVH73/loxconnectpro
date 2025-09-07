@@ -144,31 +144,23 @@ export default function SubmitIdeasPage() {
   const handleVote = async (ideaId: string, points: number) => {
     if (!userProfile || !monthlyPoints) return;
 
-    if (points > monthlyPoints.remainingPoints) {
+    const existingVote = userVotes.find(vote => vote.ideaId === ideaId);
+    const currentVotePoints = existingVote?.points || 0;
+    const pointsDifference = points - currentVotePoints;
+
+    // Check if user has enough points for the new vote
+    if (pointsDifference > monthlyPoints.remainingPoints) {
       alert(`You only have ${monthlyPoints.remainingPoints} points remaining this month.`);
       return;
     }
 
     try {
-      // Check if user already voted on this idea
-      const existingVote = userVotes.find(vote => vote.ideaId === ideaId);
-      
       if (existingVote) {
         // Update existing vote
-        const voteDiff = points - existingVote.points;
         await updateDoc(doc(db, 'userVotes', existingVote.id), {
           points: points,
           updatedAt: new Date()
         });
-        
-        // Update idea total points
-        const idea = ideas.find(i => i.id === ideaId);
-        if (idea) {
-          await updateDoc(doc(db, 'ideas', ideaId), {
-            totalPoints: idea.totalPoints + voteDiff,
-            updatedAt: new Date()
-          });
-        }
       } else {
         // Create new vote
         const newVote: Omit<UserVote, 'id'> = {
@@ -181,23 +173,28 @@ export default function SubmitIdeasPage() {
         };
 
         await addDoc(collection(db, 'userVotes'), newVote);
+      }
+      
+      // Update idea total points
+      const idea = ideas.find(i => i.id === ideaId);
+      if (idea) {
+        const newTotalPoints = idea.totalPoints + pointsDifference;
+        const newVoteCount = existingVote ? idea.voteCount : idea.voteCount + 1;
         
-        // Update idea total points
-        const idea = ideas.find(i => i.id === ideaId);
-        if (idea) {
-          await updateDoc(doc(db, 'ideas', ideaId), {
-            totalPoints: idea.totalPoints + points,
-            voteCount: idea.voteCount + 1,
-            updatedAt: new Date()
-          });
-        }
+        await updateDoc(doc(db, 'ideas', ideaId), {
+          totalPoints: newTotalPoints,
+          voteCount: newVoteCount,
+          updatedAt: new Date()
+        });
       }
 
       // Update monthly points
-      const newUsedPoints = monthlyPoints.usedPoints + (points - (existingVote?.points || 0));
+      const newUsedPoints = monthlyPoints.usedPoints + pointsDifference;
+      const newRemainingPoints = monthlyPoints.totalPoints - newUsedPoints;
+      
       await updateDoc(doc(db, 'monthlyPoints', monthlyPoints.id), {
         usedPoints: newUsedPoints,
-        remainingPoints: 10 - newUsedPoints,
+        remainingPoints: newRemainingPoints,
         updatedAt: new Date()
       });
 
@@ -386,7 +383,7 @@ export default function SubmitIdeasPage() {
                   <span className="font-medium">Submitted by:</span> {idea.userEmail} • 
                   <span className="font-medium ml-2">Points:</span> {idea.totalPoints} ⭐ • 
                   <span className="font-medium ml-2">Votes:</span> {idea.voteCount} • 
-                  <span className="font-medium ml-2">Date:</span> {new Date(idea.createdAt).toLocaleDateString()}
+                  <span className="font-medium ml-2">Date:</span> {idea.createdAt ? new Date(idea.createdAt.seconds ? idea.createdAt.seconds * 1000 : idea.createdAt).toLocaleDateString() : 'Unknown'}
                 </div>
                 
                 <p className="text-gray-700 mb-4">{idea.description}</p>
