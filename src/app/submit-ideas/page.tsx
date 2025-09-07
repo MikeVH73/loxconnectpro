@@ -21,29 +21,30 @@ export default function SubmitIdeasPage() {
   useEffect(() => {
     if (!db || !userProfile) return;
 
-    let ideasQuery;
-    if (userProfile.role === 'superAdmin') {
-      // SuperAdmin sees all ideas (pending, approved, rejected)
-      ideasQuery = query(
-        collection(db, 'ideas'),
-        orderBy('createdAt', 'desc')
-      );
-    } else {
-      // Regular users only see approved ideas
-      ideasQuery = query(
-        collection(db, 'ideas'),
-        where('status', '==', 'Approved'),
-        orderBy('createdAt', 'desc')
-      );
-    }
+    // For now, load all ideas and filter client-side to avoid Firebase index issues
+    const ideasQuery = query(
+      collection(db, 'ideas'),
+      orderBy('createdAt', 'desc')
+    );
 
     const unsubscribe = onSnapshot(ideasQuery, (snapshot) => {
-      const ideasData = snapshot.docs.map(doc => ({
+      const allIdeas = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
         createdAt: doc.data().createdAt?.toDate ? doc.data().createdAt.toDate() : new Date(doc.data().createdAt)
       })) as Idea[];
-      setIdeas(ideasData);
+      
+      // Filter based on user role
+      let filteredIdeas;
+      if (userProfile.role === 'superAdmin') {
+        // SuperAdmin sees all ideas
+        filteredIdeas = allIdeas;
+      } else {
+        // Regular users only see approved ideas
+        filteredIdeas = allIdeas.filter(idea => idea.status === 'Approved');
+      }
+      
+      setIdeas(filteredIdeas);
       setLoading(false);
     });
 
