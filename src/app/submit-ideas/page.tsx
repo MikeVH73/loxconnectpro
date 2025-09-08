@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from 'react';
 import { useAuth } from '../AuthProvider';
-import { collection, addDoc, query, orderBy, onSnapshot, where, doc, updateDoc, getDocs } from 'firebase/firestore';
+import { collection, addDoc, query, orderBy, onSnapshot, where, doc, updateDoc, getDocs, writeBatch } from 'firebase/firestore';
 import { db } from '../../firebaseClient';
 // Local interface to match our current implementation - Updated for new statuses
 interface LocalIdea {
@@ -111,7 +111,10 @@ export default function SubmitIdeasPage() {
 
     // Category filter
     if (categoryFilter !== 'All') {
-      filtered = filtered.filter(idea => idea.category === categoryFilter);
+      filtered = filtered.filter(idea => {
+        const mappedCategory = mapLegacyToNewCategory(idea.category, idea.title, idea.description);
+        return mappedCategory === categoryFilter;
+      });
     }
 
     // Status filter
@@ -468,6 +471,43 @@ export default function SubmitIdeasPage() {
     }
   };
 
+  // Migration function to update existing ideas with new categories
+  const migrateIdeasToNewCategories = async () => {
+    if (!db || !userProfile || userProfile.role !== 'superAdmin') return;
+    
+    try {
+      console.log('Starting idea category migration...');
+      const ideasSnapshot = await getDocs(collection(db, 'ideas'));
+      const batch = writeBatch(db);
+      let updateCount = 0;
+      
+      ideasSnapshot.forEach((doc) => {
+        const idea = doc.data();
+        const currentCategory = idea.category;
+        const newCategory = mapLegacyToNewCategory(currentCategory, idea.title, idea.description);
+        
+        // Only update if category changed
+        if (currentCategory !== newCategory) {
+          batch.update(doc.ref, { category: newCategory });
+          updateCount++;
+          console.log(`Migrating idea "${idea.title}" from "${currentCategory}" to "${newCategory}"`);
+        }
+      });
+      
+      if (updateCount > 0) {
+        await batch.commit();
+        console.log(`Migration completed: ${updateCount} ideas updated`);
+        alert(`Migration completed: ${updateCount} ideas updated with new categories`);
+      } else {
+        console.log('No ideas needed migration');
+        alert('All ideas already use the new category system');
+      }
+    } catch (error) {
+      console.error('Migration failed:', error);
+      alert('Migration failed. Please try again.');
+    }
+  };
+
   const openAttachment = (attachment: any) => {
     window.open(attachment.url, '_blank');
   };
@@ -478,6 +518,76 @@ export default function SubmitIdeasPage() {
     if (type.includes('word') || type.includes('document')) return '📝';
     if (type.includes('text')) return '📃';
     return '📎';
+  };
+
+  // Function to map legacy categories to new categories
+  const mapLegacyToNewCategory = (legacyCategory: string, title: string, description: string): string => {
+    const content = `${title} ${description}`.toLowerCase();
+    
+    // Map legacy categories to new ones based on content analysis
+    switch (legacyCategory) {
+      case 'Bug Report':
+        // Bug reports about specific features go to that feature's category
+        if (content.includes('dashboard') || content.includes('analytics') || content.includes('chart')) return 'Analytics';
+        if (content.includes('quote') || content.includes('qr')) return 'Quote Requests';
+        if (content.includes('customer')) return 'Customers';
+        if (content.includes('notification') || content.includes('message')) return 'Notifications';
+        if (content.includes('planning') || content.includes('schedule')) return 'Planning';
+        if (content.includes('archive') || content.includes('old')) return 'Archived';
+        if (content.includes('faq') || content.includes('help')) return 'FAQs';
+        return 'Dashboard'; // Default for general bugs
+        
+      case 'Improvement':
+        // Improvements to specific features
+        if (content.includes('dashboard') || content.includes('analytics') || content.includes('chart')) return 'Analytics';
+        if (content.includes('quote') || content.includes('qr')) return 'Quote Requests';
+        if (content.includes('customer')) return 'Customers';
+        if (content.includes('notification') || content.includes('message')) return 'Notifications';
+        if (content.includes('planning') || content.includes('schedule')) return 'Planning';
+        if (content.includes('archive') || content.includes('old')) return 'Archived';
+        if (content.includes('faq') || content.includes('help')) return 'FAQs';
+        return 'Dashboard'; // Default for general improvements
+        
+      case 'New Feature':
+        // New features for specific areas
+        if (content.includes('dashboard') || content.includes('analytics') || content.includes('chart')) return 'Analytics';
+        if (content.includes('quote') || content.includes('qr')) return 'Quote Requests';
+        if (content.includes('customer')) return 'Customers';
+        if (content.includes('notification') || content.includes('message')) return 'Notifications';
+        if (content.includes('planning') || content.includes('schedule')) return 'Planning';
+        if (content.includes('archive') || content.includes('old')) return 'Archived';
+        if (content.includes('faq') || content.includes('help')) return 'FAQs';
+        return 'Dashboard'; // Default for general new features
+        
+      case 'Design Issue':
+        // Design issues can be in any category, analyze content
+        if (content.includes('dashboard') || content.includes('analytics') || content.includes('chart')) return 'Analytics';
+        if (content.includes('quote') || content.includes('qr')) return 'Quote Requests';
+        if (content.includes('customer')) return 'Customers';
+        if (content.includes('notification') || content.includes('message')) return 'Notifications';
+        if (content.includes('planning') || content.includes('schedule')) return 'Planning';
+        if (content.includes('archive') || content.includes('old')) return 'Archived';
+        if (content.includes('faq') || content.includes('help')) return 'FAQs';
+        return 'Dashboard'; // Default for general design issues
+        
+      case 'Performance':
+        // Performance issues can be in any category, analyze content
+        if (content.includes('dashboard') || content.includes('analytics') || content.includes('chart')) return 'Analytics';
+        if (content.includes('quote') || content.includes('qr')) return 'Quote Requests';
+        if (content.includes('customer')) return 'Customers';
+        if (content.includes('notification') || content.includes('message')) return 'Notifications';
+        if (content.includes('planning') || content.includes('schedule')) return 'Planning';
+        if (content.includes('archive') || content.includes('old')) return 'Archived';
+        if (content.includes('faq') || content.includes('help')) return 'FAQs';
+        return 'Dashboard'; // Default for general performance issues
+        
+      default:
+        // If it's already a new category, return as-is
+        if (['Dashboard', 'Planning', 'Quote Requests', 'Archived', 'Customers', 'Notifications', 'Analytics', 'FAQs'].includes(legacyCategory)) {
+          return legacyCategory;
+        }
+        return 'Dashboard'; // Default fallback
+    }
   };
 
   const getCategoryColor = (category: string) => {
@@ -491,13 +601,6 @@ export default function SubmitIdeasPage() {
       case 'Notifications': return 'bg-yellow-100 text-yellow-800';
       case 'Analytics': return 'bg-indigo-100 text-indigo-800';
       case 'FAQs': return 'bg-pink-100 text-pink-800';
-      
-      // Legacy categories (for backward compatibility)
-      case 'Bug Report': return 'bg-red-100 text-red-800';
-      case 'Improvement': return 'bg-blue-100 text-blue-800';
-      case 'New Feature': return 'bg-green-100 text-green-800';
-      case 'Design Issue': return 'bg-purple-100 text-purple-800';
-      case 'Performance': return 'bg-orange-100 text-orange-800';
       
       default: return 'bg-gray-100 text-gray-800';
     }
@@ -575,23 +678,14 @@ export default function SubmitIdeasPage() {
                 className="px-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#e40115] w-full"
               >
                 <option value="All">All Categories</option>
-                <optgroup label="New Categories">
-                  <option value="Dashboard">Dashboard</option>
-                  <option value="Planning">Planning</option>
-                  <option value="Quote Requests">Quote Requests</option>
-                  <option value="Archived">Archived</option>
-                  <option value="Customers">Customers</option>
-                  <option value="Notifications">Notifications</option>
-                  <option value="Analytics">Analytics</option>
-                  <option value="FAQs">FAQs</option>
-                </optgroup>
-                <optgroup label="Legacy Categories">
-                  <option value="Bug Report">Bug Report</option>
-                  <option value="Improvement">Improvement</option>
-                  <option value="New Feature">New Feature</option>
-                  <option value="Design Issue">Design Issue</option>
-                  <option value="Performance">Performance</option>
-                </optgroup>
+                <option value="Dashboard">Dashboard</option>
+                <option value="Planning">Planning</option>
+                <option value="Quote Requests">Quote Requests</option>
+                <option value="Archived">Archived</option>
+                <option value="Customers">Customers</option>
+                <option value="Notifications">Notifications</option>
+                <option value="Analytics">Analytics</option>
+                <option value="FAQs">FAQs</option>
               </select>
             </div>
             
@@ -893,8 +987,8 @@ export default function SubmitIdeasPage() {
                         )}
                       </div>
                       <div className="flex flex-col space-y-3">
-                        <span className={`px-4 py-2 rounded-full text-sm font-medium ${getCategoryColor(idea.category)}`}>
-                          {idea.category}
+                        <span className={`px-4 py-2 rounded-full text-sm font-medium ${getCategoryColor(mapLegacyToNewCategory(idea.category, idea.title, idea.description))}`}>
+                          {mapLegacyToNewCategory(idea.category, idea.title, idea.description)}
                         </span>
                         <span className={`px-4 py-2 rounded-full text-sm font-medium ${getStatusColor(idea.status)}`}>
                           {idea.status}
@@ -1003,8 +1097,8 @@ export default function SubmitIdeasPage() {
                         )}
                       </div>
                       <div className="flex flex-col space-y-3">
-                        <span className={`px-4 py-2 rounded-full text-sm font-medium ${getCategoryColor(idea.category)}`}>
-                          {idea.category}
+                        <span className={`px-4 py-2 rounded-full text-sm font-medium ${getCategoryColor(mapLegacyToNewCategory(idea.category, idea.title, idea.description))}`}>
+                          {mapLegacyToNewCategory(idea.category, idea.title, idea.description)}
                         </span>
                         <span className={`px-4 py-2 rounded-full text-sm font-medium ${getStatusColor(idea.status)}`}>
                           {idea.status}
@@ -1050,6 +1144,24 @@ export default function SubmitIdeasPage() {
           </div>
         </div>
 
+        {/* SuperAdmin Tools */}
+        {userProfile?.role === 'superAdmin' && (
+          <div className="mt-8 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+            <h3 className="text-lg font-semibold text-yellow-800 mb-3">🛠️ Admin Tools</h3>
+            <div className="flex gap-3">
+              <button
+                onClick={migrateIdeasToNewCategories}
+                className="px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors text-sm font-medium"
+              >
+                Migrate Ideas to New Categories
+              </button>
+              <p className="text-sm text-yellow-700 flex items-center">
+                This will update all existing ideas to use the new menu-based categories instead of legacy ones.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* SuperAdmin Section: Pending Approval */}
         {userProfile?.role === 'superAdmin' && (
           <div className="mt-12">
@@ -1068,8 +1180,8 @@ export default function SubmitIdeasPage() {
                         <p className="text-gray-600 mb-4">{idea.description}</p>
                       </div>
                       <div className="flex flex-col space-y-2">
-                        <span className={`px-3 py-1 rounded-full text-sm font-medium ${getCategoryColor(idea.category)}`}>
-                          {idea.category}
+                        <span className={`px-3 py-1 rounded-full text-sm font-medium ${getCategoryColor(mapLegacyToNewCategory(idea.category, idea.title, idea.description))}`}>
+                          {mapLegacyToNewCategory(idea.category, idea.title, idea.description)}
                         </span>
                         <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(idea.status)}`}>
                           {idea.status}
@@ -1122,8 +1234,8 @@ export default function SubmitIdeasPage() {
                         <p className="text-gray-600 mb-4">{idea.description}</p>
                       </div>
                       <div className="flex flex-col space-y-2">
-                        <span className={`px-3 py-1 rounded-full text-sm font-medium ${getCategoryColor(idea.category)}`}>
-                          {idea.category}
+                        <span className={`px-3 py-1 rounded-full text-sm font-medium ${getCategoryColor(mapLegacyToNewCategory(idea.category, idea.title, idea.description))}`}>
+                          {mapLegacyToNewCategory(idea.category, idea.title, idea.description)}
                         </span>
                         <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(idea.status)}`}>
                           {idea.status}
