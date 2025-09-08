@@ -12,7 +12,7 @@ interface LocalIdea {
   userRole: string;
   title: string;
   description: string;
-  category: 'Bug Report' | 'Improvement' | 'New Feature' | 'Design Issue' | 'Performance';
+  category: 'Dashboard' | 'Planning' | 'Quote Requests' | 'Archived' | 'Customers' | 'Notifications' | 'Analytics' | 'FAQs';
   status: 'Pending Approval' | 'Approved' | 'Being Implemented' | 'Rejected' | 'Archived';
   likeCount?: number;
   createdAt: Date;
@@ -26,6 +26,15 @@ interface LocalIdea {
   rejectionReason?: string;
   deletedAt?: Date;
   deletedBy?: string;
+  attachments?: Array<{
+    id: string;
+    name: string;
+    url: string;
+    type: string;
+    size: number;
+    uploadedAt: Date;
+    uploadedBy: string;
+  }>;
 }
 
 export default function SubmitIdeasPage() {
@@ -37,11 +46,13 @@ export default function SubmitIdeasPage() {
   const [submitting, setSubmitting] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({
-    category: 'New Feature' as const,
+    category: 'Dashboard' as const,
     title: '',
     description: ''
   });
   const [rejectionReason, setRejectionReason] = useState('');
+  const [attachments, setAttachments] = useState<File[]>([]);
+  const [userNotifications, setUserNotifications] = useState<any[]>([]);
   
   // Filter states
   const [searchTerm, setSearchTerm] = useState('');
@@ -153,6 +164,29 @@ export default function SubmitIdeasPage() {
     return () => unsubscribe();
   }, [userProfile]);
 
+  // Load user's idea notifications
+  useEffect(() => {
+    if (!db || !userProfile) return;
+
+    const notificationsQuery = query(
+      collection(db!, 'notifications'),
+      where('userId', '==', userProfile.id),
+      where('type', 'in', ['idea_approved', 'idea_rejected', 'idea_implemented']),
+      orderBy('createdAt', 'desc')
+    );
+
+    const unsubscribe = onSnapshot(notificationsQuery, (snapshot) => {
+      const notifications = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        createdAt: doc.data().createdAt?.toDate ? doc.data().createdAt.toDate() : new Date(doc.data().createdAt)
+      }));
+      setUserNotifications(notifications);
+    });
+
+    return () => unsubscribe();
+  }, [userProfile]);
+
   const handleLikeIdea = async (ideaId: string) => {
     if (!db || !userProfile) return;
 
@@ -248,7 +282,8 @@ export default function SubmitIdeasPage() {
       
       await Promise.all(notificationPromises);
       
-      setFormData({ category: 'New Feature', title: '', description: '' });
+      setFormData({ category: 'Dashboard', title: '', description: '' });
+      setAttachments([]);
       setShowForm(false);
       alert('Idea submitted successfully! It will be reviewed by a superAdmin before being visible to other users.');
     } catch (error) {
@@ -382,13 +417,33 @@ export default function SubmitIdeasPage() {
     }
   };
 
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    setAttachments(prev => [...prev, ...files]);
+  };
+
+  const removeAttachment = (index: number) => {
+    setAttachments(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
   const getCategoryColor = (category: string) => {
     switch (category) {
-      case 'Bug Report': return 'bg-red-100 text-red-800';
-      case 'Improvement': return 'bg-blue-100 text-blue-800';
-      case 'New Feature': return 'bg-green-100 text-green-800';
-      case 'Design Issue': return 'bg-purple-100 text-purple-800';
-      case 'Performance': return 'bg-orange-100 text-orange-800';
+      case 'Dashboard': return 'bg-blue-100 text-blue-800';
+      case 'Planning': return 'bg-purple-100 text-purple-800';
+      case 'Quote Requests': return 'bg-green-100 text-green-800';
+      case 'Archived': return 'bg-gray-100 text-gray-800';
+      case 'Customers': return 'bg-orange-100 text-orange-800';
+      case 'Notifications': return 'bg-yellow-100 text-yellow-800';
+      case 'Analytics': return 'bg-indigo-100 text-indigo-800';
+      case 'FAQs': return 'bg-pink-100 text-pink-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
@@ -420,7 +475,7 @@ export default function SubmitIdeasPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-6 py-8">
+      <div className="w-full px-4 py-8">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Submit Ideas</h1>
           <p className="text-gray-600">Share your ideas to improve LoxConnect PRO. Ideas are reviewed by superAdmins before being visible to all users.</p>
@@ -465,11 +520,14 @@ export default function SubmitIdeasPage() {
                 className="px-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#e40115] w-full"
               >
                 <option value="All">All Categories</option>
-                <option value="Bug Report">Bug Report</option>
-                <option value="Improvement">Improvement</option>
-                <option value="New Feature">New Feature</option>
-                <option value="Design Issue">Design Issue</option>
-                <option value="Performance">Performance</option>
+                <option value="Dashboard">Dashboard</option>
+                <option value="Planning">Planning</option>
+                <option value="Quote Requests">Quote Requests</option>
+                <option value="Archived">Archived</option>
+                <option value="Customers">Customers</option>
+                <option value="Notifications">Notifications</option>
+                <option value="Analytics">Analytics</option>
+                <option value="FAQs">FAQs</option>
               </select>
             </div>
             
@@ -538,11 +596,14 @@ export default function SubmitIdeasPage() {
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#e40115]"
                   required
                 >
-                  <option value="Bug Report">Bug Report</option>
-                  <option value="Improvement">Improvement</option>
-                  <option value="New Feature">New Feature</option>
-                  <option value="Design Issue">Design Issue</option>
-                  <option value="Performance">Performance</option>
+                  <option value="Dashboard">Dashboard</option>
+                  <option value="Planning">Planning</option>
+                  <option value="Quote Requests">Quote Requests</option>
+                  <option value="Archived">Archived</option>
+                  <option value="Customers">Customers</option>
+                  <option value="Notifications">Notifications</option>
+                  <option value="Analytics">Analytics</option>
+                  <option value="FAQs">FAQs</option>
                 </select>
               </div>
 
@@ -571,6 +632,46 @@ export default function SubmitIdeasPage() {
                   placeholder="Describe your idea in detail..."
                   required
                 />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Attachments (Optional)
+                </label>
+                <div className="space-y-3">
+                  <input
+                    type="file"
+                    multiple
+                    onChange={handleFileUpload}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#e40115]"
+                    accept="image/*,.pdf,.doc,.docx,.txt"
+                  />
+                  <p className="text-sm text-gray-500">
+                    You can attach images, PDFs, or documents to help illustrate your idea. Max 10MB per file.
+                  </p>
+                  
+                  {/* Display selected files */}
+                  {attachments.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium text-gray-700">Selected files:</p>
+                      {attachments.map((file, index) => (
+                        <div key={index} className="flex items-center justify-between bg-gray-50 p-2 rounded-md">
+                          <div className="flex items-center space-x-2">
+                            <span className="text-sm text-gray-600">{file.name}</span>
+                            <span className="text-xs text-gray-500">({formatFileSize(file.size)})</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeAttachment(index)}
+                            className="text-red-600 hover:text-red-800 text-sm"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="flex space-x-4">
@@ -629,6 +730,46 @@ export default function SubmitIdeasPage() {
             </div>
           </div>
         </div>
+
+        {/* User Notifications Section */}
+        {userNotifications.length > 0 && (
+          <div className="mb-8 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg p-6">
+            <h3 className="text-lg font-semibold text-green-800 mb-4">📬 Your Idea Updates</h3>
+            <div className="space-y-3">
+              {userNotifications.map((notification) => (
+                <div key={notification.id} className="bg-white rounded-lg p-4 border-l-4 border-green-500">
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1">
+                      <h4 className="font-medium text-gray-900">{notification.title}</h4>
+                      <p className="text-gray-600 text-sm mt-1">{notification.message}</p>
+                      <p className="text-gray-500 text-xs mt-2">
+                        {notification.createdAt instanceof Date ? notification.createdAt.toLocaleDateString() : new Date(notification.createdAt).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <div className="ml-4">
+                      {notification.type === 'idea_approved' && (
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                          ✅ Approved
+                        </span>
+                      )}
+                      {notification.type === 'idea_rejected' && (
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                          ❌ Rejected
+                        </span>
+                      )}
+                      {notification.type === 'idea_implemented' && (
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                          🚀 Implemented
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Kanban Layout */}
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-12">
           {/* Left Column: Ideas */}
