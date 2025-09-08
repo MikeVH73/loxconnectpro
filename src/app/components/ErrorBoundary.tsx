@@ -24,6 +24,13 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     console.error('ErrorBoundary caught an error:', error, errorInfo);
+    
+    // Don't show error boundary for navigation-related errors during sign-out
+    if (error.message.includes('navigation') || error.message.includes('redirect') || error.message.includes('signOut')) {
+      console.log('Suppressing navigation error during sign-out');
+      this.setState({ hasError: false });
+      return;
+    }
   }
 
   resetError = () => {

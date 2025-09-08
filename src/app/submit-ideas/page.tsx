@@ -482,6 +482,7 @@ export default function SubmitIdeasPage() {
 
   const getCategoryColor = (category: string) => {
     switch (category) {
+      // New categories (menu-based)
       case 'Dashboard': return 'bg-blue-100 text-blue-800';
       case 'Planning': return 'bg-purple-100 text-purple-800';
       case 'Quote Requests': return 'bg-green-100 text-green-800';
@@ -490,6 +491,14 @@ export default function SubmitIdeasPage() {
       case 'Notifications': return 'bg-yellow-100 text-yellow-800';
       case 'Analytics': return 'bg-indigo-100 text-indigo-800';
       case 'FAQs': return 'bg-pink-100 text-pink-800';
+      
+      // Legacy categories (for backward compatibility)
+      case 'Bug Report': return 'bg-red-100 text-red-800';
+      case 'Improvement': return 'bg-blue-100 text-blue-800';
+      case 'New Feature': return 'bg-green-100 text-green-800';
+      case 'Design Issue': return 'bg-purple-100 text-purple-800';
+      case 'Performance': return 'bg-orange-100 text-orange-800';
+      
       default: return 'bg-gray-100 text-gray-800';
     }
   };
@@ -566,14 +575,23 @@ export default function SubmitIdeasPage() {
                 className="px-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#e40115] w-full"
               >
                 <option value="All">All Categories</option>
-                <option value="Dashboard">Dashboard</option>
-                <option value="Planning">Planning</option>
-                <option value="Quote Requests">Quote Requests</option>
-                <option value="Archived">Archived</option>
-                <option value="Customers">Customers</option>
-                <option value="Notifications">Notifications</option>
-                <option value="Analytics">Analytics</option>
-                <option value="FAQs">FAQs</option>
+                <optgroup label="New Categories">
+                  <option value="Dashboard">Dashboard</option>
+                  <option value="Planning">Planning</option>
+                  <option value="Quote Requests">Quote Requests</option>
+                  <option value="Archived">Archived</option>
+                  <option value="Customers">Customers</option>
+                  <option value="Notifications">Notifications</option>
+                  <option value="Analytics">Analytics</option>
+                  <option value="FAQs">FAQs</option>
+                </optgroup>
+                <optgroup label="Legacy Categories">
+                  <option value="Bug Report">Bug Report</option>
+                  <option value="Improvement">Improvement</option>
+                  <option value="New Feature">New Feature</option>
+                  <option value="Design Issue">Design Issue</option>
+                  <option value="Performance">Performance</option>
+                </optgroup>
               </select>
             </div>
             

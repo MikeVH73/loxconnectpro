@@ -169,7 +169,9 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
             // This prevents React errors from trying to render with incomplete user data
             if (err instanceof Error && err.message.includes('No profile found')) {
               console.log('User has no profile, signing out to prevent errors');
-              await signOut(auth);
+              if (auth) {
+                await signOut(auth);
+              }
               return;
             }
             setError('Error loading user profile. Please try again.');
@@ -211,13 +213,27 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
       // Sign out from Firebase
       await signOut(auth);
       
-      // Redirect to login page
-      window.location.href = '/login';
+      // Use a more robust redirect method
+      setTimeout(() => {
+        try {
+          window.location.replace('/login');
+        } catch (e) {
+          // Fallback if replace fails
+          window.location.href = '/login';
+        }
+      }, 100);
+      
     } catch (err) {
       console.error('Error signing out:', err);
       setError('Error signing out');
       // Even if there's an error, redirect to login
-      window.location.href = '/login';
+      setTimeout(() => {
+        try {
+          window.location.replace('/login');
+        } catch (e) {
+          window.location.href = '/login';
+        }
+      }, 100);
     }
   };
 

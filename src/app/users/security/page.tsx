@@ -58,11 +58,37 @@ export default function SecurityPage() {
     setError(null);
     setSuccess(null);
     try {
+      // Check if user is properly authenticated
+      if (!user.emailVerified) {
+        setError('Please verify your email first before enrolling MFA');
+        return;
+      }
+      
       const session = await multiFactor(user).getSession();
       const secret = await TotpMultiFactorGenerator.generateSecret(session);
       setTotpSecret(secret as any);
     } catch (e: any) {
-      setError(e?.message || "Failed to start enrollment");
+      console.error('MFA enrollment error:', e);
+      if (e.code === 'auth/requires-recent-login') {
+        setError('Please sign out and sign in again, then try enrolling MFA');
+      } else {
+        setError(e?.message || "Failed to start enrollment");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const refreshAuthState = async () => {
+    if (!user) return;
+    try {
+      setLoading(true);
+      setError(null);
+      // Force a refresh of the user's auth state
+      await user.reload();
+      setSuccess('Auth state refreshed. Email verification status updated.');
+    } catch (e: any) {
+      setError(e?.message || 'Failed to refresh auth state');
     } finally {
       setLoading(false);
     }
@@ -160,6 +186,13 @@ export default function SecurityPage() {
               className="px-3 py-2 bg-gray-200 text-gray-800 rounded text-sm hover:bg-gray-300"
             >
               Advanced: open verification link now
+            </button>
+            <button
+              onClick={refreshAuthState}
+              disabled={loading}
+              className="px-3 py-2 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 disabled:opacity-50"
+            >
+              {loading ? 'Refreshing...' : 'Refresh Status'}
             </button>
           </div>
         </section>
