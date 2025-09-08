@@ -144,6 +144,9 @@ export default function SubmitIdeasPage() {
       }
     }
 
+    // Sort by likes within each category (highest likes first)
+    filtered = filtered.sort((a, b) => (b.likeCount || 0) - (a.likeCount || 0));
+
     setFilteredIdeas(filtered);
   }, [ideas, searchTerm, categoryFilter, statusFilter, dateFilter]);
 
@@ -172,6 +175,7 @@ export default function SubmitIdeasPage() {
       collection(db!, 'notifications'),
       where('userId', '==', userProfile.id),
       where('type', 'in', ['idea_approved', 'idea_rejected', 'idea_implemented']),
+      where('read', '==', false),
       orderBy('createdAt', 'desc')
     );
 
@@ -432,6 +436,48 @@ export default function SubmitIdeasPage() {
     const sizes = ['Bytes', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  const clearNotification = async (notificationId: string) => {
+    if (!db || !userProfile) return;
+    
+    try {
+      await updateDoc(doc(db!, 'notifications', notificationId), {
+        read: true,
+        readAt: new Date()
+      });
+    } catch (error) {
+      console.error('Error clearing notification:', error);
+    }
+  };
+
+  const clearAllNotifications = async () => {
+    if (!db || !userProfile) return;
+    
+    try {
+      const unreadNotifications = userNotifications.filter(n => !n.read);
+      const updatePromises = unreadNotifications.map(notification => 
+        updateDoc(doc(db!, 'notifications', notification.id), {
+          read: true,
+          readAt: new Date()
+        })
+      );
+      await Promise.all(updatePromises);
+    } catch (error) {
+      console.error('Error clearing all notifications:', error);
+    }
+  };
+
+  const openAttachment = (attachment: any) => {
+    window.open(attachment.url, '_blank');
+  };
+
+  const getFileIcon = (type: string) => {
+    if (type.startsWith('image/')) return '🖼️';
+    if (type.includes('pdf')) return '📄';
+    if (type.includes('word') || type.includes('document')) return '📝';
+    if (type.includes('text')) return '📃';
+    return '📎';
   };
 
   const getCategoryColor = (category: string) => {
@@ -734,7 +780,15 @@ export default function SubmitIdeasPage() {
         {/* User Notifications Section */}
         {userNotifications.length > 0 && (
           <div className="mb-8 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg p-6">
-            <h3 className="text-lg font-semibold text-green-800 mb-4">📬 Your Idea Updates</h3>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold text-green-800">📬 Your Idea Updates</h3>
+              <button
+                onClick={clearAllNotifications}
+                className="text-sm text-green-600 hover:text-green-800 font-medium"
+              >
+                Clear All
+              </button>
+            </div>
             <div className="space-y-3">
               {userNotifications.map((notification) => (
                 <div key={notification.id} className="bg-white rounded-lg p-4 border-l-4 border-green-500">
@@ -746,7 +800,7 @@ export default function SubmitIdeasPage() {
                         {notification.createdAt instanceof Date ? notification.createdAt.toLocaleDateString() : new Date(notification.createdAt).toLocaleDateString()}
                       </p>
                     </div>
-                    <div className="ml-4">
+                    <div className="ml-4 flex items-center space-x-2">
                       {notification.type === 'idea_approved' && (
                         <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
                           ✅ Approved
@@ -762,6 +816,13 @@ export default function SubmitIdeasPage() {
                           🚀 Implemented
                         </span>
                       )}
+                      <button
+                        onClick={() => clearNotification(notification.id)}
+                        className="text-gray-400 hover:text-gray-600 text-sm"
+                        title="Clear notification"
+                      >
+                        ✕
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -791,7 +852,27 @@ export default function SubmitIdeasPage() {
                     <div className="flex justify-between items-start mb-6">
                       <div className="flex-1 pr-4">
                         <h3 className="text-2xl font-bold text-gray-900 mb-3">{idea.title}</h3>
-                        <p className="text-gray-600 mb-6 text-lg leading-relaxed">{idea.description}</p>
+                        <p className="text-gray-600 mb-4 text-lg leading-relaxed">{idea.description}</p>
+                        
+                        {/* Attachments Display */}
+                        {idea.attachments && idea.attachments.length > 0 && (
+                          <div className="mb-4">
+                            <p className="text-sm font-medium text-gray-700 mb-2">Attachments:</p>
+                            <div className="flex flex-wrap gap-2">
+                              {idea.attachments.map((attachment, index) => (
+                                <button
+                                  key={index}
+                                  onClick={() => openAttachment(attachment)}
+                                  className="flex items-center space-x-2 bg-gray-100 hover:bg-gray-200 rounded-lg px-3 py-2 text-sm transition-colors"
+                                >
+                                  <span className="text-lg">{getFileIcon(attachment.type)}</span>
+                                  <span className="text-gray-700">{attachment.name}</span>
+                                  <span className="text-gray-500 text-xs">({formatFileSize(attachment.size)})</span>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                       <div className="flex flex-col space-y-3">
                         <span className={`px-4 py-2 rounded-full text-sm font-medium ${getCategoryColor(idea.category)}`}>
@@ -881,7 +962,27 @@ export default function SubmitIdeasPage() {
                     <div className="flex justify-between items-start mb-6">
                       <div className="flex-1 pr-4">
                         <h3 className="text-2xl font-bold text-gray-900 mb-3">{idea.title}</h3>
-                        <p className="text-gray-600 mb-6 text-lg leading-relaxed">{idea.description}</p>
+                        <p className="text-gray-600 mb-4 text-lg leading-relaxed">{idea.description}</p>
+                        
+                        {/* Attachments Display */}
+                        {idea.attachments && idea.attachments.length > 0 && (
+                          <div className="mb-4">
+                            <p className="text-sm font-medium text-gray-700 mb-2">Attachments:</p>
+                            <div className="flex flex-wrap gap-2">
+                              {idea.attachments.map((attachment, index) => (
+                                <button
+                                  key={index}
+                                  onClick={() => openAttachment(attachment)}
+                                  className="flex items-center space-x-2 bg-gray-100 hover:bg-gray-200 rounded-lg px-3 py-2 text-sm transition-colors"
+                                >
+                                  <span className="text-lg">{getFileIcon(attachment.type)}</span>
+                                  <span className="text-gray-700">{attachment.name}</span>
+                                  <span className="text-gray-500 text-xs">({formatFileSize(attachment.size)})</span>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                       <div className="flex flex-col space-y-3">
                         <span className={`px-4 py-2 rounded-full text-sm font-medium ${getCategoryColor(idea.category)}`}>
