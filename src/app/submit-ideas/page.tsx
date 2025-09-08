@@ -55,7 +55,7 @@ export default function SubmitIdeasPage() {
 
     // For now, load all ideas and filter client-side to avoid Firebase index issues
     const ideasQuery = query(
-      collection(db, 'ideas'),
+      collection(db!, 'ideas'),
       orderBy('createdAt', 'desc')
     );
 
@@ -141,7 +141,7 @@ export default function SubmitIdeasPage() {
     if (!db || !userProfile) return;
 
     const likesQuery = query(
-      collection(db, 'ideaLikes'),
+      collection(db!, 'ideaLikes'),
       where('userId', '==', userProfile.id)
     );
 
@@ -162,7 +162,7 @@ export default function SubmitIdeasPage() {
       if (isLiked) {
         // Unlike: find and delete the like document
         const likesQuery = query(
-          collection(db, 'ideaLikes'),
+          collection(db!, 'ideaLikes'),
           where('userId', '==', userProfile.id),
           where('ideaId', '==', ideaId)
         );
@@ -183,7 +183,7 @@ export default function SubmitIdeasPage() {
         }
       } else {
         // Like: create new like document
-        await addDoc(collection(db, 'ideaLikes'), {
+        await addDoc(collection(db!, 'ideaLikes'), {
           userId: userProfile.id,
           ideaId: ideaId,
           createdAt: new Date()
@@ -222,17 +222,17 @@ export default function SubmitIdeasPage() {
         createdAt: new Date()
       };
 
-      const docRef = await addDoc(collection(db, 'ideas'), ideaData);
+      const docRef = await addDoc(collection(db!, 'ideas'), ideaData);
       
       // Create notification for all superAdmins about new idea
       const superAdminsQuery = query(
-        collection(db, 'users'),
+        collection(db!, 'users'),
         where('role', '==', 'superAdmin')
       );
       const superAdminsSnapshot = await getDocs(superAdminsQuery);
       
       const notificationPromises = superAdminsSnapshot.docs.map(superAdminDoc => 
-        addDoc(collection(db, 'notifications'), {
+        addDoc(collection(db!, 'notifications'), {
           type: 'new_idea',
           title: 'New Idea Submitted',
           message: `New idea "${formData.title}" submitted by ${userProfile.email}`,
@@ -272,7 +272,7 @@ export default function SubmitIdeasPage() {
       // Create notification for the idea submitter
       const idea = ideas.find(i => i.id === ideaId);
       if (idea) {
-        await addDoc(collection(db, 'notifications'), {
+        await addDoc(collection(db!, 'notifications'), {
           type: 'idea_implemented',
           title: 'Your idea is being implemented!',
           message: `Great news! Your idea "${idea.title}" is now being implemented by our development team.`,
@@ -325,7 +325,7 @@ export default function SubmitIdeasPage() {
       // Create notification for the idea submitter
       const idea = ideas.find(i => i.id === ideaId);
       if (idea) {
-        await addDoc(collection(db, 'notifications'), {
+        await addDoc(collection(db!, 'notifications'), {
           type: 'idea_approved',
           title: 'Your idea was approved!',
           message: `Your idea "${idea.title}" has been approved and is now visible to all users.`,
@@ -363,7 +363,7 @@ export default function SubmitIdeasPage() {
       // Create notification for the idea submitter
       const idea = ideas.find(i => i.id === ideaId);
       if (idea) {
-        await addDoc(collection(db, 'notifications'), {
+        await addDoc(collection(db!, 'notifications'), {
           type: 'idea_rejected',
           title: 'Your idea was rejected',
           message: `Your idea "${idea.title}" was rejected. Reason: ${reason}`,
@@ -420,30 +420,34 @@ export default function SubmitIdeasPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-4xl mx-auto px-4 py-8">
+      <div className="max-w-7xl mx-auto px-6 py-8">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Submit Ideas</h1>
           <p className="text-gray-600">Share your ideas to improve LoxConnect PRO. Ideas are reviewed by superAdmins before being visible to all users.</p>
         </div>
 
-        <div className="mb-6 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+        {/* Submit Button */}
+        <div className="mb-6">
           <button
             onClick={() => setShowForm(!showForm)}
-            className="bg-[#e40115] text-white px-6 py-3 rounded-lg font-medium hover:bg-red-700 transition-colors"
+            className="bg-[#e40115] text-white px-8 py-3 rounded-lg font-medium hover:bg-red-700 transition-colors text-lg"
           >
             {showForm ? 'Cancel' : 'Submit New Idea'}
           </button>
-          
-          {/* Search and Filter Controls */}
-          <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
+        </div>
+        
+        {/* Search and Filter Controls */}
+        <div className="mb-6 bg-white rounded-lg shadow-sm p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Search & Filter Ideas</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
             {/* Search */}
-            <div className="relative">
+            <div className="relative lg:col-span-2">
               <input
                 type="text"
-                placeholder="Search ideas..."
+                placeholder="Search ideas by title, description, or submitter..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#e40115] w-full sm:w-64"
+                className="pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#e40115] w-full"
               />
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                 <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -453,47 +457,58 @@ export default function SubmitIdeasPage() {
             </div>
             
             {/* Category Filter */}
-            <select
-              value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#e40115]"
-            >
-              <option value="All">All Categories</option>
-              <option value="Bug Report">Bug Report</option>
-              <option value="Improvement">Improvement</option>
-              <option value="New Feature">New Feature</option>
-              <option value="Design Issue">Design Issue</option>
-              <option value="Performance">Performance</option>
-            </select>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+              <select
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value)}
+                className="px-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#e40115] w-full"
+              >
+                <option value="All">All Categories</option>
+                <option value="Bug Report">Bug Report</option>
+                <option value="Improvement">Improvement</option>
+                <option value="New Feature">New Feature</option>
+                <option value="Design Issue">Design Issue</option>
+                <option value="Performance">Performance</option>
+              </select>
+            </div>
             
             {/* Status Filter */}
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#e40115]"
-            >
-              <option value="All">All Status</option>
-              <option value="Pending Approval">Pending Approval</option>
-              <option value="Approved">Approved</option>
-              <option value="Being Implemented">Being Implemented</option>
-              <option value="Rejected">Rejected</option>
-            </select>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="px-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#e40115] w-full"
+              >
+                <option value="All">All Status</option>
+                <option value="Pending Approval">Pending Approval</option>
+                <option value="Approved">Approved</option>
+                <option value="Being Implemented">Being Implemented</option>
+                <option value="Rejected">Rejected</option>
+              </select>
+            </div>
             
             {/* Date Filter */}
-            <select
-              value={dateFilter}
-              onChange={(e) => setDateFilter(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#e40115]"
-            >
-              <option value="All">All Time</option>
-              <option value="Today">Today</option>
-              <option value="This Week">This Week</option>
-              <option value="This Month">This Month</option>
-              <option value="Last 3 Months">Last 3 Months</option>
-            </select>
-            
-            {/* Clear Filters */}
-            {(searchTerm || categoryFilter !== 'All' || statusFilter !== 'All' || dateFilter !== 'All') && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Time Period</label>
+              <select
+                value={dateFilter}
+                onChange={(e) => setDateFilter(e.target.value)}
+                className="px-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#e40115] w-full"
+              >
+                <option value="All">All Time</option>
+                <option value="Today">Today</option>
+                <option value="This Week">This Week</option>
+                <option value="This Month">This Month</option>
+                <option value="Last 3 Months">Last 3 Months</option>
+              </select>
+            </div>
+          </div>
+          
+          {/* Clear Filters */}
+          {(searchTerm || categoryFilter !== 'All' || statusFilter !== 'All' || dateFilter !== 'All') && (
+            <div className="mt-4 flex justify-end">
               <button
                 onClick={() => {
                   setSearchTerm('');
@@ -501,12 +516,12 @@ export default function SubmitIdeasPage() {
                   setStatusFilter('All');
                   setDateFilter('All');
                 }}
-                className="px-3 py-2 text-gray-600 hover:text-gray-800 text-sm font-medium"
+                className="px-4 py-2 text-gray-600 hover:text-gray-800 text-sm font-medium border border-gray-300 rounded-lg hover:bg-gray-50"
               >
-                Clear Filters
+                Clear All Filters
               </button>
-            )}
-          </div>
+            </div>
+          )}
         </div>
 
         {showForm && (
@@ -579,36 +594,51 @@ export default function SubmitIdeasPage() {
         )}
 
         {/* Results Counter */}
-        <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <span className="text-blue-800 font-medium">
+        <div className="mb-8 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-6">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+              <span className="text-blue-800 font-semibold text-lg">
                 Showing {filteredIdeas.length} of {ideas.length} ideas
               </span>
               {(searchTerm || categoryFilter !== 'All' || statusFilter !== 'All' || dateFilter !== 'All') && (
-                <span className="text-blue-600 text-sm">
-                  (filtered by: {[
+                <span className="text-blue-600 text-sm bg-blue-100 px-3 py-1 rounded-full">
+                  Filtered by: {[
                     searchTerm && 'search',
                     categoryFilter !== 'All' && 'category',
                     statusFilter !== 'All' && 'status',
                     dateFilter !== 'All' && 'date'
-                  ].filter(Boolean).join(', ')})
+                  ].filter(Boolean).join(', ')}
                 </span>
               )}
             </div>
-            <div className="flex space-x-4 text-sm text-blue-700">
-              <span>Approved: {filteredIdeas.filter(i => i.status === 'Approved').length}</span>
-              <span>Being Implemented: {filteredIdeas.filter(i => i.status === 'Being Implemented').length}</span>
+            <div className="flex flex-wrap gap-6 text-sm text-blue-700">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                <span className="font-medium">Approved: {filteredIdeas.filter(i => i.status === 'Approved').length}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 bg-purple-500 rounded-full"></div>
+                <span className="font-medium">Being Implemented: {filteredIdeas.filter(i => i.status === 'Being Implemented').length}</span>
+              </div>
               {userProfile?.role === 'superAdmin' && (
-                <span>Pending: {filteredIdeas.filter(i => i.status === 'Pending Approval').length}</span>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
+                  <span className="font-medium">Pending: {filteredIdeas.filter(i => i.status === 'Pending Approval').length}</span>
+                </div>
               )}
             </div>
           </div>
         </div>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Kanban Layout */}
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-12">
           {/* Left Column: Ideas */}
-          <div>
-            <h2 className="text-2xl font-semibold text-gray-900 mb-6">💡 Ideas</h2>
+          <div className="min-h-[600px]">
+            <div className="flex items-center justify-between mb-8">
+              <h2 className="text-3xl font-bold text-gray-900">💡 Ideas</h2>
+              <div className="text-sm text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
+                {filteredIdeas.filter(idea => idea.status === 'Approved').length} approved
+              </div>
+            </div>
             <div className="space-y-4">
               {filteredIdeas.filter(idea => idea.status === 'Approved').length === 0 ? (
                 <div className="text-center py-8 bg-white rounded-lg shadow-md">
@@ -616,68 +646,70 @@ export default function SubmitIdeasPage() {
                 </div>
               ) : (
                 filteredIdeas.filter(idea => idea.status === 'Approved').map((idea) => (
-                  <div key={idea.id} className="bg-white rounded-lg shadow-md p-6 border-l-4 border-green-500">
-                    <div className="flex justify-between items-start mb-4">
-                      <div className="flex-1">
-                        <h3 className="text-xl font-semibold text-gray-900 mb-2">{idea.title}</h3>
-                        <p className="text-gray-600 mb-4">{idea.description}</p>
+                  <div key={idea.id} className="bg-white rounded-xl shadow-lg p-8 border-l-4 border-green-500 hover:shadow-xl transition-shadow">
+                    <div className="flex justify-between items-start mb-6">
+                      <div className="flex-1 pr-4">
+                        <h3 className="text-2xl font-bold text-gray-900 mb-3">{idea.title}</h3>
+                        <p className="text-gray-600 mb-6 text-lg leading-relaxed">{idea.description}</p>
                       </div>
-                      <div className="flex flex-col space-y-2">
-                        <span className={`px-3 py-1 rounded-full text-sm font-medium ${getCategoryColor(idea.category)}`}>
+                      <div className="flex flex-col space-y-3">
+                        <span className={`px-4 py-2 rounded-full text-sm font-medium ${getCategoryColor(idea.category)}`}>
                           {idea.category}
                         </span>
-                        <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(idea.status)}`}>
+                        <span className={`px-4 py-2 rounded-full text-sm font-medium ${getStatusColor(idea.status)}`}>
                           {idea.status}
                         </span>
                       </div>
                     </div>
                     
                     {/* Prominent Like Count */}
-                    <div className="mb-4">
+                    <div className="mb-6">
                       <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-3">
+                        <div className="flex items-center space-x-6">
                           {userProfile && (
                             <button
                               onClick={() => handleLikeIdea(idea.id)}
                               disabled={userLikes.includes(idea.id)}
-                              className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-lg font-medium transition-colors ${
+                              className={`flex items-center space-x-3 px-6 py-3 rounded-xl text-lg font-medium transition-all duration-200 ${
                                 userLikes.includes(idea.id)
                                   ? 'bg-red-100 text-red-600 cursor-not-allowed'
-                                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200 hover:scale-105'
                               }`}
                             >
-                              <span className="text-2xl">❤️</span>
+                              <span className="text-3xl">❤️</span>
                               <span>{userLikes.includes(idea.id) ? 'Liked' : 'Like'}</span>
                             </button>
                           )}
-                          <div className="text-center">
-                            <div className="text-3xl font-bold text-red-600">{idea.likeCount || 0}</div>
-                            <div className="text-sm text-gray-500">likes</div>
+                          <div className="text-center bg-red-50 rounded-xl p-6">
+                            <div className="text-5xl font-bold text-red-600">{idea.likeCount || 0}</div>
+                            <div className="text-sm text-gray-600 font-medium">likes</div>
                           </div>
                         </div>
                       </div>
                     </div>
                     
-                    <div className="text-sm text-gray-500 mb-4">
-                      <p>Submitted by: {idea.userEmail}</p>
-                      <p>Date: {idea.createdAt instanceof Date ? idea.createdAt.toLocaleDateString() : new Date(idea.createdAt).toLocaleDateString()}</p>
-                      {idea.approvedBy && (
-                        <p>Approved by: {idea.approvedBy}</p>
-                      )}
+                    <div className="text-sm text-gray-500 mb-6 bg-gray-50 rounded-lg p-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                        <p><span className="font-medium">Submitted by:</span> {idea.userEmail}</p>
+                        <p><span className="font-medium">Date:</span> {idea.createdAt instanceof Date ? idea.createdAt.toLocaleDateString() : new Date(idea.createdAt).toLocaleDateString()}</p>
+                        {idea.approvedBy && (
+                          <p><span className="font-medium">Approved by:</span> {idea.approvedBy}</p>
+                        )}
+                      </div>
                     </div>
                     
                     {/* SuperAdmin controls */}
                     {userProfile?.role === 'superAdmin' && (
-                      <div className="flex flex-wrap gap-2">
+                      <div className="flex flex-wrap gap-3">
                         <button
                           onClick={() => handleImplementIdea(idea.id)}
-                          className="bg-purple-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-purple-700"
+                          className="bg-purple-600 text-white px-6 py-3 rounded-lg text-sm font-medium hover:bg-purple-700 transition-colors"
                         >
                           Start Implementing
                         </button>
                         <button
                           onClick={() => handleDeleteIdea(idea.id)}
-                          className="bg-gray-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-700"
+                          className="bg-gray-600 text-white px-6 py-3 rounded-lg text-sm font-medium hover:bg-gray-700 transition-colors"
                         >
                           Delete
                         </button>
@@ -690,8 +722,13 @@ export default function SubmitIdeasPage() {
           </div>
 
           {/* Right Column: Being Implemented */}
-          <div>
-            <h2 className="text-2xl font-semibold text-gray-900 mb-6">🚀 Being Implemented</h2>
+          <div className="min-h-[600px]">
+            <div className="flex items-center justify-between mb-8">
+              <h2 className="text-3xl font-bold text-gray-900">🚀 Being Implemented</h2>
+              <div className="text-sm text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
+                {filteredIdeas.filter(idea => idea.status === 'Being Implemented').length} in progress
+              </div>
+            </div>
             <div className="space-y-4">
               {filteredIdeas.filter(idea => idea.status === 'Being Implemented').length === 0 ? (
                 <div className="text-center py-8 bg-white rounded-lg shadow-md">
@@ -699,46 +736,48 @@ export default function SubmitIdeasPage() {
                 </div>
               ) : (
                 filteredIdeas.filter(idea => idea.status === 'Being Implemented').map((idea) => (
-                  <div key={idea.id} className="bg-white rounded-lg shadow-md p-6 border-l-4 border-purple-500">
-                    <div className="flex justify-between items-start mb-4">
-                      <div className="flex-1">
-                        <h3 className="text-xl font-semibold text-gray-900 mb-2">{idea.title}</h3>
-                        <p className="text-gray-600 mb-4">{idea.description}</p>
+                  <div key={idea.id} className="bg-white rounded-xl shadow-lg p-8 border-l-4 border-purple-500 hover:shadow-xl transition-shadow">
+                    <div className="flex justify-between items-start mb-6">
+                      <div className="flex-1 pr-4">
+                        <h3 className="text-2xl font-bold text-gray-900 mb-3">{idea.title}</h3>
+                        <p className="text-gray-600 mb-6 text-lg leading-relaxed">{idea.description}</p>
                       </div>
-                      <div className="flex flex-col space-y-2">
-                        <span className={`px-3 py-1 rounded-full text-sm font-medium ${getCategoryColor(idea.category)}`}>
+                      <div className="flex flex-col space-y-3">
+                        <span className={`px-4 py-2 rounded-full text-sm font-medium ${getCategoryColor(idea.category)}`}>
                           {idea.category}
                         </span>
-                        <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(idea.status)}`}>
+                        <span className={`px-4 py-2 rounded-full text-sm font-medium ${getStatusColor(idea.status)}`}>
                           {idea.status}
                         </span>
                       </div>
                     </div>
                     
                     {/* Show Like Count (but no like button) */}
-                    <div className="mb-4">
+                    <div className="mb-6">
                       <div className="flex items-center justify-center">
-                        <div className="text-center">
-                          <div className="text-3xl font-bold text-red-600">{idea.likeCount || 0}</div>
-                          <div className="text-sm text-gray-500">likes received</div>
+                        <div className="text-center bg-purple-50 rounded-xl p-6">
+                          <div className="text-5xl font-bold text-purple-600">{idea.likeCount || 0}</div>
+                          <div className="text-sm text-gray-600 font-medium">likes received</div>
                         </div>
                       </div>
                     </div>
                     
-                    <div className="text-sm text-gray-500 mb-4">
-                      <p>Submitted by: {idea.userEmail}</p>
-                      <p>Date: {idea.createdAt instanceof Date ? idea.createdAt.toLocaleDateString() : new Date(idea.createdAt).toLocaleDateString()}</p>
-                      {idea.implementedBy && (
-                        <p className="text-purple-600 font-medium">Being implemented by: {idea.implementedBy}</p>
-                      )}
+                    <div className="text-sm text-gray-500 mb-6 bg-gray-50 rounded-lg p-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                        <p><span className="font-medium">Submitted by:</span> {idea.userEmail}</p>
+                        <p><span className="font-medium">Date:</span> {idea.createdAt instanceof Date ? idea.createdAt.toLocaleDateString() : new Date(idea.createdAt).toLocaleDateString()}</p>
+                        {idea.implementedBy && (
+                          <p className="text-purple-600 font-medium md:col-span-2"><span className="font-medium">Being implemented by:</span> {idea.implementedBy}</p>
+                        )}
+                      </div>
                     </div>
                     
                     {/* SuperAdmin controls */}
                     {userProfile?.role === 'superAdmin' && (
-                      <div className="flex flex-wrap gap-2">
+                      <div className="flex flex-wrap gap-3">
                         <button
                           onClick={() => handleDeleteIdea(idea.id)}
-                          className="bg-gray-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-700"
+                          className="bg-gray-600 text-white px-6 py-3 rounded-lg text-sm font-medium hover:bg-gray-700 transition-colors"
                         >
                           Archive
                         </button>
