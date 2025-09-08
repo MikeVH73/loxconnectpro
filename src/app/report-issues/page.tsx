@@ -1,15 +1,19 @@
 "use client";
 import { useState, useEffect } from 'react';
 import { useAuth } from '../AuthProvider';
-import { collection, addDoc, query, orderBy, onSnapshot, where } from 'firebase/firestore';
+import { collection, addDoc, query, orderBy, onSnapshot, where, updateDoc, doc } from 'firebase/firestore';
 import { db } from '../../firebaseClient';
 import { ErrorReport } from '../../types';
 
 export default function ReportIssuesPage() {
-  const { userProfile, authLoading } = useAuth();
+  const { userProfile, loading } = useAuth();
   const [errorReports, setErrorReports] = useState<ErrorReport[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [reportsLoading, setReportsLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [statusFilter, setStatusFilter] = useState('All');
+  const [priorityFilter, setPriorityFilter] = useState('All');
+  const [replyingTo, setReplyingTo] = useState<string | null>(null);
+  const [replyText, setReplyText] = useState('');
   const [formData, setFormData] = useState({
     category: 'Bug Report' as const,
     title: '',
@@ -23,7 +27,7 @@ export default function ReportIssuesPage() {
     if (!userProfile) return;
 
     const q = query(
-      collection(db, 'errorReports'),
+      collection(db!, 'errorReports'),
       orderBy('createdAt', 'desc')
     );
 
@@ -34,11 +38,20 @@ export default function ReportIssuesPage() {
       })) as ErrorReport[];
       
       setErrorReports(reports);
-      setLoading(false);
+      setReportsLoading(false);
     });
 
     return () => unsubscribe();
   }, [userProfile]);
+
+  // Filter reports based on current filters
+  const filteredReports = errorReports.filter(report => {
+    const statusMatch = statusFilter === 'All' || report.status === statusFilter;
+    const priorityMatch = priorityFilter === 'All' || report.priority === priorityFilter;
+    const userMatch = userProfile?.role === 'superAdmin' || report.userId === userProfile?.id;
+    
+    return statusMatch && priorityMatch && userMatch;
+  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -61,7 +74,7 @@ export default function ReportIssuesPage() {
         updatedAt: new Date()
       };
 
-      await addDoc(collection(db, 'errorReports'), newReport);
+      await addDoc(collection(db!, 'errorReports'), newReport);
       
       // Reset form
       setFormData({
@@ -96,11 +109,81 @@ export default function ReportIssuesPage() {
       case 'In Progress': return 'bg-yellow-100 text-yellow-800';
       case 'Resolved': return 'bg-green-100 text-green-800';
       case 'Closed': return 'bg-gray-100 text-gray-800';
+      case 'Archived': return 'bg-gray-100 text-gray-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
 
-  if (authLoading) {
+  // SuperAdmin functions
+  const handleReply = async (reportId: string) => {
+    if (!replyText.trim() || !userProfile) return;
+
+    try {
+      await updateDoc(doc(db!, 'errorReports', reportId), {
+        superAdminResponse: replyText,
+        respondedBy: userProfile.email,
+        respondedAt: new Date(),
+        status: 'Resolved',
+        updatedAt: new Date()
+      });
+
+      // Create notification for the user
+      await addDoc(collection(db!, 'notifications'), {
+        type: 'error_resolved',
+        userId: errorReports.find(r => r.id === reportId)?.userId,
+        userEmail: errorReports.find(r => r.id === reportId)?.userEmail,
+        title: 'Error Report Resolved',
+        message: `Your error report "${errorReports.find(r => r.id === reportId)?.title}" has been resolved.`,
+        read: false,
+        createdAt: new Date(),
+        targetCountryKey: errorReports.find(r => r.id === reportId)?.userCountry?.toLowerCase().replace(/\s+/g, '')
+      });
+
+      setReplyingTo(null);
+      setReplyText('');
+      alert('Response sent successfully!');
+    } catch (error) {
+      console.error('Error sending reply:', error);
+      alert('Failed to send response. Please try again.');
+    }
+  };
+
+  const handleArchive = async (reportId: string) => {
+    if (!userProfile) return;
+
+    try {
+      await updateDoc(doc(db!, 'errorReports', reportId), {
+        status: 'Archived',
+        archivedBy: userProfile.email,
+        archivedAt: new Date(),
+        updatedAt: new Date()
+      });
+
+      alert('Report archived successfully!');
+    } catch (error) {
+      console.error('Error archiving report:', error);
+      alert('Failed to archive report. Please try again.');
+    }
+  };
+
+  const handleStatusChange = async (reportId: string, newStatus: string) => {
+    if (!userProfile) return;
+
+    try {
+      await updateDoc(doc(db!, 'errorReports', reportId), {
+        status: newStatus,
+        updatedBy: userProfile.email,
+        updatedAt: new Date()
+      });
+
+      alert('Status updated successfully!');
+    } catch (error) {
+      console.error('Error updating status:', error);
+      alert('Failed to update status. Please try again.');
+    }
+  };
+
+  if (loading) {
     return (
       <div className="p-8">
         <div className="animate-pulse">
@@ -230,11 +313,46 @@ export default function ReportIssuesPage() {
       {/* Error Reports List */}
       <div className="bg-white border rounded-lg shadow-sm">
         <div className="p-6 border-b">
-          <h2 className="text-xl font-semibold">Your Error Reports</h2>
-          <p className="text-gray-600 text-sm mt-1">Track the status of your submitted reports</p>
+          <div className="flex justify-between items-center mb-4">
+            <div>
+              <h2 className="text-xl font-semibold">
+                {userProfile?.role === 'superAdmin' ? 'All Error Reports' : 'Your Error Reports'}
+              </h2>
+              <p className="text-gray-600 text-sm mt-1">
+                {userProfile?.role === 'superAdmin' ? 'Manage and respond to all error reports' : 'Track the status of your submitted reports'}
+              </p>
+            </div>
+            {userProfile?.role === 'superAdmin' && (
+              <div className="flex space-x-3">
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#e40115]"
+                >
+                  <option value="All">All Status</option>
+                  <option value="New">New</option>
+                  <option value="In Progress">In Progress</option>
+                  <option value="Resolved">Resolved</option>
+                  <option value="Closed">Closed</option>
+                  <option value="Archived">Archived</option>
+                </select>
+                <select
+                  value={priorityFilter}
+                  onChange={(e) => setPriorityFilter(e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#e40115]"
+                >
+                  <option value="All">All Priority</option>
+                  <option value="Critical">Critical</option>
+                  <option value="High">High</option>
+                  <option value="Medium">Medium</option>
+                  <option value="Low">Low</option>
+                </select>
+              </div>
+            )}
+          </div>
         </div>
         
-        {loading ? (
+        {reportsLoading ? (
           <div className="p-6">
             <div className="animate-pulse space-y-4">
               {[1, 2, 3].map(i => (
@@ -242,16 +360,23 @@ export default function ReportIssuesPage() {
               ))}
             </div>
           </div>
-        ) : errorReports.length === 0 ? (
+        ) : filteredReports.length === 0 ? (
           <div className="p-6 text-center text-gray-500">
-            No error reports submitted yet.
+            No error reports found.
           </div>
         ) : (
           <div className="divide-y">
-            {errorReports.map((report) => (
+            {filteredReports.map((report) => (
               <div key={report.id} className="p-6 hover:bg-gray-50">
                 <div className="flex justify-between items-start mb-2">
-                  <h3 className="text-lg font-medium text-gray-900">{report.title}</h3>
+                  <div className="flex-1">
+                    <h3 className="text-lg font-medium text-gray-900">{report.title}</h3>
+                    {userProfile?.role === 'superAdmin' && (
+                      <div className="text-sm text-gray-500 mt-1">
+                        <span className="font-medium">Submitted by:</span> {report.userEmail} ({report.userCountry})
+                      </div>
+                    )}
+                  </div>
                   <div className="flex space-x-2">
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${getPriorityColor(report.priority)}`}>
                       {report.priority}
@@ -265,10 +390,66 @@ export default function ReportIssuesPage() {
                 <div className="text-sm text-gray-600 mb-2">
                   <span className="font-medium">Category:</span> {report.category} • 
                   <span className="font-medium ml-2">Page:</span> {report.page} • 
-                  <span className="font-medium ml-2">Submitted:</span> {report.createdAt ? new Date(report.createdAt.seconds ? report.createdAt.seconds * 1000 : report.createdAt).toLocaleDateString() : 'Unknown'}
+                  <span className="font-medium ml-2">Submitted:</span> {report.createdAt ? new Date(report.createdAt).toLocaleDateString() : 'Unknown'}
                 </div>
                 
                 <p className="text-gray-700 mb-3">{report.description}</p>
+                
+                {/* SuperAdmin Controls */}
+                {userProfile?.role === 'superAdmin' && report.status !== 'Archived' && (
+                  <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+                    <div className="flex flex-wrap gap-2 mb-3">
+                      <button
+                        onClick={() => handleStatusChange(report.id, 'In Progress')}
+                        className="px-3 py-1 bg-yellow-100 text-yellow-800 rounded text-sm hover:bg-yellow-200"
+                        disabled={report.status === 'In Progress'}
+                      >
+                        Mark In Progress
+                      </button>
+                      <button
+                        onClick={() => setReplyingTo(report.id)}
+                        className="px-3 py-1 bg-blue-100 text-blue-800 rounded text-sm hover:bg-blue-200"
+                      >
+                        Reply & Resolve
+                      </button>
+                      <button
+                        onClick={() => handleArchive(report.id)}
+                        className="px-3 py-1 bg-gray-100 text-gray-800 rounded text-sm hover:bg-gray-200"
+                      >
+                        Archive
+                      </button>
+                    </div>
+                    
+                    {/* Reply Form */}
+                    {replyingTo === report.id && (
+                      <div className="mt-3">
+                        <textarea
+                          value={replyText}
+                          onChange={(e) => setReplyText(e.target.value)}
+                          placeholder="Type your response here..."
+                          className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#e40115] h-24"
+                        />
+                        <div className="flex justify-end space-x-2 mt-2">
+                          <button
+                            onClick={() => {
+                              setReplyingTo(null);
+                              setReplyText('');
+                            }}
+                            className="px-3 py-1 text-gray-600 hover:text-gray-800"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            onClick={() => handleReply(report.id)}
+                            className="px-4 py-1 bg-[#e40115] text-white rounded hover:bg-red-700"
+                          >
+                            Send Response
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
                 
                 {report.superAdminResponse && (
                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mt-3">

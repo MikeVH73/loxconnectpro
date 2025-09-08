@@ -655,6 +655,7 @@ export default function SubmitIdeasPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
             {/* Search */}
             <div className="relative lg:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Search</label>
               <input
                 type="text"
                 placeholder="Search ideas by title, description, or submitter..."
@@ -1058,9 +1059,6 @@ export default function SubmitIdeasPage() {
                   <div key={idea.id} className="bg-white rounded-lg shadow-md p-4 border-l-4 border-purple-500 hover:shadow-lg transition-shadow">
                     <div className="flex justify-between items-start mb-3">
                       <div className="flex items-center space-x-3 flex-1">
-                        <div className="flex-shrink-0 w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center">
-                          <span className="text-sm font-bold text-gray-600">{index + 1}</span>
-                        </div>
                         <div className="flex-1">
                           <h3 className="text-lg font-bold text-gray-900 mb-1">{idea.title}</h3>
                           <p className="text-gray-600 text-sm leading-relaxed">{idea.description}</p>

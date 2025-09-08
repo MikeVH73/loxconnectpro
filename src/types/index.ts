@@ -82,7 +82,7 @@ export interface ErrorReport {
   title: string;
   description: string;
   priority: 'Critical' | 'High' | 'Medium' | 'Low';
-  status: 'New' | 'In Progress' | 'Resolved' | 'Closed';
+  status: 'New' | 'In Progress' | 'Resolved' | 'Closed' | 'Archived';
   screenshot?: string; // Base64 or URL
   createdAt: Date;
   updatedAt: Date;
