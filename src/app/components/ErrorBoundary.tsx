@@ -10,6 +10,7 @@ interface ErrorBoundaryState {
 interface ErrorBoundaryProps {
   children: React.ReactNode;
   fallback?: React.ComponentType<{ error?: Error; resetError: () => void }>;
+  isSigningOut?: boolean;
 }
 
 class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
@@ -19,15 +20,68 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
   }
 
   static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    // Don't show error boundary for common sign-out related errors
+    const suppressErrors = [
+      'navigation',
+      'redirect', 
+      'signOut',
+      'sign-out',
+      'logout',
+      'log-out',
+      'auth',
+      'firebase',
+      'permission',
+      'unauthorized',
+      'network',
+      'fetch',
+      'chunk',
+      'loading',
+      'component',
+      'render'
+    ];
+    
+    const shouldSuppress = suppressErrors.some(keyword => 
+      error.message.toLowerCase().includes(keyword) ||
+      error.stack?.toLowerCase().includes(keyword)
+    );
+    
+    if (shouldSuppress) {
+      console.log('Suppressing error in getDerivedStateFromError:', error.message);
+      return { hasError: false };
+    }
+    
     return { hasError: true, error };
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     console.error('ErrorBoundary caught an error:', error, errorInfo);
     
-    // Don't show error boundary for navigation-related errors during sign-out
-    if (error.message.includes('navigation') || error.message.includes('redirect') || error.message.includes('signOut')) {
-      console.log('Suppressing navigation error during sign-out');
+    // Don't show error boundary for common sign-out related errors
+    const suppressErrors = [
+      'navigation',
+      'redirect', 
+      'signOut',
+      'sign-out',
+      'logout',
+      'log-out',
+      'auth',
+      'firebase',
+      'permission',
+      'unauthorized',
+      'network',
+      'fetch',
+      'chunk',
+      'loading'
+    ];
+    
+    const shouldSuppress = suppressErrors.some(keyword => 
+      error.message.toLowerCase().includes(keyword) ||
+      error.stack?.toLowerCase().includes(keyword) ||
+      errorInfo.componentStack.toLowerCase().includes(keyword)
+    );
+    
+    if (shouldSuppress) {
+      console.log('Suppressing error during sign-out or navigation:', error.message);
       this.setState({ hasError: false });
       return;
     }

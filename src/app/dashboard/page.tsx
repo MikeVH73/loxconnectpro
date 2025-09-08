@@ -174,12 +174,18 @@ export default function DashboardPage() {
         return;
       }
 
-      if (!user) {
-        router.push('/login');
+      // Don't redirect if we're in the middle of signing out
+      if (!user && !authLoading) {
+        // Add a small delay to prevent race conditions during sign-out
+        setTimeout(() => {
+          if (!user) {
+            router.push('/login');
+          }
+        }, 100);
         return;
       }
 
-      if (!userProfile) {
+      if (!userProfile && user) {
         setError('User profile not found. Please log in again.');
         return;
       }

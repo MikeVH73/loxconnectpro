@@ -11,7 +11,7 @@ const nextConfig = {
     ignoreDuringBuilds: true
   },
   env: {
-    NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '',
+    NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY) || '',
   },
   webpack: (config) => {
     const path = require('path');
@@ -35,9 +35,7 @@ const nextConfig = {
   },
   pageExtensions: ['tsx', 'ts', 'jsx', 'js'],
   compiler: {
-    removeConsole: (process.env.NODE_ENV === 'production') ? {
-      exclude: ['error', 'warn'],
-    } : false,
+    removeConsole: false, // Simplified to avoid process.env issues
   },
   async headers() {
     return [

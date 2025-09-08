@@ -21,6 +21,7 @@ interface AuthContextType {
   error: string | null;
   signOutUser: () => Promise<void>;
   retryProfileLoad: () => Promise<void>;
+  isSigningOut: boolean;
 }
 
 const AuthContext = createContext<AuthContextType>({ 
@@ -30,6 +31,7 @@ const AuthContext = createContext<AuthContextType>({
   error: null,
   signOutUser: async () => {},
   retryProfileLoad: async () => {},
+  isSigningOut: false,
 });
 
 function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -38,6 +40,7 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isClient, setIsClient] = useState(false);
+  const [isSigningOut, setIsSigningOut] = useState(false);
 
   useEffect(() => {
     setIsClient(true);
@@ -198,10 +201,9 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     try {
-      // Clear user state immediately to prevent components from accessing stale data
-      setUser(null);
-      setUserProfile(null);
-      setError(null);
+      // Set signing out state to prevent other components from interfering
+      setIsSigningOut(true);
+      setLoading(true);
       
       // Clear secure session cookie first (best-effort)
       try {
@@ -213,7 +215,12 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
       // Sign out from Firebase
       await signOut(auth);
       
-      // Use a more robust redirect method
+      // Clear user state after successful sign-out
+      setUser(null);
+      setUserProfile(null);
+      setError(null);
+      
+      // Use a more robust redirect method with longer delay
       setTimeout(() => {
         try {
           window.location.replace('/login');
@@ -221,19 +228,23 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
           // Fallback if replace fails
           window.location.href = '/login';
         }
-      }, 100);
+      }, 200);
       
     } catch (err) {
       console.error('Error signing out:', err);
       setError('Error signing out');
-      // Even if there's an error, redirect to login
+      // Even if there's an error, clear state and redirect to login
+      setUser(null);
+      setUserProfile(null);
+      setLoading(false);
+      setIsSigningOut(false);
       setTimeout(() => {
         try {
           window.location.replace('/login');
         } catch (e) {
           window.location.href = '/login';
         }
-      }, 100);
+      }, 200);
     }
   };
 
@@ -295,7 +306,7 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, userProfile, loading, error, signOutUser, retryProfileLoad }}>
+    <AuthContext.Provider value={{ user, userProfile, loading, error, signOutUser, retryProfileLoad, isSigningOut }}>
       {children}
     </AuthContext.Provider>
   );
