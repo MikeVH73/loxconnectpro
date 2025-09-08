@@ -31,6 +31,7 @@ interface LocalIdea {
 export default function SubmitIdeasPage() {
   const { userProfile } = useAuth();
   const [ideas, setIdeas] = useState<LocalIdea[]>([]);
+  const [filteredIdeas, setFilteredIdeas] = useState<LocalIdea[]>([]);
   const [userLikes, setUserLikes] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -41,6 +42,12 @@ export default function SubmitIdeasPage() {
     description: ''
   });
   const [rejectionReason, setRejectionReason] = useState('');
+  
+  // Filter states
+  const [searchTerm, setSearchTerm] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState<string>('All');
+  const [statusFilter, setStatusFilter] = useState<string>('All');
+  const [dateFilter, setDateFilter] = useState<string>('All');
 
   // Load ideas - show all for superAdmin, only approved for others
   useEffect(() => {
@@ -77,6 +84,57 @@ export default function SubmitIdeasPage() {
 
     return () => unsubscribe();
   }, [userProfile]);
+
+  // Apply filters whenever ideas or filter states change
+  useEffect(() => {
+    let filtered = [...ideas];
+
+    // Search filter
+    if (searchTerm) {
+      filtered = filtered.filter(idea => 
+        idea.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        idea.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        idea.userEmail.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+
+    // Category filter
+    if (categoryFilter !== 'All') {
+      filtered = filtered.filter(idea => idea.category === categoryFilter);
+    }
+
+    // Status filter
+    if (statusFilter !== 'All') {
+      filtered = filtered.filter(idea => idea.status === statusFilter);
+    }
+
+    // Date filter
+    if (dateFilter !== 'All') {
+      const now = new Date();
+      const filterDate = new Date();
+      
+      switch (dateFilter) {
+        case 'Today':
+          filterDate.setHours(0, 0, 0, 0);
+          filtered = filtered.filter(idea => idea.createdAt >= filterDate);
+          break;
+        case 'This Week':
+          filterDate.setDate(now.getDate() - 7);
+          filtered = filtered.filter(idea => idea.createdAt >= filterDate);
+          break;
+        case 'This Month':
+          filterDate.setMonth(now.getMonth() - 1);
+          filtered = filtered.filter(idea => idea.createdAt >= filterDate);
+          break;
+        case 'Last 3 Months':
+          filterDate.setMonth(now.getMonth() - 3);
+          filtered = filtered.filter(idea => idea.createdAt >= filterDate);
+          break;
+      }
+    }
+
+    setFilteredIdeas(filtered);
+  }, [ideas, searchTerm, categoryFilter, statusFilter, dateFilter]);
 
   // Load user's likes
   useEffect(() => {
@@ -155,16 +213,40 @@ export default function SubmitIdeasPage() {
         userId: userProfile.id,
         userEmail: userProfile.email,
         userCountry: userProfile.businessUnit || userProfile.countries?.[0] || 'Unknown',
+        userRole: userProfile.role,
         title: formData.title,
         description: formData.description,
         category: formData.category,
         status: 'Pending Approval',
-        totalPoints: 0,
-        voteCount: 0,
+        likeCount: 0,
         createdAt: new Date()
       };
 
-      await addDoc(collection(db, 'ideas'), ideaData);
+      const docRef = await addDoc(collection(db, 'ideas'), ideaData);
+      
+      // Create notification for all superAdmins about new idea
+      const superAdminsQuery = query(
+        collection(db, 'users'),
+        where('role', '==', 'superAdmin')
+      );
+      const superAdminsSnapshot = await getDocs(superAdminsQuery);
+      
+      const notificationPromises = superAdminsSnapshot.docs.map(superAdminDoc => 
+        addDoc(collection(db, 'notifications'), {
+          type: 'new_idea',
+          title: 'New Idea Submitted',
+          message: `New idea "${formData.title}" submitted by ${userProfile.email}`,
+          userId: superAdminDoc.id,
+          userEmail: superAdminDoc.data().email,
+          ideaId: docRef.id,
+          ideaTitle: formData.title,
+          ideaCategory: formData.category,
+          createdAt: new Date(),
+          read: false
+        })
+      );
+      
+      await Promise.all(notificationPromises);
       
       setFormData({ category: 'New Feature', title: '', description: '' });
       setShowForm(false);
@@ -186,7 +268,25 @@ export default function SubmitIdeasPage() {
         implementedBy: userProfile.email,
         implementedAt: new Date()
       });
-      alert('Idea marked as being implemented!');
+      
+      // Create notification for the idea submitter
+      const idea = ideas.find(i => i.id === ideaId);
+      if (idea) {
+        await addDoc(collection(db, 'notifications'), {
+          type: 'idea_implemented',
+          title: 'Your idea is being implemented!',
+          message: `Great news! Your idea "${idea.title}" is now being implemented by our development team.`,
+          userId: idea.userId,
+          userEmail: idea.userEmail,
+          ideaId: ideaId,
+          ideaTitle: idea.title,
+          implementedBy: userProfile.email,
+          createdAt: new Date(),
+          read: false
+        });
+      }
+      
+      alert('Idea marked as being implemented! The submitter will be notified.');
     } catch (error) {
       console.error('Error implementing idea:', error);
       alert('Failed to mark idea as being implemented. Please try again.');
@@ -221,7 +321,25 @@ export default function SubmitIdeasPage() {
         approvedBy: userProfile.email,
         approvedAt: new Date()
       });
-      alert('Idea approved successfully!');
+      
+      // Create notification for the idea submitter
+      const idea = ideas.find(i => i.id === ideaId);
+      if (idea) {
+        await addDoc(collection(db, 'notifications'), {
+          type: 'idea_approved',
+          title: 'Your idea was approved!',
+          message: `Your idea "${idea.title}" has been approved and is now visible to all users.`,
+          userId: idea.userId,
+          userEmail: idea.userEmail,
+          ideaId: ideaId,
+          ideaTitle: idea.title,
+          approvedBy: userProfile.email,
+          createdAt: new Date(),
+          read: false
+        });
+      }
+      
+      alert('Idea approved successfully! The submitter will be notified.');
     } catch (error) {
       console.error('Error approving idea:', error);
       alert('Failed to approve idea. Please try again.');
@@ -308,13 +426,87 @@ export default function SubmitIdeasPage() {
           <p className="text-gray-600">Share your ideas to improve LoxConnect PRO. Ideas are reviewed by superAdmins before being visible to all users.</p>
         </div>
 
-        <div className="mb-6">
+        <div className="mb-6 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
           <button
             onClick={() => setShowForm(!showForm)}
             className="bg-[#e40115] text-white px-6 py-3 rounded-lg font-medium hover:bg-red-700 transition-colors"
           >
             {showForm ? 'Cancel' : 'Submit New Idea'}
           </button>
+          
+          {/* Search and Filter Controls */}
+          <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
+            {/* Search */}
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Search ideas..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#e40115] w-full sm:w-64"
+              />
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </div>
+            </div>
+            
+            {/* Category Filter */}
+            <select
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#e40115]"
+            >
+              <option value="All">All Categories</option>
+              <option value="Bug Report">Bug Report</option>
+              <option value="Improvement">Improvement</option>
+              <option value="New Feature">New Feature</option>
+              <option value="Design Issue">Design Issue</option>
+              <option value="Performance">Performance</option>
+            </select>
+            
+            {/* Status Filter */}
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#e40115]"
+            >
+              <option value="All">All Status</option>
+              <option value="Pending Approval">Pending Approval</option>
+              <option value="Approved">Approved</option>
+              <option value="Being Implemented">Being Implemented</option>
+              <option value="Rejected">Rejected</option>
+            </select>
+            
+            {/* Date Filter */}
+            <select
+              value={dateFilter}
+              onChange={(e) => setDateFilter(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#e40115]"
+            >
+              <option value="All">All Time</option>
+              <option value="Today">Today</option>
+              <option value="This Week">This Week</option>
+              <option value="This Month">This Month</option>
+              <option value="Last 3 Months">Last 3 Months</option>
+            </select>
+            
+            {/* Clear Filters */}
+            {(searchTerm || categoryFilter !== 'All' || statusFilter !== 'All' || dateFilter !== 'All') && (
+              <button
+                onClick={() => {
+                  setSearchTerm('');
+                  setCategoryFilter('All');
+                  setStatusFilter('All');
+                  setDateFilter('All');
+                }}
+                className="px-3 py-2 text-gray-600 hover:text-gray-800 text-sm font-medium"
+              >
+                Clear Filters
+              </button>
+            )}
+          </div>
         </div>
 
         {showForm && (
@@ -386,18 +578,44 @@ export default function SubmitIdeasPage() {
           </div>
         )}
 
-        {/* Kanban Layout */}
+        {/* Results Counter */}
+        <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <span className="text-blue-800 font-medium">
+                Showing {filteredIdeas.length} of {ideas.length} ideas
+              </span>
+              {(searchTerm || categoryFilter !== 'All' || statusFilter !== 'All' || dateFilter !== 'All') && (
+                <span className="text-blue-600 text-sm">
+                  (filtered by: {[
+                    searchTerm && 'search',
+                    categoryFilter !== 'All' && 'category',
+                    statusFilter !== 'All' && 'status',
+                    dateFilter !== 'All' && 'date'
+                  ].filter(Boolean).join(', ')})
+                </span>
+              )}
+            </div>
+            <div className="flex space-x-4 text-sm text-blue-700">
+              <span>Approved: {filteredIdeas.filter(i => i.status === 'Approved').length}</span>
+              <span>Being Implemented: {filteredIdeas.filter(i => i.status === 'Being Implemented').length}</span>
+              {userProfile?.role === 'superAdmin' && (
+                <span>Pending: {filteredIdeas.filter(i => i.status === 'Pending Approval').length}</span>
+              )}
+            </div>
+          </div>
+        </div>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Left Column: Ideas */}
           <div>
             <h2 className="text-2xl font-semibold text-gray-900 mb-6">💡 Ideas</h2>
             <div className="space-y-4">
-              {ideas.filter(idea => idea.status === 'Approved').length === 0 ? (
+              {filteredIdeas.filter(idea => idea.status === 'Approved').length === 0 ? (
                 <div className="text-center py-8 bg-white rounded-lg shadow-md">
-                  <p className="text-gray-500">No approved ideas yet.</p>
+                  <p className="text-gray-500">No approved ideas found.</p>
                 </div>
               ) : (
-                ideas.filter(idea => idea.status === 'Approved').map((idea) => (
+                filteredIdeas.filter(idea => idea.status === 'Approved').map((idea) => (
                   <div key={idea.id} className="bg-white rounded-lg shadow-md p-6 border-l-4 border-green-500">
                     <div className="flex justify-between items-start mb-4">
                       <div className="flex-1">
@@ -475,12 +693,12 @@ export default function SubmitIdeasPage() {
           <div>
             <h2 className="text-2xl font-semibold text-gray-900 mb-6">🚀 Being Implemented</h2>
             <div className="space-y-4">
-              {ideas.filter(idea => idea.status === 'Being Implemented').length === 0 ? (
+              {filteredIdeas.filter(idea => idea.status === 'Being Implemented').length === 0 ? (
                 <div className="text-center py-8 bg-white rounded-lg shadow-md">
-                  <p className="text-gray-500">No ideas being implemented yet.</p>
+                  <p className="text-gray-500">No ideas being implemented found.</p>
                 </div>
               ) : (
-                ideas.filter(idea => idea.status === 'Being Implemented').map((idea) => (
+                filteredIdeas.filter(idea => idea.status === 'Being Implemented').map((idea) => (
                   <div key={idea.id} className="bg-white rounded-lg shadow-md p-6 border-l-4 border-purple-500">
                     <div className="flex justify-between items-start mb-4">
                       <div className="flex-1">
@@ -538,12 +756,12 @@ export default function SubmitIdeasPage() {
           <div className="mt-12">
             <h2 className="text-2xl font-semibold text-gray-900 mb-6">⏳ Pending Approval</h2>
             <div className="space-y-4">
-              {ideas.filter(idea => idea.status === 'Pending Approval').length === 0 ? (
+              {filteredIdeas.filter(idea => idea.status === 'Pending Approval').length === 0 ? (
                 <div className="text-center py-8 bg-white rounded-lg shadow-md">
-                  <p className="text-gray-500">No ideas pending approval.</p>
+                  <p className="text-gray-500">No ideas pending approval found.</p>
                 </div>
               ) : (
-                ideas.filter(idea => idea.status === 'Pending Approval').map((idea) => (
+                filteredIdeas.filter(idea => idea.status === 'Pending Approval').map((idea) => (
                   <div key={idea.id} className="bg-white rounded-lg shadow-md p-6 border-l-4 border-yellow-500">
                     <div className="flex justify-between items-start mb-4">
                       <div className="flex-1">
@@ -580,6 +798,63 @@ export default function SubmitIdeasPage() {
                         Reject
                       </button>
                     </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* SuperAdmin Section: Archived Ideas */}
+        {userProfile?.role === 'superAdmin' && (
+          <div className="mt-12">
+            <h2 className="text-2xl font-semibold text-gray-900 mb-6">🗄️ Archived Ideas</h2>
+            <div className="space-y-4">
+              {ideas.filter(idea => idea.status === 'Archived' || idea.status === 'Rejected').length === 0 ? (
+                <div className="text-center py-8 bg-white rounded-lg shadow-md">
+                  <p className="text-gray-500">No archived ideas found.</p>
+                </div>
+              ) : (
+                ideas.filter(idea => idea.status === 'Archived' || idea.status === 'Rejected').map((idea) => (
+                  <div key={idea.id} className="bg-white rounded-lg shadow-md p-6 border-l-4 border-gray-500 opacity-75">
+                    <div className="flex justify-between items-start mb-4">
+                      <div className="flex-1">
+                        <h3 className="text-xl font-semibold text-gray-900 mb-2">{idea.title}</h3>
+                        <p className="text-gray-600 mb-4">{idea.description}</p>
+                      </div>
+                      <div className="flex flex-col space-y-2">
+                        <span className={`px-3 py-1 rounded-full text-sm font-medium ${getCategoryColor(idea.category)}`}>
+                          {idea.category}
+                        </span>
+                        <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(idea.status)}`}>
+                          {idea.status}
+                        </span>
+                      </div>
+                    </div>
+                    
+                    <div className="text-sm text-gray-500 mb-4">
+                      <p>Submitted by: {idea.userEmail}</p>
+                      <p>Date: {idea.createdAt instanceof Date ? idea.createdAt.toLocaleDateString() : new Date(idea.createdAt).toLocaleDateString()}</p>
+                      {idea.rejectedBy && (
+                        <p className="text-red-600 font-medium">Rejected by: {idea.rejectedBy}</p>
+                      )}
+                      {idea.deletedBy && (
+                        <p className="text-gray-600 font-medium">Archived by: {idea.deletedBy}</p>
+                      )}
+                      {idea.rejectionReason && (
+                        <p className="text-red-600 italic">Reason: {idea.rejectionReason}</p>
+                      )}
+                    </div>
+                    
+                    {/* Show like count for archived ideas */}
+                    {idea.likeCount && idea.likeCount > 0 && (
+                      <div className="mb-4">
+                        <div className="text-center">
+                          <div className="text-2xl font-bold text-red-600">{idea.likeCount}</div>
+                          <div className="text-sm text-gray-500">likes received</div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ))
               )}
