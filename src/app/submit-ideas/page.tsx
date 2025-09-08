@@ -3,11 +3,34 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../AuthProvider';
 import { collection, addDoc, query, orderBy, onSnapshot, where, doc, updateDoc, getDocs } from 'firebase/firestore';
 import { db } from '../../firebaseClient';
-import { Idea } from '../../types';
+// Local interface to match our current implementation - Updated for new statuses
+interface LocalIdea {
+  id: string;
+  userId: string;
+  userEmail: string;
+  userCountry: string;
+  userRole: string;
+  title: string;
+  description: string;
+  category: 'Bug Report' | 'Improvement' | 'New Feature' | 'Design Issue' | 'Performance';
+  status: 'Pending Approval' | 'Approved' | 'Being Implemented' | 'Rejected' | 'Archived';
+  likeCount?: number;
+  createdAt: Date;
+  updatedAt?: Date;
+  approvedAt?: Date;
+  approvedBy?: string;
+  implementedAt?: Date;
+  implementedBy?: string;
+  rejectedAt?: Date;
+  rejectedBy?: string;
+  rejectionReason?: string;
+  deletedAt?: Date;
+  deletedBy?: string;
+}
 
 export default function SubmitIdeasPage() {
   const { userProfile } = useAuth();
-  const [ideas, setIdeas] = useState<Idea[]>([]);
+  const [ideas, setIdeas] = useState<LocalIdea[]>([]);
   const [userLikes, setUserLikes] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -17,6 +40,7 @@ export default function SubmitIdeasPage() {
     title: '',
     description: ''
   });
+  const [rejectionReason, setRejectionReason] = useState('');
 
   // Load ideas - show all for superAdmin, only approved for others
   useEffect(() => {
@@ -33,7 +57,7 @@ export default function SubmitIdeasPage() {
         id: doc.id,
         ...doc.data(),
         createdAt: doc.data().createdAt?.toDate ? doc.data().createdAt.toDate() : new Date(doc.data().createdAt)
-      })) as Idea[];
+      })) as LocalIdea[];
       
       // Filter based on user role
       let filteredIdeas;
@@ -41,8 +65,10 @@ export default function SubmitIdeasPage() {
         // SuperAdmin sees all ideas except archived
         filteredIdeas = allIdeas.filter(idea => idea.status !== 'Archived');
       } else {
-        // Regular users only see approved ideas
-        filteredIdeas = allIdeas.filter(idea => idea.status === 'Approved');
+        // Regular users see approved ideas AND ideas being implemented
+        filteredIdeas = allIdeas.filter(idea => 
+          idea.status === 'Approved' || idea.status === 'Being Implemented'
+        );
       }
       
       setIdeas(filteredIdeas);
@@ -215,7 +241,23 @@ export default function SubmitIdeasPage() {
         rejectedAt: new Date(),
         rejectionReason: reason
       });
-      alert('Idea rejected successfully!');
+      
+      // Create notification for the idea submitter
+      const idea = ideas.find(i => i.id === ideaId);
+      if (idea) {
+        await addDoc(collection(db, 'notifications'), {
+          type: 'idea_rejected',
+          title: 'Your idea was rejected',
+          message: `Your idea "${idea.title}" was rejected. Reason: ${reason}`,
+          userId: idea.userId,
+          userEmail: idea.userEmail,
+          ideaId: ideaId,
+          createdAt: new Date(),
+          read: false
+        });
+      }
+      
+      alert('Idea rejected successfully! The submitter will be notified.');
     } catch (error) {
       console.error('Error rejecting idea:', error);
       alert('Failed to reject idea. Please try again.');
@@ -344,113 +386,206 @@ export default function SubmitIdeasPage() {
           </div>
         )}
 
-        <div className="space-y-6">
-          <h2 className="text-2xl font-semibold text-gray-900">All Ideas</h2>
-          
-          {ideas.length === 0 ? (
-            <div className="text-center py-12">
-              <p className="text-gray-500 text-lg">No ideas submitted yet.</p>
-              <p className="text-gray-400 mt-2">Be the first to submit an idea!</p>
-            </div>
-          ) : (
-            ideas.map((idea) => (
-              <div key={idea.id} className="bg-white rounded-lg shadow-md p-6">
-                <div className="flex justify-between items-start mb-4">
-                  <div>
-                    <h3 className="text-xl font-semibold text-gray-900 mb-2">{idea.title}</h3>
-                    <p className="text-gray-600 mb-4">{idea.description}</p>
-                  </div>
-                  <div className="flex space-x-2">
-                    <span className={`px-3 py-1 rounded-full text-sm font-medium ${getCategoryColor(idea.category)}`}>
-                      {idea.category}
-                    </span>
-                    <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(idea.status)}`}>
-                      {idea.status}
-                    </span>
-                  </div>
+        {/* Kanban Layout */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Left Column: Ideas */}
+          <div>
+            <h2 className="text-2xl font-semibold text-gray-900 mb-6">💡 Ideas</h2>
+            <div className="space-y-4">
+              {ideas.filter(idea => idea.status === 'Approved').length === 0 ? (
+                <div className="text-center py-8 bg-white rounded-lg shadow-md">
+                  <p className="text-gray-500">No approved ideas yet.</p>
                 </div>
-                
-                <div className="text-sm text-gray-500">
-                  <p>Submitted by: {idea.userEmail}</p>
-                  <p>Date: {idea.createdAt instanceof Date ? idea.createdAt.toLocaleDateString() : new Date(idea.createdAt).toLocaleDateString()}</p>
-                  {idea.status === 'Approved' && idea.approvedBy && (
-                    <p>Approved by: {idea.approvedBy}</p>
-                  )}
-                  {idea.status === 'Rejected' && idea.rejectedBy && (
-                    <div>
-                      <p>Rejected by: {idea.rejectedBy}</p>
-                      {idea.rejectionReason && (
-                        <p className="text-red-600">Reason: {idea.rejectionReason}</p>
+              ) : (
+                ideas.filter(idea => idea.status === 'Approved').map((idea) => (
+                  <div key={idea.id} className="bg-white rounded-lg shadow-md p-6 border-l-4 border-green-500">
+                    <div className="flex justify-between items-start mb-4">
+                      <div className="flex-1">
+                        <h3 className="text-xl font-semibold text-gray-900 mb-2">{idea.title}</h3>
+                        <p className="text-gray-600 mb-4">{idea.description}</p>
+                      </div>
+                      <div className="flex flex-col space-y-2">
+                        <span className={`px-3 py-1 rounded-full text-sm font-medium ${getCategoryColor(idea.category)}`}>
+                          {idea.category}
+                        </span>
+                        <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(idea.status)}`}>
+                          {idea.status}
+                        </span>
+                      </div>
+                    </div>
+                    
+                    {/* Prominent Like Count */}
+                    <div className="mb-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-3">
+                          {userProfile && (
+                            <button
+                              onClick={() => handleLikeIdea(idea.id)}
+                              disabled={userLikes.includes(idea.id)}
+                              className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-lg font-medium transition-colors ${
+                                userLikes.includes(idea.id)
+                                  ? 'bg-red-100 text-red-600 cursor-not-allowed'
+                                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                              }`}
+                            >
+                              <span className="text-2xl">❤️</span>
+                              <span>{userLikes.includes(idea.id) ? 'Liked' : 'Like'}</span>
+                            </button>
+                          )}
+                          <div className="text-center">
+                            <div className="text-3xl font-bold text-red-600">{idea.likeCount || 0}</div>
+                            <div className="text-sm text-gray-500">likes</div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="text-sm text-gray-500 mb-4">
+                      <p>Submitted by: {idea.userEmail}</p>
+                      <p>Date: {idea.createdAt instanceof Date ? idea.createdAt.toLocaleDateString() : new Date(idea.createdAt).toLocaleDateString()}</p>
+                      {idea.approvedBy && (
+                        <p>Approved by: {idea.approvedBy}</p>
                       )}
                     </div>
-                  )}
-                  {idea.status === 'Being Implemented' && idea.implementedBy && (
-                    <p>Being implemented by: {idea.implementedBy}</p>
-                  )}
+                    
+                    {/* SuperAdmin controls */}
+                    {userProfile?.role === 'superAdmin' && (
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          onClick={() => handleImplementIdea(idea.id)}
+                          className="bg-purple-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-purple-700"
+                        >
+                          Start Implementing
+                        </button>
+                        <button
+                          onClick={() => handleDeleteIdea(idea.id)}
+                          className="bg-gray-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-700"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Right Column: Being Implemented */}
+          <div>
+            <h2 className="text-2xl font-semibold text-gray-900 mb-6">🚀 Being Implemented</h2>
+            <div className="space-y-4">
+              {ideas.filter(idea => idea.status === 'Being Implemented').length === 0 ? (
+                <div className="text-center py-8 bg-white rounded-lg shadow-md">
+                  <p className="text-gray-500">No ideas being implemented yet.</p>
                 </div>
-                
-                {/* Like button for approved ideas */}
-                {idea.status === 'Approved' && userProfile && (
-                  <div className="mt-3 flex items-center space-x-2">
-                    <button
-                      onClick={() => handleLikeIdea(idea.id)}
-                      disabled={userLikes.includes(idea.id)}
-                      className={`flex items-center space-x-1 px-3 py-1 rounded-md text-sm font-medium transition-colors ${
-                        userLikes.includes(idea.id)
-                          ? 'bg-red-100 text-red-600 cursor-not-allowed'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                      }`}
-                    >
-                      <span>❤️</span>
-                      <span>{userLikes.includes(idea.id) ? 'Liked' : 'Like'}</span>
-                    </button>
-                    <span className="text-sm text-gray-500">
-                      {idea.likeCount || 0} likes
-                    </span>
-                  </div>
-                )}
-                
-                {/* SuperAdmin controls */}
-                {userProfile?.role === 'superAdmin' && (
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {idea.status === 'Pending Approval' && (
-                      <>
+              ) : (
+                ideas.filter(idea => idea.status === 'Being Implemented').map((idea) => (
+                  <div key={idea.id} className="bg-white rounded-lg shadow-md p-6 border-l-4 border-purple-500">
+                    <div className="flex justify-between items-start mb-4">
+                      <div className="flex-1">
+                        <h3 className="text-xl font-semibold text-gray-900 mb-2">{idea.title}</h3>
+                        <p className="text-gray-600 mb-4">{idea.description}</p>
+                      </div>
+                      <div className="flex flex-col space-y-2">
+                        <span className={`px-3 py-1 rounded-full text-sm font-medium ${getCategoryColor(idea.category)}`}>
+                          {idea.category}
+                        </span>
+                        <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(idea.status)}`}>
+                          {idea.status}
+                        </span>
+                      </div>
+                    </div>
+                    
+                    {/* Show Like Count (but no like button) */}
+                    <div className="mb-4">
+                      <div className="flex items-center justify-center">
+                        <div className="text-center">
+                          <div className="text-3xl font-bold text-red-600">{idea.likeCount || 0}</div>
+                          <div className="text-sm text-gray-500">likes received</div>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="text-sm text-gray-500 mb-4">
+                      <p>Submitted by: {idea.userEmail}</p>
+                      <p>Date: {idea.createdAt instanceof Date ? idea.createdAt.toLocaleDateString() : new Date(idea.createdAt).toLocaleDateString()}</p>
+                      {idea.implementedBy && (
+                        <p className="text-purple-600 font-medium">Being implemented by: {idea.implementedBy}</p>
+                      )}
+                    </div>
+                    
+                    {/* SuperAdmin controls */}
+                    {userProfile?.role === 'superAdmin' && (
+                      <div className="flex flex-wrap gap-2">
                         <button
-                          onClick={() => handleApproveIdea(idea.id)}
-                          className="bg-green-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-green-700"
+                          onClick={() => handleDeleteIdea(idea.id)}
+                          className="bg-gray-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-700"
                         >
-                          Approve
+                          Archive
                         </button>
-                        <button
-                          onClick={() => handleRejectIdea(idea.id)}
-                          className="bg-red-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-red-700"
-                        >
-                          Reject
-                        </button>
-                      </>
-                    )}
-                    {idea.status === 'Approved' && (
-                      <button
-                        onClick={() => handleImplementIdea(idea.id)}
-                        className="bg-purple-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-purple-700"
-                      >
-                        Start Implementing
-                      </button>
-                    )}
-                    {idea.status !== 'Archived' && idea.status !== 'Being Implemented' && (
-                      <button
-                        onClick={() => handleDeleteIdea(idea.id)}
-                        className="bg-gray-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-700"
-                      >
-                        Delete
-                      </button>
+                      </div>
                     )}
                   </div>
-                )}
-              </div>
-            ))
-          )}
+                ))
+              )}
+            </div>
+          </div>
         </div>
+
+        {/* SuperAdmin Section: Pending Approval */}
+        {userProfile?.role === 'superAdmin' && (
+          <div className="mt-12">
+            <h2 className="text-2xl font-semibold text-gray-900 mb-6">⏳ Pending Approval</h2>
+            <div className="space-y-4">
+              {ideas.filter(idea => idea.status === 'Pending Approval').length === 0 ? (
+                <div className="text-center py-8 bg-white rounded-lg shadow-md">
+                  <p className="text-gray-500">No ideas pending approval.</p>
+                </div>
+              ) : (
+                ideas.filter(idea => idea.status === 'Pending Approval').map((idea) => (
+                  <div key={idea.id} className="bg-white rounded-lg shadow-md p-6 border-l-4 border-yellow-500">
+                    <div className="flex justify-between items-start mb-4">
+                      <div className="flex-1">
+                        <h3 className="text-xl font-semibold text-gray-900 mb-2">{idea.title}</h3>
+                        <p className="text-gray-600 mb-4">{idea.description}</p>
+                      </div>
+                      <div className="flex flex-col space-y-2">
+                        <span className={`px-3 py-1 rounded-full text-sm font-medium ${getCategoryColor(idea.category)}`}>
+                          {idea.category}
+                        </span>
+                        <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(idea.status)}`}>
+                          {idea.status}
+                        </span>
+                      </div>
+                    </div>
+                    
+                    <div className="text-sm text-gray-500 mb-4">
+                      <p>Submitted by: {idea.userEmail}</p>
+                      <p>Date: {idea.createdAt instanceof Date ? idea.createdAt.toLocaleDateString() : new Date(idea.createdAt).toLocaleDateString()}</p>
+                    </div>
+                    
+                    {/* SuperAdmin controls */}
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        onClick={() => handleApproveIdea(idea.id)}
+                        className="bg-green-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-green-700"
+                      >
+                        Approve
+                      </button>
+                      <button
+                        onClick={() => handleRejectIdea(idea.id)}
+                        className="bg-red-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-red-700"
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -101,17 +101,19 @@ export interface Idea {
   title: string;
   description: string;
   category: 'Bug Report' | 'Improvement' | 'New Feature' | 'Design Issue' | 'Performance';
-  status: 'Under Review' | 'Planned' | 'In Development' | 'Implemented' | 'Rejected';
-  totalPoints: number; // Sum of all votes
-  voteCount: number; // Number of users who voted
+  status: 'Pending Approval' | 'Approved' | 'Being Implemented' | 'Rejected' | 'Archived';
+  likeCount: number; // Number of likes received
   createdAt: Date;
   updatedAt: Date;
+  approvedAt?: Date;
+  approvedBy?: string; // SuperAdmin who approved
   implementedAt?: Date;
   implementedBy?: string; // SuperAdmin who implemented
   rejectedAt?: Date;
   rejectedBy?: string; // SuperAdmin who rejected
   rejectionReason?: string; // Why it was rejected
-  plannedFor?: string; // When it's planned to be implemented
+  deletedAt?: Date;
+  deletedBy?: string; // SuperAdmin who deleted/archived
 }
 
 export interface UserVote {
