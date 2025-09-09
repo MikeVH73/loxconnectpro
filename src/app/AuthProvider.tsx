@@ -138,6 +138,7 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!isClient) return;
 
     let unsubscribe = () => {};
+    let loadingTimeout: NodeJS.Timeout | null = null;
 
     const initializeAuth = async () => {
       // Wait for Firebase to initialize
@@ -156,9 +157,27 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
 
       unsubscribe = onAuthStateChanged(auth, async (user) => {
         console.log('Auth state changed:', user ? `User: ${user.email}` : 'No user');
+        
+        // Prevent multiple simultaneous auth state changes
+        if (isSigningOut) {
+          console.log('Currently signing out, ignoring auth state change');
+          return;
+        }
+        
+        // Clear any existing timeout
+        if (loadingTimeout) {
+          clearTimeout(loadingTimeout);
+        }
+        
         // Set loading immediately to prevent consumers from reading stale state
         setLoading(true);
         setUser(user);
+
+        // Set a timeout to prevent infinite loading
+        loadingTimeout = setTimeout(() => {
+          console.warn('Auth loading timeout - forcing loading to false');
+          setLoading(false);
+        }, 10000); // 10 second timeout
 
         if (user && db) {
           try {
@@ -185,14 +204,24 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
           setError(null);
         }
       
-      setLoading(false);
-    });
+        // Clear timeout and set loading to false
+        if (loadingTimeout) {
+          clearTimeout(loadingTimeout);
+          loadingTimeout = null;
+        }
+        setLoading(false);
+      });
     };
 
     initializeAuth();
     
-    return () => unsubscribe();
-  }, [isClient]);
+    return () => {
+      unsubscribe();
+      if (loadingTimeout) {
+        clearTimeout(loadingTimeout);
+      }
+    };
+  }, [isClient, isSigningOut]);
 
   const signOutUser = async () => {
     if (!auth) {

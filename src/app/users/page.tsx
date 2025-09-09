@@ -384,29 +384,7 @@ export default function UsersPage() {
       
       await setDoc(doc(db as Firestore, "users", userCredential.user.uid), userProfileData);
       
-      // Small delay to ensure Firestore write completes before auth state change
-      await new Promise(resolve => setTimeout(resolve, 50));
-      
-      // Handle auth state changes gracefully
-      try {
-        // Sign out the newly created user
-        await signOut(auth as any);
-        
-        // Small delay to let auth state settle
-        await new Promise(resolve => setTimeout(resolve, 100));
-        
-        // Re-authenticate the original admin user
-        await signInWithEmailAndPassword(auth as any, currentUserEmail, adminPassword);
-        
-        // Additional delay to ensure auth state is stable
-        await new Promise(resolve => setTimeout(resolve, 100));
-      } catch (authError) {
-        console.warn('Auth state change error (user was still created successfully):', authError);
-        // Don't fail the entire operation if auth switching fails
-        // The user was created successfully, which is the main goal
-      }
-      
-      // Reset form and close modals
+      // Reset form and close modals immediately
       setNewUser({
         displayName: "",
         email: "",
@@ -419,10 +397,34 @@ export default function UsersPage() {
       setShowPasswordPrompt(false);
       setSuccess(`User ${newUser.displayName} created successfully!`);
       
-      // Refresh users list and reapply role filter
+      // Refresh users list
       const usersSnap = await getDocs(collection(db as Firestore, "users"));
       const allUsers = usersSnap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
       setUsers(getFilteredUsers(allUsers));
+      
+      // Handle auth state changes gracefully - simplified approach
+      try {
+        // Sign out the newly created user
+        await signOut(auth as any);
+        
+        // Wait a bit for auth state to settle
+        await new Promise(resolve => setTimeout(resolve, 200));
+        
+        // Re-authenticate the original admin user
+        await signInWithEmailAndPassword(auth as any, currentUserEmail, adminPassword);
+        
+        // Wait for auth state to stabilize
+        await new Promise(resolve => setTimeout(resolve, 200));
+        
+      } catch (authError) {
+        console.warn('Auth state change error (user was still created successfully):', authError);
+        // Don't fail the entire operation if auth switching fails
+        // The user was created successfully, which is the main goal
+        // Force a page refresh to ensure clean state
+        setTimeout(() => {
+          window.location.reload();
+        }, 1000);
+      }
       
     } catch (error: any) {
       console.error("Error creating user:", error);
