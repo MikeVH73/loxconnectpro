@@ -161,7 +161,7 @@ export default function SecurityPage() {
               Refresh
             </button>
           </div>
-          <p className="text-sm text-gray-600">We will send a verification email using the project template. After clicking the link, return here and press Refresh.</p>
+          <p className="text-sm text-gray-600">We will send a verification email. After clicking the link, you'll be redirected to a confirmation page.</p>
           <div className="flex items-center gap-2">
             <button
               onClick={async ()=>{
@@ -169,9 +169,9 @@ export default function SecurityPage() {
                 try {
                   setVerifying(true); setError(null); setSuccess(null);
                   const base = 'https://loxconnectpro.vercel.app';
-                  const url = `${base}/users/security`;
+                  const url = `${base}/email-verified`;
                   await sendEmailVerification(user, { url, handleCodeInApp: false } as any);
-                  setSuccess('Verification email sent. Check your inbox, then come back and press Refresh.');
+                  setSuccess('Verification email sent. Check your inbox and click the link to verify your email.');
                 } catch (e: any) {
                   setError(e?.message || 'Failed to send verification email');
                 } finally { setVerifying(false); }

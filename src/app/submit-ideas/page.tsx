@@ -170,6 +170,37 @@ export default function SubmitIdeasPage() {
     return () => unsubscribe();
   }, [userProfile]);
 
+  // Clean up any existing negative like counts (one-time fix)
+  useEffect(() => {
+    if (!db || !userProfile || userProfile.role !== 'superAdmin') return;
+
+    const fixNegativeLikes = async () => {
+      try {
+        const ideasSnapshot = await getDocs(collection(db!, 'ideas'));
+        const batch = writeBatch(db!);
+        let hasUpdates = false;
+
+        ideasSnapshot.docs.forEach(doc => {
+          const data = doc.data();
+          if (data.likeCount < 0) {
+            batch.update(doc.ref, { likeCount: 0 });
+            hasUpdates = true;
+            console.log(`Fixed negative like count for idea: ${doc.id}`);
+          }
+        });
+
+        if (hasUpdates) {
+          await batch.commit();
+          console.log('Fixed all negative like counts');
+        }
+      } catch (error) {
+        console.error('Error fixing negative like counts:', error);
+      }
+    };
+
+    fixNegativeLikes();
+  }, [db, userProfile]);
+
   // Load user's idea notifications
   useEffect(() => {
     if (!db || !userProfile) return;
@@ -215,11 +246,12 @@ export default function SubmitIdeasPage() {
           });
         }
         
-        // Update idea like count
+        // Update idea like count (ensure it never goes below 0)
         const idea = ideas.find(i => i.id === ideaId);
         if (idea) {
+          const newLikeCount = Math.max(0, (idea.likeCount || 0) - 1);
           await updateDoc(doc(db, 'ideas', ideaId), {
-            likeCount: (idea.likeCount || 0) - 1
+            likeCount: newLikeCount
           });
         }
       } else {
@@ -979,7 +1011,7 @@ export default function SubmitIdeasPage() {
                             className="flex items-center space-x-1 bg-red-50 hover:bg-red-100 text-red-600 px-3 py-1 rounded-full text-sm font-medium transition-colors"
                           >
                             <span>❤️</span>
-                            <span>{idea.likeCount || 0} likes</span>
+                            <span>{Math.max(0, idea.likeCount || 0)} likes</span>
                           </button>
                         </div>
                         <div className="flex flex-col space-y-1">
@@ -1067,7 +1099,7 @@ export default function SubmitIdeasPage() {
                       <div className="flex flex-col space-y-2 ml-4">
                         <div className="flex items-center space-x-2">
                           <div className="flex items-center space-x-1 bg-purple-50 text-purple-600 px-3 py-1 rounded-full text-sm font-medium">
-                            <span>{idea.likeCount || 0} likes received</span>
+                            <span>{Math.max(0, idea.likeCount || 0)} likes received</span>
                           </div>
                         </div>
                         <div className="flex flex-col space-y-1">
@@ -1241,7 +1273,7 @@ export default function SubmitIdeasPage() {
                     {idea.likeCount && idea.likeCount > 0 && (
                       <div className="mb-4">
                         <div className="text-center">
-                          <div className="text-2xl font-bold text-red-600">{idea.likeCount}</div>
+                          <div className="text-2xl font-bold text-red-600">{Math.max(0, idea.likeCount || 0)}</div>
                           <div className="text-sm text-gray-500">likes received</div>
                         </div>
                       </div>

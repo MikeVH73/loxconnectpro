@@ -44,7 +44,14 @@ export async function POST(request: NextRequest) {
     if (!user.email) {
       return NextResponse.json({ error: 'User has no email' }, { status: 400 });
     }
-    const link = await auth.generateEmailVerificationLink(user.email);
+    
+    // Generate email verification link with custom redirect URL
+    const redirectUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://loxconnectpro.vercel.app'}/email-verified`;
+    const link = await auth.generateEmailVerificationLink(user.email, {
+      url: redirectUrl,
+      handleCodeInApp: false
+    });
+    
     return NextResponse.json({ ok: true, link });
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: e?.message || String(e) }, { status: 500 });

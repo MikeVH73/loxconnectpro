@@ -22,6 +22,8 @@ interface AuthContextType {
   signOutUser: () => Promise<void>;
   retryProfileLoad: () => Promise<void>;
   isSigningOut: boolean;
+  isCreatingUser: boolean;
+  setIsCreatingUser: (creating: boolean) => void;
 }
 
 const AuthContext = createContext<AuthContextType>({ 
@@ -32,6 +34,8 @@ const AuthContext = createContext<AuthContextType>({
   signOutUser: async () => {},
   retryProfileLoad: async () => {},
   isSigningOut: false,
+  isCreatingUser: false,
+  setIsCreatingUser: () => {},
 });
 
 function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -41,6 +45,7 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [isClient, setIsClient] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const [isCreatingUser, setIsCreatingUser] = useState(false);
 
   useEffect(() => {
     setIsClient(true);
@@ -139,6 +144,7 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
 
     let unsubscribe = () => {};
     let loadingTimeout: NodeJS.Timeout | null = null;
+    let authStateChangeCount = 0; // Track rapid auth state changes
 
     const initializeAuth = async () => {
       // Wait for Firebase to initialize
@@ -156,12 +162,26 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       unsubscribe = onAuthStateChanged(auth, async (user) => {
-        console.log('Auth state changed:', user ? `User: ${user.email}` : 'No user');
+        authStateChangeCount++;
+        console.log(`Auth state changed (${authStateChangeCount}):`, user ? `User: ${user.email}` : 'No user');
         
-        // Prevent multiple simultaneous auth state changes
+        // Prevent multiple simultaneous auth state changes during user creation
         if (isSigningOut) {
           console.log('Currently signing out, ignoring auth state change');
           return;
+        }
+        
+        // Prevent processing auth changes during user creation
+        if (isCreatingUser) {
+          console.log('Currently creating user, ignoring auth state change');
+          return;
+        }
+        
+        // If we're getting rapid auth state changes (like during user creation), 
+        // wait a bit longer before processing to avoid race conditions
+        if (authStateChangeCount > 1) {
+          console.log('Rapid auth state changes detected, waiting for stabilization...');
+          await new Promise(resolve => setTimeout(resolve, 500));
         }
         
         // Clear any existing timeout
@@ -177,7 +197,7 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
         loadingTimeout = setTimeout(() => {
           console.warn('Auth loading timeout - forcing loading to false');
           setLoading(false);
-        }, 10000); // 10 second timeout
+        }, 15000); // Increased timeout to 15 seconds for user creation scenarios
 
         if (user && db) {
           try {
@@ -335,7 +355,7 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, userProfile, loading, error, signOutUser, retryProfileLoad, isSigningOut }}>
+    <AuthContext.Provider value={{ user, userProfile, loading, error, signOutUser, retryProfileLoad, isSigningOut, isCreatingUser, setIsCreatingUser }}>
       {children}
     </AuthContext.Provider>
   );

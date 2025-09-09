@@ -10,7 +10,7 @@ import { checkAndFixUserProfiles } from "../utils/userProfileFixer";
 import ErrorBoundary from "../components/ErrorBoundary";
 
 export default function UsersPage() {
-  const { user, loading, userProfile } = useAuth();
+  const { user, loading, userProfile, setIsCreatingUser } = useAuth();
   const [users, setUsers] = useState<any[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
   const [countries, setCountries] = useState<any[]>([]);
@@ -348,12 +348,16 @@ export default function UsersPage() {
       setSubmitting(true);
       setError("");
       
+      // Set flag to prevent AuthProvider from processing auth changes
+      setIsCreatingUser(true);
+      
       // Store current user info
       const currentUser = (auth as any)?.currentUser;
       const currentUserEmail = currentUser?.email;
       
       if (!currentUserEmail) {
         setError("No current user found");
+        setIsCreatingUser(false);
         return;
       }
       
@@ -407,14 +411,14 @@ export default function UsersPage() {
         // Sign out the newly created user
         await signOut(auth as any);
         
-        // Wait a bit for auth state to settle
-        await new Promise(resolve => setTimeout(resolve, 200));
+        // Wait longer for auth state to settle
+        await new Promise(resolve => setTimeout(resolve, 1000));
         
         // Re-authenticate the original admin user
         await signInWithEmailAndPassword(auth as any, currentUserEmail, adminPassword);
         
-        // Wait for auth state to stabilize
-        await new Promise(resolve => setTimeout(resolve, 200));
+        // Wait longer for auth state to stabilize
+        await new Promise(resolve => setTimeout(resolve, 1000));
         
       } catch (authError) {
         console.warn('Auth state change error (user was still created successfully):', authError);
@@ -423,7 +427,10 @@ export default function UsersPage() {
         // Force a page refresh to ensure clean state
         setTimeout(() => {
           window.location.reload();
-        }, 1000);
+        }, 2000);
+      } finally {
+        // Clear the flag
+        setIsCreatingUser(false);
       }
       
     } catch (error: any) {
@@ -441,6 +448,7 @@ export default function UsersPage() {
       }
     } finally {
       setSubmitting(false);
+      setIsCreatingUser(false); // Ensure flag is cleared even on error
     }
   };
 

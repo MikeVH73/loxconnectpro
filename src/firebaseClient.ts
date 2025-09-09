@@ -109,6 +109,14 @@ function initializeFirebase() {
     // Initialize Auth
     if (!auth && app) {
       auth = getAuth(app);
+      
+      // Configure email verification redirect URL
+      if (typeof window !== 'undefined') {
+        const baseUrl = window.location.origin;
+        auth.settings.appVerificationDisabledForTesting = false;
+        // Note: The redirect URL is configured in Firebase Console under Authentication > Settings > Authorized domains
+        // Make sure to add your domain and set the redirect URL to: https://yourdomain.com/email-verified
+      }
     }
 
     // Initialize Storage
