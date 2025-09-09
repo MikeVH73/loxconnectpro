@@ -464,6 +464,80 @@ export default function ITOverviewPage() {
         </div>
       </section>
 
+      {/* Error Reporting & Ideas System */}
+      <section className="mb-8">
+        <h2 className="text-2xl font-semibold mb-4 text-gray-800">💡 Error Reporting & Ideas System</h2>
+        <div className="bg-white border rounded-lg p-6 shadow-sm">
+          <p className="text-gray-700 mb-4">
+            <strong>Built-in feedback and improvement system for continuous enhancement:</strong>
+          </p>
+          
+          <div className="grid md:grid-cols-2 gap-6 mb-6">
+            <div className="border rounded-lg p-4">
+              <h3 className="font-semibold text-gray-800 mb-3">🐛 Error Reporting</h3>
+              <p className="text-sm text-gray-600 mb-3">
+                Users can report issues directly from any page in the application.
+              </p>
+              <ul className="list-disc ml-6 text-gray-700 space-y-1 text-sm">
+                <li><strong>Bug Reports:</strong> Something isn't working right</li>
+                <li><strong>Improvements:</strong> Make existing features better</li>
+                <li><strong>Design Issues:</strong> UI/UX problems</li>
+                <li><strong>Performance:</strong> Slow or laggy behavior</li>
+                <li><strong>Priority Levels:</strong> Critical, High, Medium, Low</li>
+              </ul>
+              <div className="mt-3 p-3 bg-blue-50 rounded-lg">
+                <p className="text-blue-800 text-xs">
+                  <strong>SuperAdmin Management:</strong> Reply to users, mark as resolved, archive completed issues
+                </p>
+              </div>
+            </div>
+            
+            <div className="border rounded-lg p-4">
+              <h3 className="font-semibold text-gray-800 mb-3">💡 Ideas Submission</h3>
+              <p className="text-sm text-gray-600 mb-3">
+                Users can submit feature ideas organized by application areas.
+              </p>
+              <ul className="list-disc ml-6 text-gray-700 space-y-1 text-sm">
+                <li><strong>Categories:</strong> Dashboard, Planning, Quote Requests, etc.</li>
+                <li><strong>Approval Workflow:</strong> Pending → Approved → Being Implemented</li>
+                <li><strong>Like System:</strong> Users can like approved ideas</li>
+                <li><strong>File Attachments:</strong> Visual examples and documentation</li>
+                <li><strong>Search & Filter:</strong> Find ideas by category, status, date</li>
+              </ul>
+              <div className="mt-3 p-3 bg-green-50 rounded-lg">
+                <p className="text-green-800 text-xs">
+                  <strong>SuperAdmin Management:</strong> Approve/reject ideas, track implementation progress
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+            <h3 className="font-semibold text-yellow-800 mb-2">🔄 Integrated Notification System</h3>
+            <p className="text-gray-700 text-sm mb-2">
+              <strong>Seamless communication:</strong> Users receive notifications when their reports are resolved or ideas are approved/rejected.
+            </p>
+            <div className="grid md:grid-cols-2 gap-4">
+              <div>
+                <h4 className="font-semibold text-gray-800 mb-1">Error Report Notifications:</h4>
+                <ul className="text-xs text-gray-600 space-y-1">
+                  <li>• Report resolved with SuperAdmin response</li>
+                  <li>• Status changes (New → In Progress → Resolved)</li>
+                </ul>
+              </div>
+              <div>
+                <h4 className="font-semibold text-gray-800 mb-1">Ideas Notifications:</h4>
+                <ul className="text-xs text-gray-600 space-y-1">
+                  <li>• Idea approved and visible to all users</li>
+                  <li>• Idea rejected with feedback</li>
+                  <li>• Idea marked as "Being Implemented"</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Technical Details (Collapsible) */}
       <details className="mb-8">
         <summary className="text-xl font-semibold mb-4 text-gray-800 cursor-pointer hover:text-[#e40115]">
@@ -491,6 +565,8 @@ export default function ITOverviewPage() {
                 <li>Notifications: country-targeted, real-time</li>
                 <li>Users: role-based access, country assignments</li>
                 <li>Messages: real-time chat with file attachments</li>
+                <li>Error Reports: user-submitted issues with status tracking</li>
+                <li>Ideas: user-submitted features with approval workflow</li>
               </ul>
             </div>
           </div>

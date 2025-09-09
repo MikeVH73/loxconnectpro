@@ -668,10 +668,10 @@ const useCustomers = () => {
 
 **Core Features**:
 - **Error Reporting**: Users can report bugs, improvements, design issues, and performance problems
-- **Ideas Submission**: Users can submit new feature ideas with voting system
-- **Monthly Voting Points**: All users get 10 points per month to vote on ideas
+- **Ideas Submission**: Users can submit new feature ideas with approval workflow
 - **SuperAdmin Management**: Complete management dashboards for both systems
-- **Separate Notification System**: Distinct notification types that don't interfere with existing system
+- **Notification System**: Integrated with existing notification infrastructure
+- **File Attachments**: Support for attachments in ideas (images, documents)
 
 **Error Report Categories** (Simple Language):
 - **Bug Report**: Something isn't working right
@@ -680,44 +680,65 @@ const useCustomers = () => {
 - **Performance**: App is slow or laggy
 - **Other**: Something else
 
-**Idea Categories** (Simple Language):
-- **Bug Report**: Something isn't working right
-- **Improvement**: Make something better
-- **New Feature**: Add something new
-- **Design Issue**: Looks wrong or confusing
-- **Performance**: App is slow or laggy
+**Idea Categories** (Menu-Based):
+- **Dashboard**: Dashboard-related improvements
+- **Planning**: Planning functionality enhancements
+- **Quote Requests**: Quote request system improvements
+- **Archived**: Archived data management
+- **Customers**: Customer management features
+- **Notifications**: Notification system improvements
+- **Analytics**: Analytics and reporting features
+- **FAQs**: Help and documentation improvements
 
-**Voting System**:
-- **Monthly Points**: All users (including admin/superAdmin) get 10 points per month
-- **Point Distribution**: Users can distribute points across multiple ideas
-- **Automatic Reset**: Points reset monthly (1st of each month)
-- **Ranking**: Ideas ranked by total points received (highest at top)
-- **Status Tracking**: Ideas move through Under Review → Planned → In Development → Implemented
+**Ideas Workflow**:
+- **Submission**: Users submit ideas with title, description, category, and attachments
+- **Approval Process**: New ideas start as "Pending Approval" (only visible to SuperAdmins)
+- **Status Management**: Ideas move through Pending Approval → Approved → Being Implemented → Implemented
+- **Rejection Handling**: SuperAdmins can reject ideas with feedback to users
+- **Like System**: Users can like approved ideas (1 like per user per idea)
 
 **Database Collections**:
 - **errorReports**: User-submitted error reports with status tracking
-- **ideas**: User-submitted ideas with voting and status tracking
-- **userVotes**: Individual user votes with point allocation
-- **monthlyPoints**: Monthly point allocation and usage tracking
+- **ideas**: User-submitted ideas with approval workflow and status tracking
+- **notifications**: Integrated notification system for both error reports and ideas
 
-**SuperAdmin Management**:
-- **Error Reports Dashboard**: Filter by status, priority, user, date, page
-- **Ideas Management Dashboard**: Filter by status, category, votes, date
-- **Response System**: Reply directly to users within the app
-- **Status Management**: Mark as resolved/implemented with notifications to users
-- **Rejection Handling**: Provide reasons when rejecting ideas
+**SuperAdmin Management - Error Reports**:
+- **Status Filtering**: Filter by New, In Progress, Resolved, Closed, Archived
+- **Priority Filtering**: Filter by Critical, High, Medium, Low
+- **Reply & Resolve**: Send responses to users with automatic notifications
+- **Archive Functionality**: Move resolved issues to archived status
+- **Status Management**: Change status with proper tracking
+- **User Context**: See who submitted each report
+
+**SuperAdmin Management - Ideas**:
+- **Approval System**: Approve or reject new ideas with feedback
+- **Status Management**: Move ideas through workflow stages
+- **Implementation Tracking**: Mark ideas as "Being Implemented"
+- **Delete/Archive**: Archive rejected ideas
+- **Category Management**: Ideas categorized by main menu items
+- **Like Count Display**: Show like counts prominently
+- **Kanban Layout**: Visual organization with "Ideas" and "Being Implemented" columns
 
 **Notification Types**:
-- **error_report**: New error reports (to superAdmins)
-- **new_idea**: New ideas submitted (to superAdmins)
 - **error_resolved**: Error report resolved (to user)
-- **idea_response**: Idea status changed (to user)
-- **idea_implemented**: Idea implemented (to all users)
+- **idea_approved**: Idea approved (to submitter)
+- **idea_rejected**: Idea rejected (to submitter)
+- **idea_implemented**: Idea implemented (to submitter)
+- **new_idea**: New idea submitted (to SuperAdmins)
 
 **Authorization Rules**:
-- **All Users**: Can submit error reports and ideas, vote on ideas
+- **All Users**: Can submit error reports and ideas, like approved ideas
 - **SuperAdmin**: Full management access to both systems
-- **Admin**: Standard user permissions (can vote and submit)
+- **Admin**: Standard user permissions (can submit and like)
+
+**UI Features**:
+- **Search & Filter**: Search ideas by title, description, or submitter
+- **Category Filtering**: Filter by menu-based categories
+- **Status Filtering**: Filter by approval status
+- **Date Filtering**: Filter by submission time period
+- **Compact Design**: Numbered idea cards with like counts
+- **Attachment Support**: File uploads with preview and download
+- **Responsive Layout**: Full-width design with proper spacing
 
 ## 🔑 **CRITICAL REMINDERS**
 
