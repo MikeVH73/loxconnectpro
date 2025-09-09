@@ -344,10 +344,10 @@ export default function DashboardPage() {
 
     if (qr.status === "Snoozed" || hasSnoozeLabel) {
       snoozed.push(qr);
-    } else if (hasUrgentLabel || hasProblemsLabel) {
-      urgentProblems.push(qr);
     } else if (hasWaitingLabel) {
       waiting.push(qr);
+    } else if (hasUrgentLabel || hasProblemsLabel) {
+      urgentProblems.push(qr);
     } else {
       standard.push(qr);
     }
