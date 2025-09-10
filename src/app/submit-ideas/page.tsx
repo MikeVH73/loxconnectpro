@@ -12,7 +12,7 @@ interface LocalIdea {
   userRole: string;
   title: string;
   description: string;
-  category: 'Dashboard' | 'Planning' | 'Quote Requests' | 'Archived' | 'Customers' | 'Notifications' | 'Analytics' | 'FAQs';
+  category: 'Dashboard' | 'Planning' | 'Quote Requests' | 'Archived' | 'Customers' | 'Products' | 'Notifications' | 'Analytics' | 'FAQs' | 'Other';
   status: 'Pending Approval' | 'Approved' | 'Being Implemented' | 'Rejected' | 'Archived';
   likeCount?: number;
   createdAt: Date;
@@ -297,11 +297,18 @@ export default function SubmitIdeasPage() {
         description: formData.description,
         category: formData.category,
         status: 'Pending Approval',
-        likeCount: 0,
+        likeCount: 1, // Start with 1 like (from the creator)
         createdAt: new Date()
       };
 
       const docRef = await addDoc(collection(db!, 'ideas'), ideaData);
+      
+      // Create automatic like for the creator
+      await addDoc(collection(db!, 'ideaLikes'), {
+        userId: userProfile.id,
+        ideaId: docRef.id,
+        createdAt: new Date()
+      });
       
       // Create notification for all superAdmins about new idea
       const superAdminsQuery = query(
@@ -621,7 +628,7 @@ export default function SubmitIdeasPage() {
         
       default:
         // If it's already a new category, return as-is
-        if (['Dashboard', 'Planning', 'Quote Requests', 'Archived', 'Customers', 'Notifications', 'Analytics', 'FAQs'].includes(legacyCategory)) {
+        if (['Dashboard', 'Planning', 'Quote Requests', 'Archived', 'Customers', 'Products', 'Notifications', 'Analytics', 'FAQs', 'Other'].includes(legacyCategory)) {
           return legacyCategory;
         }
         return 'Dashboard'; // Default fallback
@@ -636,9 +643,11 @@ export default function SubmitIdeasPage() {
       case 'Quote Requests': return 'bg-green-100 text-green-800';
       case 'Archived': return 'bg-gray-100 text-gray-800';
       case 'Customers': return 'bg-orange-100 text-orange-800';
+      case 'Products': return 'bg-teal-100 text-teal-800';
       case 'Notifications': return 'bg-yellow-100 text-yellow-800';
       case 'Analytics': return 'bg-indigo-100 text-indigo-800';
       case 'FAQs': return 'bg-pink-100 text-pink-800';
+      case 'Other': return 'bg-slate-100 text-slate-800';
       
       default: return 'bg-gray-100 text-gray-800';
     }
@@ -722,9 +731,11 @@ export default function SubmitIdeasPage() {
                 <option value="Quote Requests">Quote Requests</option>
                 <option value="Archived">Archived</option>
                 <option value="Customers">Customers</option>
+                <option value="Products">Products</option>
                 <option value="Notifications">Notifications</option>
                 <option value="Analytics">Analytics</option>
                 <option value="FAQs">FAQs</option>
+                <option value="Other">Other...</option>
               </select>
             </div>
             
@@ -798,9 +809,11 @@ export default function SubmitIdeasPage() {
                   <option value="Quote Requests">Quote Requests</option>
                   <option value="Archived">Archived</option>
                   <option value="Customers">Customers</option>
+                  <option value="Products">Products</option>
                   <option value="Notifications">Notifications</option>
                   <option value="Analytics">Analytics</option>
                   <option value="FAQs">FAQs</option>
+                  <option value="Other">Other...</option>
                 </select>
               </div>
 
