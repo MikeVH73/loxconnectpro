@@ -163,19 +163,22 @@ export default function SubmitIdeasPage() {
     );
 
     const unsubscribe = onSnapshot(likesQuery, (snapshot) => {
-      const likedIdeas = snapshot.docs.map(doc => doc.data().ideaId);
+      const likedIdeas = snapshot.docs
+        .filter(doc => !doc.data().deleted) // Filter out deleted likes
+        .map(doc => doc.data().ideaId);
       setUserLikes(likedIdeas);
     });
 
     return () => unsubscribe();
   }, [userProfile]);
 
-  // Clean up any existing negative like counts (one-time fix)
+  // Clean up any existing negative like counts and fix like counts (one-time fix)
   useEffect(() => {
     if (!db || !userProfile || userProfile.role !== 'superAdmin') return;
 
-    const fixNegativeLikes = async () => {
+    const fixLikeSystem = async () => {
       try {
+        // Fix negative like counts
         const ideasSnapshot = await getDocs(collection(db!, 'ideas'));
         const batch = writeBatch(db!);
         let hasUpdates = false;
@@ -189,16 +192,38 @@ export default function SubmitIdeasPage() {
           }
         });
 
+        // Fix like counts by counting actual like documents
+        for (const ideaDoc of ideasSnapshot.docs) {
+          const ideaId = ideaDoc.id;
+          const ideaData = ideaDoc.data();
+          
+          // Count actual likes for this idea
+          const likesQuery = query(
+            collection(db!, 'ideaLikes'),
+            where('ideaId', '==', ideaId),
+            where('deleted', '!=', true)
+          );
+          const likesSnapshot = await getDocs(likesQuery);
+          const actualLikeCount = likesSnapshot.size;
+          
+          // Update if count doesn't match
+          if (ideaData.likeCount !== actualLikeCount) {
+            batch.update(ideaDoc.ref, { likeCount: actualLikeCount });
+            hasUpdates = true;
+            console.log(`Fixed like count for idea ${ideaId}: ${ideaData.likeCount} → ${actualLikeCount}`);
+          }
+        }
+
         if (hasUpdates) {
           await batch.commit();
-          console.log('Fixed all negative like counts');
+          console.log('Fixed all like counts');
         }
       } catch (error) {
-        console.error('Error fixing negative like counts:', error);
+        console.error('Error fixing like system:', error);
       }
     };
 
-    fixNegativeLikes();
+    fixLikeSystem();
   }, [db, userProfile]);
 
   // Load user's idea notifications
@@ -228,47 +253,28 @@ export default function SubmitIdeasPage() {
   const handleLikeIdea = async (ideaId: string) => {
     if (!db || !userProfile) return;
 
+    // Check if user has already liked this idea
     const isLiked = userLikes.includes(ideaId);
     
+    // If already liked, do nothing (prevent multiple likes)
+    if (isLiked) {
+      return;
+    }
+    
     try {
-      if (isLiked) {
-        // Unlike: find and delete the like document
-        const likesQuery = query(
-          collection(db!, 'ideaLikes'),
-          where('userId', '==', userProfile.id),
-          where('ideaId', '==', ideaId)
-        );
-        const likesSnapshot = await getDocs(likesQuery);
-        if (!likesSnapshot.empty) {
-          await updateDoc(doc(db, 'ideaLikes', likesSnapshot.docs[0].id), {
-            deleted: true,
-            deletedAt: new Date()
-          });
-        }
-        
-        // Update idea like count (ensure it never goes below 0)
-        const idea = ideas.find(i => i.id === ideaId);
-        if (idea) {
-          const newLikeCount = Math.max(0, (idea.likeCount || 0) - 1);
-          await updateDoc(doc(db, 'ideas', ideaId), {
-            likeCount: newLikeCount
-          });
-        }
-      } else {
-        // Like: create new like document
-        await addDoc(collection(db!, 'ideaLikes'), {
-          userId: userProfile.id,
-          ideaId: ideaId,
-          createdAt: new Date()
+      // Create new like document
+      await addDoc(collection(db!, 'ideaLikes'), {
+        userId: userProfile.id,
+        ideaId: ideaId,
+        createdAt: new Date()
+      });
+      
+      // Update idea like count
+      const idea = ideas.find(i => i.id === ideaId);
+      if (idea) {
+        await updateDoc(doc(db, 'ideas', ideaId), {
+          likeCount: (idea.likeCount || 0) + 1
         });
-        
-        // Update idea like count
-        const idea = ideas.find(i => i.id === ideaId);
-        if (idea) {
-          await updateDoc(doc(db, 'ideas', ideaId), {
-            likeCount: (idea.likeCount || 0) + 1
-          });
-        }
       }
     } catch (error) {
       console.error('Error liking idea:', error);
@@ -1008,9 +1014,14 @@ export default function SubmitIdeasPage() {
                         <div className="flex items-center space-x-2">
                           <button
                             onClick={() => handleLikeIdea(idea.id)}
-                            className="flex items-center space-x-1 bg-red-50 hover:bg-red-100 text-red-600 px-3 py-1 rounded-full text-sm font-medium transition-colors"
+                            disabled={userLikes.includes(idea.id)}
+                            className={`flex items-center space-x-1 px-3 py-1 rounded-full text-sm font-medium transition-colors ${
+                              userLikes.includes(idea.id)
+                                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                : 'bg-red-50 hover:bg-red-100 text-red-600'
+                            }`}
                           >
-                            <span>❤️</span>
+                            <span>{userLikes.includes(idea.id) ? '❤️' : '🤍'}</span>
                             <span>{Math.max(0, idea.likeCount || 0)} likes</span>
                           </button>
                         </div>
