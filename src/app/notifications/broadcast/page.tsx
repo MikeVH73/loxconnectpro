@@ -18,47 +18,37 @@ export default function BroadcastNotificationsPage() {
     const load = async () => {
       if (!db) return;
       
-      // Try both approaches and use the one with more countries
+      // Get unique countries from actual users (most reliable method)
       const usersSnap = await getDocs(collection(db as Firestore, "users"));
-      const countriesSnap = await getDocs(collection(db as Firestore, "countries"));
+      const countries = new Set<string>();
       
-      // Method 1: From users collection
-      const userCountries = new Set<string>();
       usersSnap.docs.forEach(doc => {
         const userData = doc.data() as any;
         
         // Add businessUnit if it exists
         if (userData.businessUnit && typeof userData.businessUnit === 'string') {
-          userCountries.add(userData.businessUnit);
+          countries.add(userData.businessUnit);
         }
         
         // Add all countries from countries array
         if (Array.isArray(userData.countries)) {
           userData.countries.forEach((country: any) => {
             if (country && typeof country === 'string') {
-              userCountries.add(country);
+              countries.add(country);
             }
           });
         }
       });
       
-      // Method 2: From countries collection
-      const countriesFromCollection = countriesSnap.docs.map(d => (d.data() as any).name).filter(Boolean) as string[];
+      const uniqueCountries = Array.from(countries).sort();
       
-      // Use the method that gives us more countries (likely countries collection)
-      const finalCountries = countriesFromCollection.length > userCountries.size 
-        ? countriesFromCollection 
-        : Array.from(userCountries);
-      
-      console.log('Broadcast countries debug:', {
-        userCountries: Array.from(userCountries),
-        countriesFromCollection,
-        finalCountries,
-        userCount: userCountries.size,
-        collectionCount: countriesFromCollection.length
+      console.log('Broadcast countries calculation:', {
+        totalUsers: usersSnap.docs.length,
+        uniqueCountries: uniqueCountries.length,
+        countries: uniqueCountries
       });
       
-      setAllCountries(finalCountries.sort());
+      setAllCountries(uniqueCountries);
     };
     load();
   }, []);
@@ -70,7 +60,7 @@ export default function BroadcastNotificationsPage() {
   const handleSend = async () => {
     if (!db) return;
     if (!title.trim() && !message.trim()) return;
-    if (!confirm("Send this broadcast to all countries?")) return;
+    if (!confirm(`Send this broadcast to all active users across ${allCountries.length} countries?`)) return;
 
     try {
       setSending(true);
@@ -79,14 +69,14 @@ export default function BroadcastNotificationsPage() {
         title, message, link, severity, createdAt: serverTimestamp(), senderRole: userProfile?.role, sender: userProfile?.email || "superAdmin"
       });
 
-      // Create one notification per country
+      // Create one notification per country to ensure all users receive it
       const notificationsRef = collection(db as Firestore, "notifications");
-      const promises = allCountries.map(c => addDoc(notificationsRef, {
+      const promises = allCountries.map(country => addDoc(notificationsRef, {
         quoteRequestId: null,
         quoteRequestTitle: null,
         sender: userProfile?.email || "superAdmin",
         senderCountry: userProfile?.businessUnit || "Global",
-        targetCountry: c,
+        targetCountry: country,
         content: `${title ? title + " — " : ""}${message}`.slice(0, 2000),
         link: link || null,
         severity,
@@ -95,7 +85,7 @@ export default function BroadcastNotificationsPage() {
         isRead: false,
       }));
       await Promise.all(promises);
-      alert("Broadcast sent to all countries.");
+      alert(`Broadcast sent successfully to all active users across ${allCountries.length} countries.`);
       setTitle(""); setMessage(""); setLink(""); setSeverity("info");
     } catch (e) {
       console.error(e);
@@ -133,7 +123,7 @@ export default function BroadcastNotificationsPage() {
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">Recipients</label>
-            <div className="text-sm text-gray-600">All countries ({allCountries.length})</div>
+            <div className="text-sm text-gray-600">All active users across all countries</div>
           </div>
         </div>
         <div className="flex justify-end">
