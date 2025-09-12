@@ -683,7 +683,7 @@ export default function SubmitIdeasPage() {
       <div className="w-full px-4 py-8">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Submit Ideas</h1>
-          <p className="text-gray-600">Share your ideas to improve LoxConnect PRO. Ideas are reviewed by superAdmins before being visible to all users.</p>
+          <p className="text-gray-600">Share your ideas to improve LoxCall PRO. Ideas are reviewed by superAdmins before being visible to all users.</p>
         </div>
 
         {/* Submit Button */}

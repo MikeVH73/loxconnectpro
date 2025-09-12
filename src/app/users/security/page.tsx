@@ -31,7 +31,7 @@ export default function SecurityPage() {
     }
   }, [user]);
 
-  const issuer = "LoxConnect PRO";
+  const issuer = "LoxCall PRO";
   const accountName = user?.email || "user@loxconnect";
 
   // Build otpauth URI from secret; fall back to provided uri if present

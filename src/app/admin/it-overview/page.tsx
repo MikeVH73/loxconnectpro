@@ -17,20 +17,20 @@ export default function ITOverviewPage() {
 
   return (
     <div className="p-8 max-w-6xl">
-      <h1 className="text-3xl font-bold text-[#e40115] mb-6">LoxConnect PRO – Complete System Overview</h1>
+      <h1 className="text-3xl font-bold text-[#e40115] mb-6">LoxCall PRO – Complete System Overview</h1>
       
       <div className="bg-blue-50 border-l-4 border-blue-400 p-4 mb-8">
         <p className="text-blue-800">
-          <strong>For Business Leaders:</strong> This page explains what LoxConnect PRO does, how it's built, and why it's secure and reliable for your business operations.
+          <strong>For Business Leaders:</strong> This page explains what LoxCall PRO does, how it's built, and why it's secure and reliable for your business operations.
         </p>
       </div>
 
-      {/* What LoxConnect PRO Does */}
+      {/* What LoxCall PRO Does */}
       <section className="mb-8">
-        <h2 className="text-2xl font-semibold mb-4 text-gray-800">🎯 What LoxConnect PRO Does</h2>
+        <h2 className="text-2xl font-semibold mb-4 text-gray-800">🎯 What LoxCall PRO Does</h2>
         <div className="bg-white border rounded-lg p-6 shadow-sm">
           <p className="text-gray-700 mb-4">
-            <strong>LoxConnect PRO is your centralized platform for managing equipment rental quotes across all countries.</strong>
+            <strong>LoxCall PRO is your centralized platform for managing equipment rental quotes across all countries.</strong>
           </p>
           <div className="grid md:grid-cols-2 gap-6">
             <div>
@@ -96,7 +96,7 @@ export default function ITOverviewPage() {
         <div className="bg-white border rounded-lg p-6 shadow-sm">
           <div className="mb-6">
             <p className="text-gray-700 mb-4">
-              <strong>LoxConnect PRO works with ANY ERP system - no integration required!</strong>
+              <strong>LoxCall PRO works with ANY ERP system - no integration required!</strong>
             </p>
             <p className="text-gray-600 text-sm mb-4">
               Each Business Unit can use their own ERP system without any technical dependencies or API connections.
@@ -130,9 +130,9 @@ export default function ITOverviewPage() {
                 </div>
               </div>
               
-              {/* Right Side - LoxConnect PRO */}
+              {/* Right Side - LoxCall PRO */}
               <div className="flex flex-col">
-                <h4 className="font-semibold text-gray-700 mb-3 text-center">LoxConnect PRO</h4>
+                <h4 className="font-semibold text-gray-700 mb-3 text-center">LoxCall PRO</h4>
                 <div className="bg-red-50 border-2 border-red-200 rounded-lg p-4 text-center flex-1 flex flex-col justify-center">
                   <div className="font-semibold text-red-800 text-lg mb-2">🔒 CLOSED SYSTEM</div>
                   <div className="text-sm text-red-600 mb-3">No External Dependencies</div>

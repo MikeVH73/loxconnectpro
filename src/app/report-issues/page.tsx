@@ -213,7 +213,7 @@ export default function ReportIssuesPage() {
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-3xl font-bold text-[#e40115] mb-2">Report Issues</h1>
-          <p className="text-gray-600">Help us improve LoxConnect PRO by reporting bugs, improvements, or other issues.</p>
+          <p className="text-gray-600">Help us improve LoxCall PRO by reporting bugs, improvements, or other issues.</p>
         </div>
         <button
           onClick={() => setShowForm(!showForm)}

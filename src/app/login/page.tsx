@@ -126,7 +126,7 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-gray-100">
       {!mfaResolver ? (
         <form onSubmit={handleSubmit} className="bg-white p-8 rounded-lg shadow-md w-full max-w-md">
-          <h1 className="text-2xl font-bold mb-6 text-center text-[#e40115]">LoxConnect PRO Login</h1>
+          <h1 className="text-2xl font-bold mb-6 text-center text-[#e40115]">LoxCall PRO Login</h1>
           <div className="mb-4">
             <label className="block mb-1 font-medium">Email</label>
             <input

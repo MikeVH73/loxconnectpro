@@ -65,7 +65,7 @@ export default function EmailVerifiedPage() {
             </div>
             <h1 className="text-2xl font-semibold text-gray-900 mb-4">Email Verified Successfully!</h1>
             <p className="text-gray-600 mb-6">
-              Your email address has been verified. You can now access all features of LoxConnect PRO.
+              Your email address has been verified. You can now access all features of LoxCall PRO.
             </p>
             <div className="space-y-3">
               <p className="text-sm text-gray-500">

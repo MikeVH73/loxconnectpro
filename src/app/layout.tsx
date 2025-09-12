@@ -23,7 +23,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "LoxConnect Pro",
+  title: "LoxCall Pro",
   description: "International quote request management system with real-time messaging",
 };
 

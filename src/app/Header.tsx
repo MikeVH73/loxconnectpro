@@ -7,7 +7,7 @@ export default function Header() {
   return (
     <div className="flex items-center justify-between px-6 py-3 bg-white border-b">
       <div className="flex items-center space-x-4">
-        <h1 className="text-[#e40115] font-bold text-lg">LoxConnect PRO</h1>
+        <h1 className="text-[#e40115] font-bold text-lg">LoxCall PRO</h1>
       </div>
       <div className="flex items-center space-x-6">
         <div className="flex items-center space-x-2">

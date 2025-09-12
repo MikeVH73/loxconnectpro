@@ -1219,7 +1219,7 @@ export default function UsersPage() {
                                     if (!res.ok) throw new Error(data?.error || 'Failed');
                                     const url: string = data?.securityUrl || '';
                                     const verify: string | undefined = data?.verificationLink;
-                                    const message = `Hi ${userData.displayName || ''},\n\nTo enable two‑step verification for your account:\n1) Sign in to LoxConnect PRO with your own account.\n2) Open: ${url}\n3) Click \"Enroll Authenticator App\" and follow the steps.\n\n${verify ? `If your email isn’t verified yet, verify here first:\n${verify}\n\n` : ''}If you already verified a moment ago but still see a message about verification, sign out and sign in again, then try step 2.\n`;
+                                    const message = `Hi ${userData.displayName || ''},\n\nTo enable two‑step verification for your account:\n1) Sign in to LoxCall PRO with your own account.\n2) Open: ${url}\n3) Click \"Enroll Authenticator App\" and follow the steps.\n\n${verify ? `If your email isn't verified yet, verify here first:\n${verify}\n\n` : ''}If you already verified a moment ago but still see a message about verification, sign out and sign in again, then try step 2.\n`;
                                     window.prompt('Copy and send this message to the user', message);
                                   } catch (e: any) {
                                     alert(e?.message || 'Failed to send MFA reminder');
