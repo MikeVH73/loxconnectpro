@@ -17,9 +17,20 @@ export default function BroadcastNotificationsPage() {
   useEffect(() => {
     const load = async () => {
       if (!db) return;
-      const countriesSnap = await getDocs(collection(db as Firestore, "countries"));
-      const countries = countriesSnap.docs.map(d => (d.data() as any).name).filter(Boolean) as string[];
-      setAllCountries(countries);
+      // Get unique countries from actual users instead of countries collection
+      const usersSnap = await getDocs(collection(db as Firestore, "users"));
+      const countries = new Set<string>();
+      
+      usersSnap.docs.forEach(doc => {
+        const userData = doc.data() as any;
+        // Get country from businessUnit or first country in countries array
+        const country = userData.businessUnit || userData.countries?.[0];
+        if (country && typeof country === 'string') {
+          countries.add(country);
+        }
+      });
+      
+      setAllCountries(Array.from(countries).sort());
     };
     load();
   }, []);
