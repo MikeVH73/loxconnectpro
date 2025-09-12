@@ -23,10 +23,19 @@ export default function BroadcastNotificationsPage() {
       
       usersSnap.docs.forEach(doc => {
         const userData = doc.data() as any;
-        // Get country from businessUnit or first country in countries array
-        const country = userData.businessUnit || userData.countries?.[0];
-        if (country && typeof country === 'string') {
-          countries.add(country);
+        
+        // Add businessUnit if it exists
+        if (userData.businessUnit && typeof userData.businessUnit === 'string') {
+          countries.add(userData.businessUnit);
+        }
+        
+        // Add all countries from countries array
+        if (Array.isArray(userData.countries)) {
+          userData.countries.forEach((country: any) => {
+            if (country && typeof country === 'string') {
+              countries.add(country);
+            }
+          });
         }
       });
       
