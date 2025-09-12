@@ -17,29 +17,48 @@ export default function BroadcastNotificationsPage() {
   useEffect(() => {
     const load = async () => {
       if (!db) return;
-      // Get unique countries from actual users instead of countries collection
-      const usersSnap = await getDocs(collection(db as Firestore, "users"));
-      const countries = new Set<string>();
       
+      // Try both approaches and use the one with more countries
+      const usersSnap = await getDocs(collection(db as Firestore, "users"));
+      const countriesSnap = await getDocs(collection(db as Firestore, "countries"));
+      
+      // Method 1: From users collection
+      const userCountries = new Set<string>();
       usersSnap.docs.forEach(doc => {
         const userData = doc.data() as any;
         
         // Add businessUnit if it exists
         if (userData.businessUnit && typeof userData.businessUnit === 'string') {
-          countries.add(userData.businessUnit);
+          userCountries.add(userData.businessUnit);
         }
         
         // Add all countries from countries array
         if (Array.isArray(userData.countries)) {
           userData.countries.forEach((country: any) => {
             if (country && typeof country === 'string') {
-              countries.add(country);
+              userCountries.add(country);
             }
           });
         }
       });
       
-      setAllCountries(Array.from(countries).sort());
+      // Method 2: From countries collection
+      const countriesFromCollection = countriesSnap.docs.map(d => (d.data() as any).name).filter(Boolean) as string[];
+      
+      // Use the method that gives us more countries (likely countries collection)
+      const finalCountries = countriesFromCollection.length > userCountries.size 
+        ? countriesFromCollection 
+        : Array.from(userCountries);
+      
+      console.log('Broadcast countries debug:', {
+        userCountries: Array.from(userCountries),
+        countriesFromCollection,
+        finalCountries,
+        userCount: userCountries.size,
+        collectionCount: countriesFromCollection.length
+      });
+      
+      setAllCountries(finalCountries.sort());
     };
     load();
   }, []);
