@@ -5,6 +5,7 @@ import { db } from "../../firebaseClient";
 import { useAuth } from "../AuthProvider";
 import dynamic from "next/dynamic";
 import ComparisonBlock from "./ComparisonBlock";
+import * as XLSX from 'xlsx';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -213,6 +214,178 @@ export default function AnalyticsPage() {
     return ['all', ...list.map(c => c.id)];
   }, [customers, customerSearch]);
   const customerLabel = (id: string) => id === 'all' ? 'customer: all' : (customers.find(c => c.id === id)?.name || id);
+
+  // Excel export function
+  const handleExportToExcel = () => {
+    const workbook = XLSX.utils.book_new();
+    
+    // Helper function to format dates
+    const formatDate = (date: any): string => {
+      const parsed = parseDateValue(date);
+      return parsed ? parsed.toLocaleDateString() : 'Unknown';
+    };
+    
+    // Helper function to get customer name
+    const getCustomerName = (qr: QuoteRequest): string => {
+      if (qr.customer) {
+        const foundCustomer = customers.find(c => c.id === qr.customer);
+        if (foundCustomer) return foundCustomer.name;
+        return `Unknown Customer (ID: ${qr.customer})`;
+      }
+      return (qr as any).customerName || 'No Customer Assigned';
+    };
+
+    // 1. Summary Sheet
+    const summaryData = [
+      ['Analytics Export Summary'],
+      ['Generated on:', new Date().toLocaleString()],
+      ['Year:', year],
+      ['Creator Countries:', filterCreator.length === 0 || filterCreator.includes('all') ? 'All' : filterCreator.join(', ')],
+      ['Involved Countries:', filterInvolved.length === 0 || filterInvolved.includes('all') ? 'All' : filterInvolved.join(', ')],
+      ['Customers:', filterCustomers.length === 0 || filterCustomers.includes('all') ? 'All' : filterCustomers.map(id => customerLabel(id)).join(', ')],
+      [''],
+      ['KPI Summary'],
+      ['Won Count:', totals.won],
+      ['Won EUR:', totals.totalWonEUR],
+      ['Lost Count:', totals.lost],
+      ['Lost EUR:', totals.totalLostEUR],
+      ['Cancelled Count:', totals.cancelled],
+      ['Cancelled EUR:', totals.totalCancelledEUR],
+      ['In Progress Count:', totals.inProgress],
+      ['In Progress EUR:', totals.totalInProgressEUR],
+      ['New Count:', totals.newCount],
+      ['New EUR:', totals.totalNewEUR],
+      [''],
+      ['Conversion Funnel'],
+      ['Total Created:', funnel.created],
+      ['Won:', funnel.won],
+      ['Conversion Rate:', `${funnel.conversion}%`],
+      ['Average Days to Win:', funnel.avgDaysToWin || 'N/A'],
+      ['Total Won EUR:', funnel.wonEUR]
+    ];
+    
+    const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
+    XLSX.utils.book_append_sheet(workbook, summarySheet, 'Summary');
+
+    // 2. Quote Requests Detail Sheet
+    const quoteRequestsData = [
+      ['ID', 'Title', 'Status', 'Creator Country', 'Involved Country', 'Customer', 'Customer Name', 'Start Date', 'End Date', 'Total Value EUR', 'Created Date', 'Updated Date']
+    ];
+    
+    filtered.forEach(qr => {
+      quoteRequestsData.push([
+        qr.id,
+        qr.title || '',
+        qr.status || '',
+        qr.creatorCountry || '',
+        qr.involvedCountry || '',
+        qr.customer || '',
+        getCustomerName(qr),
+        formatDate(qr.startDate),
+        formatDate(qr.endDate),
+        qr.totalValueEUR || 0,
+        formatDate(qr.createdAt),
+        formatDate((qr as any).updatedAt)
+      ]);
+    });
+    
+    const quoteRequestsSheet = XLSX.utils.aoa_to_sheet(quoteRequestsData);
+    XLSX.utils.book_append_sheet(workbook, quoteRequestsSheet, 'Quote Requests');
+
+    // 3. Monthly Data Sheet
+    const monthlyData = [
+      ['Month', 'Won', 'Lost', 'Cancelled', 'In Progress', 'New']
+    ];
+    
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    monthNames.forEach((month, index) => {
+      monthlyData.push([
+        month,
+        monthly.won[index],
+        monthly.lost[index],
+        monthly.cancelled[index],
+        monthly.inProgress[index],
+        monthly.newly[index]
+      ]);
+    });
+    
+    const monthlySheet = XLSX.utils.aoa_to_sheet(monthlyData);
+    XLSX.utils.book_append_sheet(workbook, monthlySheet, 'Monthly Data');
+
+    // 4. Top Customers Sheet
+    const customersData = [
+      ['Customer Name', 'Won EUR', 'Share %', 'Customer ID']
+    ];
+    
+    topCustomers.rows.forEach(customer => {
+      customersData.push([
+        customer.name,
+        customer.wonEUR,
+        customer.share.toFixed(2),
+        customer.id
+      ]);
+    });
+    
+    const customersSheet = XLSX.utils.aoa_to_sheet(customersData);
+    XLSX.utils.book_append_sheet(workbook, customersSheet, 'Top Customers');
+
+    // 5. Country Pairs Sheet
+    const pairsData = [
+      ['Creator Country', 'Involved Country', 'Total Created', 'Won', 'Lost', 'Cancelled', 'In Progress', 'New', 'Won EUR', 'Lost EUR', 'Cancelled EUR', 'Conversion %']
+    ];
+    
+    pairRows.forEach(pair => {
+      const conversion = pair.total > 0 ? Math.round((pair.won / pair.total) * 100) : 0;
+      pairsData.push([
+        pair.creator,
+        pair.involved,
+        pair.total,
+        pair.won,
+        pair.lost,
+        pair.cancelled,
+        pair.inProgress,
+        pair.newly,
+        pair.wonEUR,
+        pair.lostEUR,
+        pair.cancelledEUR,
+        conversion
+      ]);
+    });
+    
+    const pairsSheet = XLSX.utils.aoa_to_sheet(pairsData);
+    XLSX.utils.book_append_sheet(workbook, pairsSheet, 'Country Pairs');
+
+    // 6. Conversion Funnel by Country Pairs Sheet
+    const funnelData = [
+      ['Country Pair', 'Created', 'Won', 'Lost', 'Cancelled', 'In Progress', 'New', 'Conversion %']
+    ];
+    
+    pairFunnel.forEach(funnel => {
+      const conversion = funnel.created > 0 ? Math.round((funnel.won / funnel.created) * 100) : 0;
+      funnelData.push([
+        funnel.label,
+        funnel.created,
+        funnel.won,
+        funnel.lost,
+        funnel.cancelled,
+        funnel.inProgress,
+        funnel.newly,
+        conversion
+      ]);
+    });
+    
+    const funnelSheet = XLSX.utils.aoa_to_sheet(funnelData);
+    XLSX.utils.book_append_sheet(workbook, funnelSheet, 'Conversion Funnel');
+
+    // Generate filename with current filters
+    const creatorFilter = filterCreator.length === 0 || filterCreator.includes('all') ? 'All' : filterCreator.join('-');
+    const involvedFilter = filterInvolved.length === 0 || filterInvolved.includes('all') ? 'All' : filterInvolved.join('-');
+    const customerFilter = filterCustomers.length === 0 || filterCustomers.includes('all') ? 'All' : 'Filtered';
+    const filename = `Analytics_${year}_${creatorFilter}_${involvedFilter}_${customerFilter}_${new Date().toISOString().split('T')[0]}.xlsx`;
+
+    // Download the file
+    XLSX.writeFile(workbook, filename);
+  };
 
   // Monthly bar data (counts per month by status)
   const monthly = useMemo(() => {
@@ -456,6 +629,13 @@ export default function AnalyticsPage() {
             title="Clear selected filters"
           >
             Clear
+          </button>
+          <button
+            onClick={handleExportToExcel}
+            className="px-4 py-2 bg-[#e40115] text-white rounded hover:bg-red-700 flex items-center gap-2"
+            title="Export current analytics data to Excel"
+          >
+            📊 Export to Excel
           </button>
       </div>
 
