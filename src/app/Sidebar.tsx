@@ -5,7 +5,7 @@ import { useAuth } from "./AuthProvider";
 import Image from "next/image";
 import NotificationBadge from "./components/NotificationBadge";
 import { useState, useEffect } from "react";
-import { FiChevronDown, FiChevronRight, FiTag, FiGlobe, FiUsers, FiSearch, FiSpeaker, FiEdit3, FiBell, FiMonitor } from "react-icons/fi";
+import { FiChevronDown, FiChevronRight, FiTag, FiGlobe, FiUsers, FiSearch, FiSpeaker, FiEdit3, FiBell, FiMonitor, FiMapPin } from "react-icons/fi";
 
 const navItems = [
   { label: "Dashboard", href: "/dashboard" },
@@ -13,6 +13,7 @@ const navItems = [
   { label: "Quote Requests", href: "/quote-requests" },
   { label: "Archived", href: "/archived" },
   { label: "Customers", href: "/customers" },
+  { label: "Jobsites", href: "/jobsites" },
   { label: "Products", href: "/products" },
   { label: "Notifications", href: "/notifications" },
   { label: "Analytics", href: "/analytics" },

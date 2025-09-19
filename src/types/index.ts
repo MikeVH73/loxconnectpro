@@ -69,6 +69,25 @@ export interface Customer {
   countries?: string[];
 }
 
+export interface CustomerJobsite {
+  id: string;
+  customerId: string;        // Links to customers collection
+  customerName: string;     // Denormalized for easy display
+  jobsiteName: string;      // e.g., "Main Construction Site", "Warehouse Location"
+  address: string;
+  latitude: number;
+  longitude: number;
+  contact: {
+    name: string;
+    phone: string;
+  };
+  isActive: boolean;        // Soft delete
+  createdBy: string;        // User email
+  createdByRole: string;     // User role
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 // NEW FEATURES - Error Reports & Ideas System
 
 export interface ErrorReport {

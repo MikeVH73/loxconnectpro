@@ -30,6 +30,7 @@ import { moveFilesToQuoteRequest } from "../../utils/fileUtils";
 import { useMessages } from '@/app/hooks/useMessages';
 import { debounce } from "lodash";
 import { useCustomers } from "../../hooks/useCustomers";
+import { useJobsites } from "../../hooks/useJobsites";
 import { getProductByCode, normalizeCode } from "../../utils/products";
 
 // Type definitions
@@ -83,6 +84,7 @@ const NewQuoteRequestPage = () => {
   const router = useRouter();
   const { userProfile, user } = useAuth();
   const { customers } = useCustomers();
+  const { jobsites, loading: jobsitesLoading, createJobsite } = useJobsites(customerId);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -100,6 +102,16 @@ const NewQuoteRequestPage = () => {
   ]);
   const [jobsiteAddress, setJobsiteAddress] = useState("");
   const [jobsiteCoords, setJobsiteCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [selectedJobsiteId, setSelectedJobsiteId] = useState("");
+  const [showJobsiteModal, setShowJobsiteModal] = useState(false);
+  const [newJobsite, setNewJobsite] = useState({
+    jobsiteName: '',
+    address: '',
+    latitude: 0,
+    longitude: 0,
+    contactName: '',
+    contactPhone: ''
+  });
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [customerDecidesEnd, setCustomerDecidesEnd] = useState(false);
@@ -156,11 +168,81 @@ const NewQuoteRequestPage = () => {
     }
   }, [customerId, involvedCountry, customerDetails]);
 
+  // Handle jobsite selection
+  const handleJobsiteChange = (jobsiteId: string) => {
+    if (jobsiteId === 'new') {
+      setShowJobsiteModal(true);
+      return;
+    }
+    
+    setSelectedJobsiteId(jobsiteId);
+    const selectedJobsite = jobsites.find(j => j.id === jobsiteId);
+    if (selectedJobsite) {
+      setJobsiteAddress(selectedJobsite.address);
+      setJobsiteCoords({
+        lat: selectedJobsite.latitude,
+        lng: selectedJobsite.longitude
+      });
+    }
+  };
+
+  // Handle new jobsite creation
+  const handleCreateJobsite = async () => {
+    if (!customerId || !userProfile || !newJobsite.jobsiteName || !newJobsite.address || !newJobsite.contactName || !newJobsite.contactPhone) {
+      setError("Please fill in all required jobsite fields");
+      return;
+    }
+
+    try {
+      const customer = customers.find(c => c.id === customerId);
+      const jobsiteData = {
+        customerId,
+        customerName: customer?.name || 'Unknown Customer',
+        jobsiteName: newJobsite.jobsiteName,
+        address: newJobsite.address,
+        latitude: newJobsite.latitude,
+        longitude: newJobsite.longitude,
+        contact: {
+          name: newJobsite.contactName,
+          phone: newJobsite.contactPhone
+        },
+        isActive: true,
+        createdBy: userProfile.email,
+        createdByRole: userProfile.role
+      };
+
+      const newJobsiteDoc = await createJobsite(jobsiteData);
+      setSelectedJobsiteId(newJobsiteDoc.id);
+      setJobsiteAddress(newJobsite.address);
+      setJobsiteCoords({
+        lat: newJobsite.latitude,
+        lng: newJobsite.longitude
+      });
+      
+      // Reset form
+      setNewJobsite({
+        jobsiteName: '',
+        address: '',
+        latitude: 0,
+        longitude: 0,
+        contactName: '',
+        contactPhone: ''
+      });
+      setShowJobsiteModal(false);
+    } catch (error) {
+      console.error('Error creating jobsite:', error);
+      setError('Failed to create jobsite. Please try again.');
+    }
+  };
+
   // Handle customer selection
   const handleCustomerChange = async (selectedCustomerId: string) => {
     setCustomerId(selectedCustomerId);
     setJobsiteContactId("");
     setContacts([]);
+    setSelectedJobsiteId("");
+    setJobsiteAddress("");
+    setJobsiteCoords(null);
 
     if (!selectedCustomerId || !db) return;
 
@@ -459,6 +541,31 @@ const NewQuoteRequestPage = () => {
               readOnly
               className="mt-1 block w-full rounded-md border-gray-300 bg-gray-100 shadow-sm"
             />
+          </div>
+        )}
+
+        {/* Jobsite Selection */}
+        {customerId && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700">
+              Jobsite <span className="text-red-500">*</span>
+            </label>
+            <div className="mt-1">
+              <select
+                value={selectedJobsiteId}
+                onChange={(e) => handleJobsiteChange(e.target.value)}
+                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                required
+              >
+                <option value="">Select a jobsite...</option>
+                {jobsites.map((jobsite) => (
+                  <option key={jobsite.id} value={jobsite.id}>
+                    {jobsite.jobsiteName} - {jobsite.address}
+                  </option>
+                ))}
+                <option value="new">+ Add New Jobsite</option>
+              </select>
+            </div>
           </div>
         )}
 
@@ -817,6 +924,129 @@ const NewQuoteRequestPage = () => {
                   alert(e?.message || 'Failed to add product');
                 }
               }} className="px-3 py-2 bg-[#e40115] text-white rounded">Save</button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* New Jobsite Modal */}
+      {showJobsiteModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg font-medium mb-4">Add New Jobsite</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Jobsite Name *
+                </label>
+                <input
+                  type="text"
+                  value={newJobsite.jobsiteName}
+                  onChange={(e) => setNewJobsite(prev => ({ ...prev, jobsiteName: e.target.value }))}
+                  placeholder="e.g., Main Construction Site"
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                  required
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Address *
+                </label>
+                <textarea
+                  value={newJobsite.address}
+                  onChange={(e) => setNewJobsite(prev => ({ ...prev, address: e.target.value }))}
+                  rows={3}
+                  placeholder="Full jobsite address"
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Latitude
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    value={newJobsite.latitude}
+                    onChange={(e) => setNewJobsite(prev => ({ ...prev, latitude: parseFloat(e.target.value) || 0 }))}
+                    placeholder="0.000000"
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Longitude
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    value={newJobsite.longitude}
+                    onChange={(e) => setNewJobsite(prev => ({ ...prev, longitude: parseFloat(e.target.value) || 0 }))}
+                    placeholder="0.000000"
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Contact Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={newJobsite.contactName}
+                    onChange={(e) => setNewJobsite(prev => ({ ...prev, contactName: e.target.value }))}
+                    placeholder="Contact person name"
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Contact Phone *
+                  </label>
+                  <input
+                    type="tel"
+                    value={newJobsite.contactPhone}
+                    onChange={(e) => setNewJobsite(prev => ({ ...prev, contactPhone: e.target.value }))}
+                    placeholder="Phone number"
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowJobsiteModal(false);
+                    setNewJobsite({
+                      jobsiteName: '',
+                      address: '',
+                      latitude: 0,
+                      longitude: 0,
+                      contactName: '',
+                      contactPhone: ''
+                    });
+                  }}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCreateJobsite}
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700"
+                >
+                  Create Jobsite
+                </button>
+              </div>
             </div>
           </div>
         </div>
