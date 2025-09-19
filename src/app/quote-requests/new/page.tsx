@@ -30,7 +30,7 @@ import { moveFilesToQuoteRequest } from "../../utils/fileUtils";
 import { useMessages } from '@/app/hooks/useMessages';
 import { debounce } from "lodash";
 import { useCustomers } from "../../hooks/useCustomers";
-import { useJobsites } from "../../hooks/useJobsites";
+// import { useJobsites } from "../../hooks/useJobsites";
 import { getProductByCode, normalizeCode } from "../../utils/products";
 
 // Type definitions
@@ -84,10 +84,10 @@ const NewQuoteRequestPage = () => {
   const router = useRouter();
   const { userProfile, user } = useAuth();
   const { customers } = useCustomers();
-  // Safely use jobsites hook only when customerId is valid
-  const { jobsites, loading: jobsitesLoading, createJobsite } = useJobsites(
-    customerId && customerId.trim() !== '' ? customerId : undefined
-  );
+  // Temporarily disabled to prevent loading loop
+  // const { jobsites, loading: jobsitesLoading, createJobsite } = useJobsites(
+  //   customerId && customerId.trim() !== '' ? customerId : undefined
+  // );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -171,7 +171,7 @@ const NewQuoteRequestPage = () => {
     }
   }, [customerId, involvedCountry, customerDetails]);
 
-  // Handle jobsite selection
+  // Handle jobsite selection - Temporarily disabled
   const handleJobsiteChange = (jobsiteId: string) => {
     if (jobsiteId === 'new') {
       setShowJobsiteModal(true);
@@ -179,63 +179,22 @@ const NewQuoteRequestPage = () => {
     }
     
     setSelectedJobsiteId(jobsiteId);
-    const selectedJobsite = jobsites.find(j => j.id === jobsiteId);
-    if (selectedJobsite) {
-      setJobsiteAddress(selectedJobsite.address);
-      setJobsiteCoords({
-        lat: selectedJobsite.latitude,
-        lng: selectedJobsite.longitude
-      });
-    }
+    // Temporarily disabled to prevent loading loop
+    // const selectedJobsite = jobsites.find(j => j.id === jobsiteId);
+    // if (selectedJobsite) {
+    //   setJobsiteAddress(selectedJobsite.address);
+    //   setJobsiteCoords({
+    //     lat: selectedJobsite.latitude,
+    //     lng: selectedJobsite.longitude
+    //   });
+    // }
   };
 
-  // Handle new jobsite creation
+  // Handle new jobsite creation - Temporarily disabled
   const handleCreateJobsite = async () => {
-    if (!customerId || !userProfile || !newJobsite.jobsiteName || !newJobsite.address || !newJobsite.contactName || !newJobsite.contactPhone) {
-      setError("Please fill in all required jobsite fields");
-      return;
-    }
-
-    try {
-      const customer = customers.find(c => c.id === customerId);
-      const jobsiteData = {
-        customerId,
-        customerName: customer?.name || 'Unknown Customer',
-        jobsiteName: newJobsite.jobsiteName,
-        address: newJobsite.address,
-        latitude: newJobsite.latitude,
-        longitude: newJobsite.longitude,
-        contact: {
-          name: newJobsite.contactName,
-          phone: newJobsite.contactPhone
-        },
-        isActive: true,
-        createdBy: userProfile.email,
-        createdByRole: userProfile.role
-      };
-
-      const newJobsiteDoc = await createJobsite(jobsiteData);
-      setSelectedJobsiteId(newJobsiteDoc.id);
-      setJobsiteAddress(newJobsite.address);
-      setJobsiteCoords({
-        lat: newJobsite.latitude,
-        lng: newJobsite.longitude
-      });
-      
-      // Reset form
-      setNewJobsite({
-        jobsiteName: '',
-        address: '',
-        latitude: 0,
-        longitude: 0,
-        contactName: '',
-        contactPhone: ''
-      });
-      setShowJobsiteModal(false);
-    } catch (error) {
-      console.error('Error creating jobsite:', error);
-      setError('Failed to create jobsite. Please try again.');
-    }
+    // Temporarily disabled to prevent loading loop
+    alert('Jobsite functionality temporarily disabled to prevent loading issues');
+    setShowJobsiteModal(false);
   };
 
   // Handle customer selection
@@ -547,8 +506,8 @@ const NewQuoteRequestPage = () => {
           </div>
         )}
 
-        {/* Jobsite Selection */}
-        {customerId && (
+        {/* Jobsite Selection - Temporarily Disabled */}
+        {/* {customerId && (
           <div>
             <label className="block text-sm font-medium text-gray-700">
               Jobsite <span className="text-red-500">*</span>
@@ -570,7 +529,7 @@ const NewQuoteRequestPage = () => {
               </select>
             </div>
           </div>
-        )}
+        )} */}
 
         {/* Products */}
         <div>
@@ -932,8 +891,8 @@ const NewQuoteRequestPage = () => {
         </div>
       )}
       
-      {/* New Jobsite Modal */}
-      {showJobsiteModal && (
+      {/* New Jobsite Modal - Temporarily Disabled */}
+      {/* {showJobsiteModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
             <h3 className="text-lg font-medium mb-4">Add New Jobsite</h3>
@@ -1081,7 +1040,7 @@ const NewQuoteRequestPage = () => {
             </div>
           </div>
         </div>
-      )}
+      )} */}
     </div>
   );
 };
