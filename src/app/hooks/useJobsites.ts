@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { collection, query, where, orderBy, onSnapshot, addDoc, doc, updateDoc, getDocs } from 'firebase/firestore';
+import { collection, getDocs, addDoc, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../../firebaseClient';
 import { CustomerJobsite } from '../../types';
 
@@ -13,42 +13,31 @@ export function useJobsites(customerId?: string) {
       return;
     }
 
-    // Don't run query if customerId is empty string
-    if (customerId === '') {
-      setJobsites([]);
-      setLoading(false);
-      return;
-    }
-
-    // Use getDocs instead of onSnapshot to avoid index requirements
+    // Fetch all active jobsites and filter client-side to avoid index requirements
     const fetchJobsites = async () => {
       try {
-        let jobsitesQuery;
-        if (customerId && customerId.trim() !== '') {
-          // Simple query without orderBy to avoid index requirements
-          jobsitesQuery = query(
-            collection(db, 'customerJobsites'),
-            where('customerId', '==', customerId),
-            where('isActive', '==', true)
-          );
-        } else {
-          jobsitesQuery = query(
-            collection(db, 'customerJobsites'),
-            where('isActive', '==', true)
-          );
-        }
-
+        // Simple query - just get all active jobsites (no complex where clauses)
+        const jobsitesQuery = collection(db, 'customerJobsites');
         const snapshot = await getDocs(jobsitesQuery);
-        const jobsitesData = snapshot.docs.map(doc => ({
+        
+        let jobsitesData = snapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data()
         })) as CustomerJobsite[];
         
-        // Sort client-side to avoid Firebase index requirements
+        // Filter client-side for active jobsites
+        jobsitesData = jobsitesData.filter(jobsite => jobsite.isActive === true);
+        
+        // Filter by customerId if provided
+        if (customerId && customerId.trim() !== '') {
+          jobsitesData = jobsitesData.filter(jobsite => jobsite.customerId === customerId);
+        }
+        
+        // Sort client-side by creation date (newest first)
         jobsitesData.sort((a, b) => {
           const dateA = a.createdAt instanceof Date ? a.createdAt : new Date(a.createdAt);
           const dateB = b.createdAt instanceof Date ? b.createdAt : new Date(b.createdAt);
-          return dateB.getTime() - dateA.getTime(); // Descending order
+          return dateB.getTime() - dateA.getTime();
         });
         
         setJobsites(jobsitesData);
