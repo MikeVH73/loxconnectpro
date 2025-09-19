@@ -415,11 +415,25 @@ export default function JobsitesPage() {
                       Latitude
                     </label>
                     <input
-                      type="number"
-                      step="any"
+                      type="text"
                       value={formData.latitude}
-                      onChange={(e) => setFormData({ ...formData, latitude: parseFloat(e.target.value) || 0 })}
-                      placeholder="0.000000"
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        // Allow pasting coordinates like "51.9244, 4.4777" or "51.9244,4.4777"
+                        if (value.includes(',')) {
+                          const parts = value.split(',').map(p => p.trim());
+                          if (parts.length === 2) {
+                            setFormData(prev => ({
+                              ...prev,
+                              latitude: parseFloat(parts[0]) || 0,
+                              longitude: parseFloat(parts[1]) || 0
+                            }));
+                            return;
+                          }
+                        }
+                        setFormData(prev => ({ ...prev, latitude: parseFloat(value) || 0 }));
+                      }}
+                      placeholder="51.9244 or paste: 51.9244, 4.4777"
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
@@ -428,11 +442,25 @@ export default function JobsitesPage() {
                       Longitude
                     </label>
                     <input
-                      type="number"
-                      step="any"
+                      type="text"
                       value={formData.longitude}
-                      onChange={(e) => setFormData({ ...formData, longitude: parseFloat(e.target.value) || 0 })}
-                      placeholder="0.000000"
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        // Allow pasting coordinates like "51.9244, 4.4777" or "51.9244,4.4777"
+                        if (value.includes(',')) {
+                          const parts = value.split(',').map(p => p.trim());
+                          if (parts.length === 2) {
+                            setFormData(prev => ({
+                              ...prev,
+                              latitude: parseFloat(parts[0]) || 0,
+                              longitude: parseFloat(parts[1]) || 0
+                            }));
+                            return;
+                          }
+                        }
+                        setFormData(prev => ({ ...prev, longitude: parseFloat(value) || 0 }));
+                      }}
+                      placeholder="4.4777 or paste: 51.9244, 4.4777"
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>

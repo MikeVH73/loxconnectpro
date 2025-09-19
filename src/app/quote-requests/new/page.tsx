@@ -30,7 +30,7 @@ import { moveFilesToQuoteRequest } from "../../utils/fileUtils";
 import { useMessages } from '@/app/hooks/useMessages';
 import { debounce } from "lodash";
 import { useCustomers } from "../../hooks/useCustomers";
-// import { useJobsites } from "../../hooks/useJobsites";
+import { useJobsites } from "../../hooks/useJobsites";
 import { getProductByCode, normalizeCode } from "../../utils/products";
 
 // Type definitions
@@ -84,7 +84,7 @@ const NewQuoteRequestPage = () => {
   const router = useRouter();
   const { userProfile, user } = useAuth();
   const { customers } = useCustomers();
-  // const { jobsites, loading: jobsitesLoading, createJobsite } = useJobsites(customerId);
+  const { jobsites, loading: jobsitesLoading, createJobsite } = useJobsites(customerId);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -176,21 +176,63 @@ const NewQuoteRequestPage = () => {
     }
     
     setSelectedJobsiteId(jobsiteId);
-    // const selectedJobsite = jobsites.find(j => j.id === jobsiteId);
-    // if (selectedJobsite) {
-    //   setJobsiteAddress(selectedJobsite.address);
-    //   setJobsiteCoords({
-    //     lat: selectedJobsite.latitude,
-    //     lng: selectedJobsite.longitude
-    //   });
-    // }
+    const selectedJobsite = jobsites.find(j => j.id === jobsiteId);
+    if (selectedJobsite) {
+      setJobsiteAddress(selectedJobsite.address);
+      setJobsiteCoords({
+        lat: selectedJobsite.latitude,
+        lng: selectedJobsite.longitude
+      });
+    }
   };
 
   // Handle new jobsite creation
   const handleCreateJobsite = async () => {
-    // Temporarily disabled
-    alert('Jobsite functionality temporarily disabled for debugging');
-    setShowJobsiteModal(false);
+    if (!customerId || !userProfile || !newJobsite.jobsiteName || !newJobsite.address || !newJobsite.contactName || !newJobsite.contactPhone) {
+      setError("Please fill in all required jobsite fields");
+      return;
+    }
+
+    try {
+      const customer = customers.find(c => c.id === customerId);
+      const jobsiteData = {
+        customerId,
+        customerName: customer?.name || 'Unknown Customer',
+        jobsiteName: newJobsite.jobsiteName,
+        address: newJobsite.address,
+        latitude: newJobsite.latitude,
+        longitude: newJobsite.longitude,
+        contact: {
+          name: newJobsite.contactName,
+          phone: newJobsite.contactPhone
+        },
+        isActive: true,
+        createdBy: userProfile.email,
+        createdByRole: userProfile.role
+      };
+
+      const newJobsiteDoc = await createJobsite(jobsiteData);
+      setSelectedJobsiteId(newJobsiteDoc.id);
+      setJobsiteAddress(newJobsite.address);
+      setJobsiteCoords({
+        lat: newJobsite.latitude,
+        lng: newJobsite.longitude
+      });
+      
+      // Reset form
+      setNewJobsite({
+        jobsiteName: '',
+        address: '',
+        latitude: 0,
+        longitude: 0,
+        contactName: '',
+        contactPhone: ''
+      });
+      setShowJobsiteModal(false);
+    } catch (error) {
+      console.error('Error creating jobsite:', error);
+      setError('Failed to create jobsite. Please try again.');
+    }
   };
 
   // Handle customer selection
@@ -502,8 +544,8 @@ const NewQuoteRequestPage = () => {
           </div>
         )}
 
-        {/* Jobsite Selection - Temporarily Disabled */}
-        {/* {customerId && (
+        {/* Jobsite Selection */}
+        {customerId && (
           <div>
             <label className="block text-sm font-medium text-gray-700">
               Jobsite <span className="text-red-500">*</span>
@@ -525,7 +567,7 @@ const NewQuoteRequestPage = () => {
               </select>
             </div>
           </div>
-        )} */}
+        )}
 
         {/* Products */}
         <div>
@@ -887,8 +929,8 @@ const NewQuoteRequestPage = () => {
         </div>
       )}
       
-      {/* New Jobsite Modal - Temporarily Disabled */}
-      {/* {showJobsiteModal && (
+      {/* New Jobsite Modal */}
+      {showJobsiteModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
             <h3 className="text-lg font-medium mb-4">Add New Jobsite</h3>
@@ -927,11 +969,25 @@ const NewQuoteRequestPage = () => {
                     Latitude
                   </label>
                   <input
-                    type="number"
-                    step="any"
+                    type="text"
                     value={newJobsite.latitude}
-                    onChange={(e) => setNewJobsite(prev => ({ ...prev, latitude: parseFloat(e.target.value) || 0 }))}
-                    placeholder="0.000000"
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      // Allow pasting coordinates like "51.9244, 4.4777" or "51.9244,4.4777"
+                      if (value.includes(',')) {
+                        const parts = value.split(',').map(p => p.trim());
+                        if (parts.length === 2) {
+                          setNewJobsite(prev => ({
+                            ...prev,
+                            latitude: parseFloat(parts[0]) || 0,
+                            longitude: parseFloat(parts[1]) || 0
+                          }));
+                          return;
+                        }
+                      }
+                      setNewJobsite(prev => ({ ...prev, latitude: parseFloat(value) || 0 }));
+                    }}
+                    placeholder="51.9244 or paste: 51.9244, 4.4777"
                     className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                   />
                 </div>
@@ -940,11 +996,25 @@ const NewQuoteRequestPage = () => {
                     Longitude
                   </label>
                   <input
-                    type="number"
-                    step="any"
+                    type="text"
                     value={newJobsite.longitude}
-                    onChange={(e) => setNewJobsite(prev => ({ ...prev, longitude: parseFloat(e.target.value) || 0 }))}
-                    placeholder="0.000000"
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      // Allow pasting coordinates like "51.9244, 4.4777" or "51.9244,4.4777"
+                      if (value.includes(',')) {
+                        const parts = value.split(',').map(p => p.trim());
+                        if (parts.length === 2) {
+                          setNewJobsite(prev => ({
+                            ...prev,
+                            latitude: parseFloat(parts[0]) || 0,
+                            longitude: parseFloat(parts[1]) || 0
+                          }));
+                          return;
+                        }
+                      }
+                      setNewJobsite(prev => ({ ...prev, longitude: parseFloat(value) || 0 }));
+                    }}
+                    placeholder="4.4777 or paste: 51.9244, 4.4777"
                     className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                   />
                 </div>
@@ -1008,7 +1078,7 @@ const NewQuoteRequestPage = () => {
             </div>
           </div>
         </div>
-      )} */}
+      )}
     </div>
   );
 };
