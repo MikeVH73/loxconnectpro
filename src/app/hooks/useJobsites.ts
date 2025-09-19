@@ -8,10 +8,20 @@ export function useJobsites(customerId?: string) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!db) return;
+    if (!db) {
+      setLoading(false);
+      return;
+    }
+
+    // Don't run query if customerId is empty string
+    if (customerId === '') {
+      setJobsites([]);
+      setLoading(false);
+      return;
+    }
 
     let jobsitesQuery;
-    if (customerId) {
+    if (customerId && customerId.trim() !== '') {
       jobsitesQuery = query(
         collection(db, 'customerJobsites'),
         where('customerId', '==', customerId),
@@ -32,6 +42,9 @@ export function useJobsites(customerId?: string) {
         ...doc.data()
       })) as CustomerJobsite[];
       setJobsites(jobsitesData);
+      setLoading(false);
+    }, (error) => {
+      console.error('Error in jobsites listener:', error);
       setLoading(false);
     });
 
