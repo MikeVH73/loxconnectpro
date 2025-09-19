@@ -16,49 +16,47 @@ export default function TemplatesPage() {
   const [newTemplate, setNewTemplate] = useState({
     name: '',
     description: '',
-    category: '',
     templateData: {
       title: '',
       description: '',
       customerId: '',
       involvedCountry: '',
       defaultJobsiteAddress: '',
-      defaultLatitude: 0,
-      defaultLongitude: 0,
-      defaultJobsiteContact: { name: '', phone: '' },
+      defaultCoordinates: '',
+      defaultJobsiteContactId: '',
       defaultNotes: ''
     },
     isPublic: false
   });
-
-  const categories = [
-    'Construction',
-    'Equipment Rental',
-    'Maintenance',
-    'Event',
-    'General',
-    'Other'
-  ];
 
   const countries = [
     'Belgium', 'Denmark', 'Finland', 'France', 'Germany', 'Ireland', 'Italy',
     'Netherlands', 'Norway', 'Poland', 'Portugal', 'Spain', 'Sweden', 'United Kingdom'
   ];
 
+  // Get user's customers only
+  const userCustomers = customers.filter(customer => {
+    if (!userProfile) return false;
+    const userCountry = userProfile.businessUnit || userProfile.countries?.[0];
+    return customer.countries?.includes(userCountry) || customer.ownerCountry === userCountry;
+  });
+
   const handleCreateTemplate = async () => {
-    if (!userProfile || !newTemplate.name || !newTemplate.category) {
-      alert('Please fill in template name and category');
+    if (!userProfile || !newTemplate.name) {
+      alert('Please fill in template name');
       return;
     }
 
     try {
+      const userCountry = userProfile.businessUnit || userProfile.countries?.[0] || 'Unknown';
+      
       await createTemplate({
         name: newTemplate.name,
         description: newTemplate.description,
-        category: newTemplate.category,
         templateData: newTemplate.templateData,
         createdBy: userProfile.email,
         createdByRole: userProfile.role,
+        createdByCountry: userCountry,
         isPublic: newTemplate.isPublic,
         isActive: true
       });
@@ -66,16 +64,14 @@ export default function TemplatesPage() {
       setNewTemplate({
         name: '',
         description: '',
-        category: '',
         templateData: {
           title: '',
           description: '',
           customerId: '',
           involvedCountry: '',
           defaultJobsiteAddress: '',
-          defaultLatitude: 0,
-          defaultLongitude: 0,
-          defaultJobsiteContact: { name: '', phone: '' },
+          defaultCoordinates: '',
+          defaultJobsiteContactId: '',
           defaultNotes: ''
         },
         isPublic: false
@@ -133,6 +129,19 @@ export default function TemplatesPage() {
     }
   };
 
+  const handleCopyTemplate = (template: QuoteRequestTemplate) => {
+    setNewTemplate({
+      name: `${template.name} (Copy)`,
+      description: template.description,
+      templateData: {
+        ...template.templateData,
+        involvedCountry: '' // Clear country so user can select different one
+      },
+      isPublic: false
+    });
+    setShowCreateModal(true);
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -171,9 +180,16 @@ export default function TemplatesPage() {
               <div className="flex justify-between items-start mb-4">
                 <div>
                   <h3 className="text-lg font-semibold text-gray-900">{template.name}</h3>
-                  <p className="text-sm text-gray-500">{template.category}</p>
+                  <p className="text-sm text-gray-500">Created by {template.createdBy}</p>
                 </div>
                 <div className="flex gap-2">
+                  <button
+                    onClick={() => handleCopyTemplate(template)}
+                    className="text-gray-400 hover:text-green-600"
+                    title="Copy template"
+                  >
+                    <FiCopy className="w-4 h-4" />
+                  </button>
                   <button
                     onClick={() => handleEditTemplate(template)}
                     className="text-gray-400 hover:text-blue-600"
@@ -205,6 +221,9 @@ export default function TemplatesPage() {
                   <span className="font-medium">Country:</span> {template.templateData.involvedCountry || 'Not set'}
                 </div>
                 <div className="text-sm">
+                  <span className="font-medium">Coordinates:</span> {template.templateData.defaultCoordinates || 'Not set'}
+                </div>
+                <div className="text-sm">
                   <span className="font-medium">Usage:</span> {template.usageCount} times
                 </div>
                 <div className="text-sm">
@@ -212,7 +231,7 @@ export default function TemplatesPage() {
                   <span className={`ml-1 px-2 py-1 rounded text-xs ${
                     template.isPublic ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
                   }`}>
-                    {template.isPublic ? 'Public' : 'Private'}
+                    {template.isPublic ? 'Country Shared' : 'Private'}
                   </span>
                 </div>
               </div>
@@ -249,34 +268,17 @@ export default function TemplatesPage() {
             
             <div className="space-y-4">
               {/* Basic Information */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Template Name *
-                  </label>
-                  <input
-                    type="text"
-                    value={newTemplate.name}
-                    onChange={(e) => setNewTemplate(prev => ({ ...prev, name: e.target.value }))}
-                    placeholder="e.g., Standard Construction"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Category *
-                  </label>
-                  <select
-                    value={newTemplate.category}
-                    onChange={(e) => setNewTemplate(prev => ({ ...prev, category: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">Select category...</option>
-                    {categories.map(cat => (
-                      <option key={cat} value={cat}>{cat}</option>
-                    ))}
-                  </select>
-                </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Template Name *
+                </label>
+                <input
+                  type="text"
+                  value={newTemplate.name}
+                  onChange={(e) => setNewTemplate(prev => ({ ...prev, name: e.target.value }))}
+                  placeholder="e.g., Standard Construction"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
               </div>
 
               <div>
@@ -344,7 +346,7 @@ export default function TemplatesPage() {
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
                       <option value="">Select customer...</option>
-                      {customers.map(customer => (
+                      {userCustomers.map(customer => (
                         <option key={customer.id} value={customer.id}>
                           {customer.name}
                         </option>
@@ -392,6 +394,47 @@ export default function TemplatesPage() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Default Coordinates
+                    </label>
+                    <input
+                      type="text"
+                      value={newTemplate.templateData.defaultCoordinates || ''}
+                      onChange={(e) => setNewTemplate(prev => ({
+                        ...prev,
+                        templateData: { ...prev.templateData, defaultCoordinates: e.target.value }
+                      }))}
+                      placeholder="e.g., 51.9244, 4.4777"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+
+                {/* Default Jobsite Contact */}
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Default Jobsite Contact
+                    </label>
+                    <select
+                      value={newTemplate.templateData.defaultJobsiteContactId || ''}
+                      onChange={(e) => setNewTemplate(prev => ({
+                        ...prev,
+                        templateData: { ...prev.templateData, defaultJobsiteContactId: e.target.value }
+                      }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="">Select contact...</option>
+                      {newTemplate.templateData.customerId && 
+                        userCustomers.find(c => c.id === newTemplate.templateData.customerId)?.jobsiteContacts?.map(contact => (
+                          <option key={contact.id} value={contact.id}>
+                            {contact.name} - {contact.phone}
+                          </option>
+                        ))
+                      }
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
                       Default Notes
                     </label>
                     <input
@@ -407,52 +450,6 @@ export default function TemplatesPage() {
                   </div>
                 </div>
 
-                {/* Default Jobsite Contact */}
-                <div className="grid grid-cols-2 gap-4 mb-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Default Contact Name
-                    </label>
-                    <input
-                      type="text"
-                      value={newTemplate.templateData.defaultJobsiteContact?.name || ''}
-                      onChange={(e) => setNewTemplate(prev => ({
-                        ...prev,
-                        templateData: { 
-                          ...prev.templateData, 
-                          defaultJobsiteContact: { 
-                            ...prev.templateData.defaultJobsiteContact, 
-                            name: e.target.value 
-                          }
-                        }
-                      }))}
-                      placeholder="Default contact name"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Default Contact Phone
-                    </label>
-                    <input
-                      type="text"
-                      value={newTemplate.templateData.defaultJobsiteContact?.phone || ''}
-                      onChange={(e) => setNewTemplate(prev => ({
-                        ...prev,
-                        templateData: { 
-                          ...prev.templateData, 
-                          defaultJobsiteContact: { 
-                            ...prev.templateData.defaultJobsiteContact, 
-                            phone: e.target.value 
-                          }
-                        }
-                      }))}
-                      placeholder="Default contact phone"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                </div>
-
                 {/* Visibility */}
                 <div className="flex items-center">
                   <input
@@ -463,7 +460,7 @@ export default function TemplatesPage() {
                     className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                   />
                   <label htmlFor="isPublic" className="ml-2 block text-sm text-gray-900">
-                    Make this template public (available to all users)
+                    Share this template with users from the same country
                   </label>
                 </div>
               </div>

@@ -226,14 +226,18 @@ const NewQuoteRequestPage = () => {
     if (template.templateData.defaultJobsiteAddress) {
       setJobsiteAddress(template.templateData.defaultJobsiteAddress);
     }
-    if (template.templateData.defaultLatitude && template.templateData.defaultLongitude) {
-      setJobsiteCoords({
-        lat: template.templateData.defaultLatitude,
-        lng: template.templateData.defaultLongitude
-      });
+    if (template.templateData.defaultCoordinates) {
+      // Parse coordinates from "lat, lng" format
+      const coords = template.templateData.defaultCoordinates.split(',').map(c => parseFloat(c.trim()));
+      if (coords.length === 2 && !isNaN(coords[0]) && !isNaN(coords[1])) {
+        setJobsiteCoords({
+          lat: coords[0],
+          lng: coords[1]
+        });
+      }
     }
-    if (template.templateData.defaultJobsiteContact) {
-      setJobsiteContact(template.templateData.defaultJobsiteContact);
+    if (template.templateData.defaultJobsiteContactId) {
+      setJobsiteContactId(template.templateData.defaultJobsiteContactId);
     }
     if (template.templateData.defaultNotes) {
       setNotes(template.templateData.defaultNotes);
@@ -492,7 +496,7 @@ const NewQuoteRequestPage = () => {
                   : 'No customer';
                 return (
                   <option key={template.id} value={template.id}>
-                    {template.name} ({template.category}) - {customerName} - {template.templateData.involvedCountry || 'Any country'} - Used {template.usageCount} times
+                    {template.name} - {customerName} - {template.templateData.involvedCountry || 'Any country'} - Used {template.usageCount} times
                   </option>
                 );
               })}
@@ -744,45 +748,38 @@ const NewQuoteRequestPage = () => {
             required
           />
           
-          <div className="mt-4 grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Latitude</label>
-              <input
-                type="number"
-                step="any"
-                value={jobsiteCoords?.lat || ''}
-                onChange={(e) => {
-                  const lat = parseFloat(e.target.value);
+          <div className="mt-4">
+            <label className="block text-sm font-medium text-gray-700">Coordinates</label>
+            <input
+              type="text"
+              value={jobsiteCoords ? `${jobsiteCoords.lat}, ${jobsiteCoords.lng}` : ''}
+              onChange={(e) => {
+                const value = e.target.value;
+                if (value.includes(',')) {
+                  const parts = value.split(',').map(p => p.trim());
+                  if (parts.length === 2) {
+                    const lat = parseFloat(parts[0]);
+                    const lng = parseFloat(parts[1]);
+                    if (!isNaN(lat) && !isNaN(lng)) {
+                      setJobsiteCoords({ lat, lng });
+                    }
+                  }
+                } else {
+                  const lat = parseFloat(value);
                   if (!isNaN(lat)) {
                     setJobsiteCoords(prev => ({
                       lat,
                       lng: prev?.lng || 0
                     }));
                   }
-                }}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                placeholder="e.g., 51.9244"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Longitude</label>
-              <input
-                type="number"
-                step="any"
-                value={jobsiteCoords?.lng || ''}
-                onChange={(e) => {
-                  const lng = parseFloat(e.target.value);
-                  if (!isNaN(lng)) {
-                    setJobsiteCoords(prev => ({
-                      lat: prev?.lat || 0,
-                      lng
-                    }));
-                  }
-                }}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                placeholder="e.g., 4.4777"
-              />
-            </div>
+                }
+              }}
+              placeholder="e.g., 51.9244, 4.4777"
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+            />
+            <p className="mt-1 text-sm text-gray-500">
+              Enter coordinates separated by comma (e.g., 51.9244, 4.4777)
+            </p>
           </div>
         </div>
 

@@ -73,7 +73,6 @@ export interface QuoteRequestTemplate {
   id: string;
   name: string;                    // Template name (e.g., "Standard Construction", "Equipment Rental")
   description: string;             // Template description
-  category: string;               // Template category (e.g., "Construction", "Equipment", "General")
   
   // Template data that will pre-fill Quote Request form
   templateData: {
@@ -82,19 +81,16 @@ export interface QuoteRequestTemplate {
     customerId?: string;          // Pre-selected customer ID
     involvedCountry?: string;     // Pre-selected involved country
     defaultJobsiteAddress?: string; // Default jobsite address
-    defaultLatitude?: number;     // Default latitude
-    defaultLongitude?: number;    // Default longitude
-    defaultJobsiteContact?: {     // Default jobsite contact
-      name: string;
-      phone: string;
-    };
+    defaultCoordinates?: string;   // Combined latitude,longitude (e.g., "51.9244, 4.4777")
+    defaultJobsiteContactId?: string; // Pre-selected jobsite contact ID
     defaultNotes?: string;        // Default notes
   };
   
   // Metadata
   createdBy: string;             // User email who created template
   createdByRole: string;          // User role
-  isPublic: boolean;             // Whether template is available to all users
+  createdByCountry: string;      // Country of template creator
+  isPublic: boolean;             // Whether template is available to users from same country
   usageCount: number;            // How many times template has been used
   isActive: boolean;             // Soft delete flag
   createdAt: Date;
