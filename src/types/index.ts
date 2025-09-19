@@ -69,21 +69,39 @@ export interface Customer {
   countries?: string[];
 }
 
-export interface CustomerJobsite {
+export interface QuoteRequestTemplate {
   id: string;
-  customerId: string;        // Links to customers collection
-  customerName: string;     // Denormalized for easy display
-  jobsiteName: string;      // e.g., "Main Construction Site", "Warehouse Location"
-  address: string;
-  latitude: number;
-  longitude: number;
-  contact: {
-    name: string;
-    phone: string;
+  name: string;                    // Template name (e.g., "Standard Construction", "Equipment Rental")
+  description: string;             // Template description
+  category: string;               // Template category (e.g., "Construction", "Equipment", "General")
+  
+  // Template data that will pre-fill Quote Request form
+  templateData: {
+    title?: string;               // Default title
+    description?: string;         // Default description
+    products: Array<{             // Pre-filled products
+      catClass: string;
+      quantity: number;
+      description: string;
+    }>;
+    defaultStartDate?: number;    // Days from today for default start date
+    defaultEndDate?: number;      // Days from today for default end date
+    defaultJobsiteAddress?: string; // Default jobsite address
+    defaultLatitude?: number;     // Default latitude
+    defaultLongitude?: number;    // Default longitude
+    defaultJobsiteContact?: {     // Default jobsite contact
+      name: string;
+      phone: string;
+    };
+    defaultNotes?: string;        // Default notes
   };
-  isActive: boolean;        // Soft delete
-  createdBy: string;        // User email
-  createdByRole: string;     // User role
+  
+  // Metadata
+  createdBy: string;             // User email who created template
+  createdByRole: string;          // User role
+  isPublic: boolean;             // Whether template is available to all users
+  usageCount: number;            // How many times template has been used
+  isActive: boolean;             // Soft delete flag
   createdAt: Date;
   updatedAt: Date;
 }

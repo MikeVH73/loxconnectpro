@@ -29,9 +29,8 @@ const FileUpload = dynamic(() => import("../../components/FileUpload"), {
 import { moveFilesToQuoteRequest } from "../../utils/fileUtils";
 import { useMessages } from '@/app/hooks/useMessages';
 import { debounce } from "lodash";
+import { useTemplates } from "../../hooks/useTemplates";
 import { useCustomers } from "../../hooks/useCustomers";
-// import { useJobsites } from "../../hooks/useJobsites";
-import { getProductByCode, normalizeCode } from "../../utils/products";
 
 // Type definitions
 interface Jobsite {
@@ -84,6 +83,7 @@ const NewQuoteRequestPage = () => {
   const router = useRouter();
   const { userProfile, user } = useAuth();
   const { customers } = useCustomers();
+  const { templates, incrementUsageCount } = useTemplates();
   // Jobsites integration permanently disabled due to persistent loading issues
   // const { jobsites, loading: jobsitesLoading, createJobsite } = useJobsites(
   //   customerId && customerId.trim() !== '' ? customerId : undefined
@@ -107,6 +107,7 @@ const NewQuoteRequestPage = () => {
   const [jobsiteCoords, setJobsiteCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [selectedJobsiteId, setSelectedJobsiteId] = useState("");
   const [showJobsiteModal, setShowJobsiteModal] = useState(false);
+  const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [newJobsite, setNewJobsite] = useState({
     jobsiteName: '',
     address: '',
@@ -195,6 +196,64 @@ const NewQuoteRequestPage = () => {
     // Permanently disabled due to persistent loading issues
     alert('Jobsite integration disabled due to technical issues. Please use the Jobsites page to manage jobsites.');
     setShowJobsiteModal(false);
+  };
+
+  // Handle template selection
+  const handleTemplateChange = async (templateId: string) => {
+    if (!templateId) {
+      setSelectedTemplateId("");
+      return;
+    }
+
+    const template = templates.find(t => t.id === templateId);
+    if (!template) return;
+
+    setSelectedTemplateId(templateId);
+
+    // Apply template data to form
+    if (template.templateData.title) {
+      setTitle(template.templateData.title);
+    }
+    if (template.templateData.description) {
+      setDescription(template.templateData.description);
+    }
+    if (template.templateData.products && template.templateData.products.length > 0) {
+      setProducts(template.templateData.products);
+    }
+    if (template.templateData.defaultJobsiteAddress) {
+      setJobsiteAddress(template.templateData.defaultJobsiteAddress);
+    }
+    if (template.templateData.defaultLatitude && template.templateData.defaultLongitude) {
+      setJobsiteCoords({
+        lat: template.templateData.defaultLatitude,
+        lng: template.templateData.defaultLongitude
+      });
+    }
+    if (template.templateData.defaultJobsiteContact) {
+      setJobsiteContact(template.templateData.defaultJobsiteContact);
+    }
+    if (template.templateData.defaultNotes) {
+      setNotes(template.templateData.defaultNotes);
+    }
+
+    // Set default dates
+    if (template.templateData.defaultStartDate !== undefined) {
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() + template.templateData.defaultStartDate);
+      setStartDate(startDate.toISOString().split('T')[0]);
+    }
+    if (template.templateData.defaultEndDate !== undefined) {
+      const endDate = new Date();
+      endDate.setDate(endDate.getDate() + template.templateData.defaultEndDate);
+      setEndDate(endDate.toISOString().split('T')[0]);
+    }
+
+    // Increment usage count
+    try {
+      await incrementUsageCount(templateId);
+    } catch (error) {
+      console.error('Error incrementing template usage:', error);
+    }
   };
 
   // Handle customer selection
@@ -422,6 +481,30 @@ const NewQuoteRequestPage = () => {
               <span className="ml-2 text-sm text-gray-500">(Status will be "New" until the involved country responds)</span>
             </div>
           </div>
+        </div>
+
+        {/* Template Selection */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700">
+            Template (Optional)
+          </label>
+          <div className="mt-1">
+            <select
+              value={selectedTemplateId}
+              onChange={(e) => handleTemplateChange(e.target.value)}
+              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            >
+              <option value="">Select a template...</option>
+              {templates.map((template) => (
+                <option key={template.id} value={template.id}>
+                  {template.name} ({template.category}) - Used {template.usageCount} times
+                </option>
+              ))}
+            </select>
+          </div>
+          <p className="mt-1 text-sm text-gray-500">
+            Select a template to pre-fill the form with common values
+          </p>
         </div>
 
         {/* Title */}
