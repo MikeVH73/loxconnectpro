@@ -79,13 +79,8 @@ export interface QuoteRequestTemplate {
   templateData: {
     title?: string;               // Default title
     description?: string;         // Default description
-    products: Array<{             // Pre-filled products
-      catClass: string;
-      quantity: number;
-      description: string;
-    }>;
-    defaultStartDate?: number;    // Days from today for default start date
-    defaultEndDate?: number;      // Days from today for default end date
+    customerId?: string;          // Pre-selected customer ID
+    involvedCountry?: string;     // Pre-selected involved country
     defaultJobsiteAddress?: string; // Default jobsite address
     defaultLatitude?: number;     // Default latitude
     defaultLongitude?: number;    // Default longitude

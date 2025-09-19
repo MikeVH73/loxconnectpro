@@ -2,12 +2,14 @@
 import { useState } from 'react';
 import { useAuth } from '../AuthProvider';
 import { useTemplates } from '../hooks/useTemplates';
+import { useCustomers } from '../hooks/useCustomers';
 import { QuoteRequestTemplate } from '../../types';
 import { FiPlus, FiEdit, FiTrash2, FiCopy, FiEye } from 'react-icons/fi';
 
 export default function TemplatesPage() {
   const { userProfile } = useAuth();
   const { templates, loading, createTemplate, updateTemplate, deleteTemplate } = useTemplates();
+  const { customers } = useCustomers();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<QuoteRequestTemplate | null>(null);
@@ -18,9 +20,8 @@ export default function TemplatesPage() {
     templateData: {
       title: '',
       description: '',
-      products: [{ catClass: '', quantity: 1, description: '' }],
-      defaultStartDate: 0,
-      defaultEndDate: 30,
+      customerId: '',
+      involvedCountry: '',
       defaultJobsiteAddress: '',
       defaultLatitude: 0,
       defaultLongitude: 0,
@@ -37,6 +38,11 @@ export default function TemplatesPage() {
     'Event',
     'General',
     'Other'
+  ];
+
+  const countries = [
+    'Belgium', 'Denmark', 'Finland', 'France', 'Germany', 'Ireland', 'Italy',
+    'Netherlands', 'Norway', 'Poland', 'Portugal', 'Spain', 'Sweden', 'United Kingdom'
   ];
 
   const handleCreateTemplate = async () => {
@@ -64,9 +70,8 @@ export default function TemplatesPage() {
         templateData: {
           title: '',
           description: '',
-          products: [{ catClass: '', quantity: 1, description: '' }],
-          defaultStartDate: 0,
-          defaultEndDate: 30,
+          customerId: '',
+          involvedCountry: '',
           defaultJobsiteAddress: '',
           defaultLatitude: 0,
           defaultLongitude: 0,
@@ -126,38 +131,6 @@ export default function TemplatesPage() {
       console.error('Error deleting template:', error);
       alert('Failed to delete template. Please try again.');
     }
-  };
-
-  const addProduct = () => {
-    setNewTemplate(prev => ({
-      ...prev,
-      templateData: {
-        ...prev.templateData,
-        products: [...prev.templateData.products, { catClass: '', quantity: 1, description: '' }]
-      }
-    }));
-  };
-
-  const removeProduct = (index: number) => {
-    setNewTemplate(prev => ({
-      ...prev,
-      templateData: {
-        ...prev.templateData,
-        products: prev.templateData.products.filter((_, i) => i !== index)
-      }
-    }));
-  };
-
-  const updateProduct = (index: number, field: string, value: any) => {
-    setNewTemplate(prev => ({
-      ...prev,
-      templateData: {
-        ...prev.templateData,
-        products: prev.templateData.products.map((product, i) => 
-          i === index ? { ...product, [field]: value } : product
-        )
-      }
-    }));
   };
 
   if (loading) {
@@ -222,7 +195,14 @@ export default function TemplatesPage() {
 
               <div className="space-y-2 mb-4">
                 <div className="text-sm">
-                  <span className="font-medium">Products:</span> {template.templateData.products.length}
+                  <span className="font-medium">Customer:</span> {
+                    template.templateData.customerId 
+                      ? customers.find(c => c.id === template.templateData.customerId)?.name || 'Unknown'
+                      : 'Not set'
+                  }
+                </div>
+                <div className="text-sm">
+                  <span className="font-medium">Country:</span> {template.templateData.involvedCountry || 'Not set'}
                 </div>
                 <div className="text-sm">
                   <span className="font-medium">Usage:</span> {template.usageCount} times
@@ -349,92 +329,47 @@ export default function TemplatesPage() {
                   </div>
                 </div>
 
-                {/* Products */}
-                <div className="mb-4">
-                  <div className="flex justify-between items-center mb-2">
-                    <label className="block text-sm font-medium text-gray-700">
-                      Default Products
-                    </label>
-                    <button
-                      onClick={addProduct}
-                      className="text-blue-600 hover:text-blue-700 text-sm"
-                    >
-                      + Add Product
-                    </button>
-                  </div>
-                  
-                  {newTemplate.templateData.products.map((product, index) => (
-                    <div key={index} className="grid grid-cols-12 gap-2 mb-2">
-                      <div className="col-span-3">
-                        <input
-                          type="text"
-                          value={product.catClass}
-                          onChange={(e) => updateProduct(index, 'catClass', e.target.value)}
-                          placeholder="Cat. Class"
-                          className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                        />
-                      </div>
-                      <div className="col-span-6">
-                        <input
-                          type="text"
-                          value={product.description}
-                          onChange={(e) => updateProduct(index, 'description', e.target.value)}
-                          placeholder="Description"
-                          className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                        />
-                      </div>
-                      <div className="col-span-2">
-                        <input
-                          type="number"
-                          value={product.quantity}
-                          onChange={(e) => updateProduct(index, 'quantity', parseInt(e.target.value) || 1)}
-                          min="1"
-                          className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                        />
-                      </div>
-                      <div className="col-span-1">
-                        <button
-                          onClick={() => removeProduct(index)}
-                          className="text-red-500 hover:text-red-700"
-                        >
-                          <FiTrash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Default Dates */}
+                {/* Customer and Country Selection */}
                 <div className="grid grid-cols-2 gap-4 mb-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Default Start Date (days from today)
+                      Default Customer
                     </label>
-                    <input
-                      type="number"
-                      value={newTemplate.templateData.defaultStartDate || 0}
+                    <select
+                      value={newTemplate.templateData.customerId || ''}
                       onChange={(e) => setNewTemplate(prev => ({
                         ...prev,
-                        templateData: { ...prev.templateData, defaultStartDate: parseInt(e.target.value) || 0 }
+                        templateData: { ...prev.templateData, customerId: e.target.value }
                       }))}
-                      min="0"
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
+                    >
+                      <option value="">Select customer...</option>
+                      {customers.map(customer => (
+                        <option key={customer.id} value={customer.id}>
+                          {customer.name}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Default End Date (days from today)
+                      Default Involved Country
                     </label>
-                    <input
-                      type="number"
-                      value={newTemplate.templateData.defaultEndDate || 30}
+                    <select
+                      value={newTemplate.templateData.involvedCountry || ''}
                       onChange={(e) => setNewTemplate(prev => ({
                         ...prev,
-                        templateData: { ...prev.templateData, defaultEndDate: parseInt(e.target.value) || 30 }
+                        templateData: { ...prev.templateData, involvedCountry: e.target.value }
                       }))}
-                      min="1"
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
+                    >
+                      <option value="">Select country...</option>
+                      {countries.map(country => (
+                        <option key={country} value={country}>
+                          {country}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 </div>
 
@@ -467,6 +402,52 @@ export default function TemplatesPage() {
                         templateData: { ...prev.templateData, defaultNotes: e.target.value }
                       }))}
                       placeholder="Default notes"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+
+                {/* Default Jobsite Contact */}
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Default Contact Name
+                    </label>
+                    <input
+                      type="text"
+                      value={newTemplate.templateData.defaultJobsiteContact?.name || ''}
+                      onChange={(e) => setNewTemplate(prev => ({
+                        ...prev,
+                        templateData: { 
+                          ...prev.templateData, 
+                          defaultJobsiteContact: { 
+                            ...prev.templateData.defaultJobsiteContact, 
+                            name: e.target.value 
+                          }
+                        }
+                      }))}
+                      placeholder="Default contact name"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Default Contact Phone
+                    </label>
+                    <input
+                      type="text"
+                      value={newTemplate.templateData.defaultJobsiteContact?.phone || ''}
+                      onChange={(e) => setNewTemplate(prev => ({
+                        ...prev,
+                        templateData: { 
+                          ...prev.templateData, 
+                          defaultJobsiteContact: { 
+                            ...prev.templateData.defaultJobsiteContact, 
+                            phone: e.target.value 
+                          }
+                        }
+                      }))}
+                      placeholder="Default contact phone"
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>

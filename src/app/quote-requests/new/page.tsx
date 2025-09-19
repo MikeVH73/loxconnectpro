@@ -217,8 +217,11 @@ const NewQuoteRequestPage = () => {
     if (template.templateData.description) {
       setDescription(template.templateData.description);
     }
-    if (template.templateData.products && template.templateData.products.length > 0) {
-      setProducts(template.templateData.products);
+    if (template.templateData.customerId) {
+      setCustomerId(template.templateData.customerId);
+    }
+    if (template.templateData.involvedCountry) {
+      setInvolvedCountry(template.templateData.involvedCountry);
     }
     if (template.templateData.defaultJobsiteAddress) {
       setJobsiteAddress(template.templateData.defaultJobsiteAddress);
@@ -234,18 +237,6 @@ const NewQuoteRequestPage = () => {
     }
     if (template.templateData.defaultNotes) {
       setNotes(template.templateData.defaultNotes);
-    }
-
-    // Set default dates
-    if (template.templateData.defaultStartDate !== undefined) {
-      const startDate = new Date();
-      startDate.setDate(startDate.getDate() + template.templateData.defaultStartDate);
-      setStartDate(startDate.toISOString().split('T')[0]);
-    }
-    if (template.templateData.defaultEndDate !== undefined) {
-      const endDate = new Date();
-      endDate.setDate(endDate.getDate() + template.templateData.defaultEndDate);
-      setEndDate(endDate.toISOString().split('T')[0]);
     }
 
     // Increment usage count
@@ -495,11 +486,16 @@ const NewQuoteRequestPage = () => {
               className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
             >
               <option value="">Select a template...</option>
-              {templates.map((template) => (
-                <option key={template.id} value={template.id}>
-                  {template.name} ({template.category}) - Used {template.usageCount} times
-                </option>
-              ))}
+              {templates.map((template) => {
+                const customerName = template.templateData.customerId 
+                  ? customers.find(c => c.id === template.templateData.customerId)?.name || 'Unknown'
+                  : 'No customer';
+                return (
+                  <option key={template.id} value={template.id}>
+                    {template.name} ({template.category}) - {customerName} - {template.templateData.involvedCountry || 'Any country'} - Used {template.usageCount} times
+                  </option>
+                );
+              })}
             </select>
           </div>
           <p className="mt-1 text-sm text-gray-500">
