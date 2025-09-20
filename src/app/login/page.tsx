@@ -65,12 +65,22 @@ export default function LoginPage() {
           if (userDoc.exists()) {
             const userData = userDoc.data();
             if (userData.tempPassword === password) {
-              // Temporary password matches, allow login
-              // We need to create a custom auth session or redirect to password change
-              setError("Temporary password accepted. Please change your password on the next page.");
-              // For now, we'll redirect to profile page to change password
-              router.replace("/users/profile?tempPassword=true");
-              return;
+              // Temporary password matches, try to sign in with it
+              try {
+                const cred = await signInWithEmailAndPassword(auth, email, password);
+                const idToken = await getIdToken(cred.user, true);
+                await fetch('/api/auth/session', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ idToken })
+                });
+                // Redirect to profile page to change password
+                router.replace("/users/profile?tempPassword=true");
+                return;
+              } catch (tempErr: any) {
+                setError("Temporary password is invalid or expired. Please contact an admin for a new temporary password.");
+                return;
+              }
             }
           }
         } catch (firestoreErr) {
@@ -78,11 +88,20 @@ export default function LoginPage() {
         }
       }
       
-      // Friendlier hint for unverified emails or strict policy
+      // Enhanced error handling with specific guidance
+      console.error('Login error:', err);
       if (err?.code === 'auth/invalid-credential') {
-        setError('Login failed. If you recently changed your email, make sure it is verified. Contact an admin to resend a verification email.');
+        setError('Login failed. Please check your email and password. If you recently changed your email, make sure it is verified. Contact an admin to resend a verification email.');
+      } else if (err?.code === 'auth/user-not-found') {
+        setError('No account found with this email address. Please contact an admin to create your account.');
+      } else if (err?.code === 'auth/wrong-password') {
+        setError('Incorrect password. If you have a temporary password, please use it. Otherwise, contact an admin to reset your password.');
+      } else if (err?.code === 'auth/too-many-requests') {
+        setError('Too many failed login attempts. Please wait a few minutes before trying again.');
+      } else if (err?.code === 'auth/network-request-failed') {
+        setError('Network error. Please check your internet connection and try again.');
       } else {
-        setError(err.message || "Login failed");
+        setError(err.message || "Login failed. Please contact an admin for assistance.");
       }
     } finally {
       setSubmitting(false);

@@ -30,15 +30,18 @@ export async function POST(request: NextRequest) {
   try {
     const { idToken } = await request.json();
     if (!idToken) {
+      console.error('Session API: Missing idToken');
       return NextResponse.json({ error: 'Missing idToken' }, { status: 400 });
     }
 
     const auth = getAdminAuth();
     // Verify token to ensure it's valid for this project
-    await auth.verifyIdToken(idToken);
+    const decodedToken = await auth.verifyIdToken(idToken);
+    console.log('Session API: Token verified for user:', decodedToken.email);
 
     const expiresIn = getExpiresMs();
     const sessionCookie = await auth.createSessionCookie(idToken, { expiresIn });
+    console.log('Session API: Session cookie created successfully');
 
     const res = NextResponse.json({ ok: true }, { status: 200 });
     res.cookies.set('__session', sessionCookie, {
@@ -50,6 +53,7 @@ export async function POST(request: NextRequest) {
     });
     return res;
   } catch (error: any) {
+    console.error('Session API error:', error);
     return NextResponse.json({ error: error?.message || 'Failed to set session' }, { status: 400 });
   }
 }
