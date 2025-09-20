@@ -83,6 +83,7 @@ export interface QuoteRequestTemplate {
     defaultJobsiteAddress?: string; // Default jobsite address
     defaultCoordinates?: string;   // Combined latitude,longitude (e.g., "51.9244, 4.4777")
     defaultJobsiteContactId?: string; // Pre-selected jobsite contact ID
+    defaultCustomerNumber?: string; // Default customer number for involved country
     defaultNotes?: string;        // Default notes
   };
   

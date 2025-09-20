@@ -239,6 +239,9 @@ const NewQuoteRequestPage = () => {
     if (template.templateData.defaultJobsiteContactId) {
       setJobsiteContactId(template.templateData.defaultJobsiteContactId);
     }
+    if (template.templateData.defaultCustomerNumber) {
+      setCustomerNumber(template.templateData.defaultCustomerNumber);
+    }
     if (template.templateData.defaultNotes) {
       setNotes(template.templateData.defaultNotes);
     }
