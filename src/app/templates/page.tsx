@@ -1,10 +1,12 @@
 "use client";
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../AuthProvider';
 import { useTemplates } from '../hooks/useTemplates';
 import { useCustomers } from '../hooks/useCustomers';
 import { QuoteRequestTemplate } from '../../types';
 import { FiPlus, FiEdit, FiTrash2, FiCopy, FiEye } from 'react-icons/fi';
+import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
+import { db } from '../../firebaseClient';
 
 export default function TemplatesPage() {
   const { userProfile } = useAuth();
@@ -13,6 +15,7 @@ export default function TemplatesPage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<QuoteRequestTemplate | null>(null);
+  const [customerContacts, setCustomerContacts] = useState<Record<string, any[]>>({});
   const [newTemplate, setNewTemplate] = useState({
     name: '',
     description: '',
@@ -30,8 +33,10 @@ export default function TemplatesPage() {
   });
 
   const countries = [
-    'Belgium', 'Denmark', 'Finland', 'France', 'Germany', 'Ireland', 'Italy',
-    'Netherlands', 'Norway', 'Poland', 'Portugal', 'Spain', 'Sweden', 'United Kingdom'
+    'Loxcall Austria', 'Loxcall Belgium', 'Loxcall Denmark', 'Loxcall Finland', 'Loxcall France', 
+    'Loxcall Germany', 'Loxcall Ireland', 'Loxcall Italy', 'Loxcall Luxembourg', 'Loxcall Netherlands', 
+    'Loxcall Norway', 'Loxcall Poland', 'Loxcall Portugal', 'Loxcall Spain', 'Loxcall Sweden', 
+    'Loxcall Switzerland', 'Loxcall UK', 'Nationwide Platforms UK', 'Ramirent Finland'
   ];
 
   // Get user's customers only
@@ -40,6 +45,56 @@ export default function TemplatesPage() {
     const userCountry = userProfile.businessUnit || userProfile.countries?.[0];
     return customer.countries?.includes(userCountry) || customer.ownerCountry === userCountry;
   });
+
+  // Fetch customer contacts when customer is selected
+  const fetchCustomerContacts = async (customerId: string) => {
+    if (!customerId || !db) return;
+
+    try {
+      const customerDoc = await getDoc(doc(db, "customers", customerId));
+      if (customerDoc.exists()) {
+        const customerData = customerDoc.data();
+        let allContacts: any[] = [];
+        
+        // Add first contact if it exists
+        if (customerData.contact && customerData.phone) {
+          allContacts.push({
+            id: 'main',
+            name: customerData.contact,
+            phone: customerData.phone,
+            email: customerData.email || '',
+            type: 'first'
+          });
+        }
+        
+        // Fetch jobsite contacts from subcollection
+        const contactsRef = collection(db, `customers/${customerId}/contacts`);
+        const contactsSnapshot = await getDocs(contactsRef);
+        const jobsiteContacts = contactsSnapshot.docs.map(doc => ({
+          id: doc.id,
+          name: doc.data().name,
+          phone: doc.data().phone,
+          email: doc.data().email || '',
+          type: 'jobsite'
+        }));
+        
+        allContacts = [...allContacts, ...jobsiteContacts];
+        setCustomerContacts(prev => ({
+          ...prev,
+          [customerId]: allContacts
+        }));
+      }
+    } catch (error) {
+      console.error('Error fetching customer contacts:', error);
+    }
+  };
+
+  // Fetch contacts when customer changes
+  useEffect(() => {
+    if (newTemplate.templateData.customerId) {
+      fetchCustomerContacts(newTemplate.templateData.customerId);
+    }
+  }, [newTemplate.templateData.customerId]);
 
   const handleCreateTemplate = async () => {
     if (!userProfile || !newTemplate.name) {
@@ -425,7 +480,7 @@ export default function TemplatesPage() {
                     >
                       <option value="">Select contact...</option>
                       {newTemplate.templateData.customerId && 
-                        userCustomers.find(c => c.id === newTemplate.templateData.customerId)?.jobsiteContacts?.map(contact => (
+                        customerContacts[newTemplate.templateData.customerId]?.map(contact => (
                           <option key={contact.id} value={contact.id}>
                             {contact.name} - {contact.phone}
                           </option>
