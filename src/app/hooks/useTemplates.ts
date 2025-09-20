@@ -44,6 +44,8 @@ export function useTemplates(userCountry?: string) {
         });
         
         setTemplates(templatesData);
+        console.log('Templates loaded:', templatesData.length, 'templates');
+        console.log('Sample template:', templatesData[0]);
         setLoading(false);
       } catch (error) {
         console.error('Error fetching templates:', error);
