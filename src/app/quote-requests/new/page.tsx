@@ -247,6 +247,15 @@ const NewQuoteRequestPage = () => {
       setNotes(template.templateData.defaultNotes);
     }
 
+    // Fallback: If template doesn't have customer number but we have customer and country,
+    // try to get it from customer data
+    if (!template.templateData.defaultCustomerNumber && 
+        template.templateData.customerId && 
+        template.templateData.involvedCountry) {
+      // This will be handled by the useEffect when customerDetails loads
+      console.log('Template missing customer number, will try to get from customer data');
+    }
+
     console.log('Template applied successfully');
 
     // Increment usage count
