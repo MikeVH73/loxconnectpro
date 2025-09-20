@@ -100,6 +100,8 @@ export default function LoginPage() {
         setError('Too many failed login attempts. Please wait a few minutes before trying again.');
       } else if (err?.code === 'auth/network-request-failed') {
         setError('Network error. Please check your internet connection and try again.');
+      } else if (err?.code === 'auth/user-disabled') {
+        setError('Your account has been disabled. Please contact an admin to reactivate your account.');
       } else {
         setError(err.message || "Login failed. Please contact an admin for assistance.");
       }

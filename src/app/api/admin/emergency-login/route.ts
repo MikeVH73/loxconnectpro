@@ -22,6 +22,17 @@ export async function POST(req: NextRequest) {
     try {
       const userRecord = await auth.getUserByEmail(email);
       
+      // Check if user is disabled
+      if (userRecord.disabled) {
+        console.log(`User ${email} is disabled, reactivating...`);
+        // Reactivate the user
+        await auth.updateUser(userRecord.uid, { 
+          disabled: false,
+          emailVerified: true // Ensure email is verified
+        });
+        console.log(`User ${email} reactivated successfully`);
+      }
+      
       // Generate a temporary password
       const tempPassword = Math.random().toString(36).slice(-12);
       
@@ -34,7 +45,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ 
         success: true, 
         tempPassword,
-        message: 'Emergency login successful. Use the temporary password to log in.'
+        wasDisabled: userRecord.disabled,
+        message: userRecord.disabled 
+          ? 'User was disabled and has been reactivated. Use the temporary password to log in.'
+          : 'Emergency login successful. Use the temporary password to log in.'
       });
       
     } catch (userError: any) {
