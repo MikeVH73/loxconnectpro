@@ -88,7 +88,7 @@ export default function LoginPage() {
         }
       }
       
-      // Enhanced error handling with specific guidance
+      // Enhanced error handling with user-friendly messages
       console.error('Login error:', err);
       if (err?.code === 'auth/invalid-credential') {
         setError('Login failed. Please check your email and password. If you recently changed your email, make sure it is verified. Contact an admin to resend a verification email.');
@@ -101,9 +101,17 @@ export default function LoginPage() {
       } else if (err?.code === 'auth/network-request-failed') {
         setError('Network error. Please check your internet connection and try again.');
       } else if (err?.code === 'auth/user-disabled') {
-        setError('Your account has been disabled. Please contact an admin to reactivate your account.');
+        setError('Account disabled. Login not possible; contact your (super)Admin.');
+      } else if (err?.code === 'auth/email-not-verified') {
+        setError('Email not verified. Please check your email for a verification link or contact an admin to resend it.');
+      } else if (err?.code === 'auth/account-exists-with-different-credential') {
+        setError('An account already exists with this email using a different login method. Please contact an admin for assistance.');
+      } else if (err?.code === 'auth/operation-not-allowed') {
+        setError('Login method not allowed. Please contact an admin for assistance.');
+      } else if (err?.code === 'auth/weak-password') {
+        setError('Password is too weak. Please choose a stronger password.');
       } else {
-        setError(err.message || "Login failed. Please contact an admin for assistance.");
+        setError('Login failed. Please contact an admin for assistance.');
       }
     } finally {
       setSubmitting(false);
