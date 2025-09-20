@@ -212,36 +212,25 @@ const NewQuoteRequestPage = () => {
     if (!template) return;
 
     console.log('Applying template:', template);
-    console.log('Template data:', template.templateData);
     setSelectedTemplateId(templateId);
 
     // Apply template data to form
     if (template.templateData.title) {
-      console.log('Setting title:', template.templateData.title);
       setTitle(template.templateData.title);
     }
-    if (template.templateData.description) {
-      console.log('Setting description:', template.templateData.description);
-      setDescription(template.templateData.description);
-    }
     if (template.templateData.customerId) {
-      console.log('Setting customerId:', template.templateData.customerId);
       setCustomerId(template.templateData.customerId);
     }
     if (template.templateData.involvedCountry) {
-      console.log('Setting involvedCountry:', template.templateData.involvedCountry);
       setInvolvedCountry(template.templateData.involvedCountry);
     }
     if (template.templateData.defaultJobsiteAddress) {
-      console.log('Setting jobsiteAddress:', template.templateData.defaultJobsiteAddress);
       setJobsiteAddress(template.templateData.defaultJobsiteAddress);
     }
     if (template.templateData.defaultCoordinates) {
-      console.log('Setting coordinates:', template.templateData.defaultCoordinates);
       // Parse coordinates from "lat, lng" format
       const coords = template.templateData.defaultCoordinates.split(',').map(c => parseFloat(c.trim()));
       if (coords.length === 2 && !isNaN(coords[0]) && !isNaN(coords[1])) {
-        console.log('Parsed coordinates:', coords);
         setJobsiteCoords({
           lat: coords[0],
           lng: coords[1]
@@ -249,15 +238,12 @@ const NewQuoteRequestPage = () => {
       }
     }
     if (template.templateData.defaultJobsiteContactId) {
-      console.log('Setting jobsiteContactId:', template.templateData.defaultJobsiteContactId);
       setJobsiteContactId(template.templateData.defaultJobsiteContactId);
     }
     if (template.templateData.defaultCustomerNumber) {
-      console.log('Setting customerNumber:', template.templateData.defaultCustomerNumber);
       setCustomerNumber(template.templateData.defaultCustomerNumber);
     }
     if (template.templateData.defaultNotes) {
-      console.log('Setting notes:', template.templateData.defaultNotes);
       setNotes(template.templateData.defaultNotes);
     }
 
