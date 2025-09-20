@@ -165,24 +165,12 @@ const NewQuoteRequestPage = () => {
 
   // Update customer number when involved country changes
   useEffect(() => {
-    console.log('Customer number useEffect triggered:', {
-      customerId,
-      involvedCountry,
-      customerDetails: customerDetails?.customerNumbers,
-      currentCustomerNumber: customerNumber
-    });
-    
     if (customerId && involvedCountry && customerDetails?.customerNumbers) {
       // Only set customer number if it's not already set from template
       if (!customerNumber) {
-        const newCustomerNumber = customerDetails.customerNumbers[involvedCountry] || "";
-        console.log('Setting customer number from customer data:', newCustomerNumber);
-        setCustomerNumber(newCustomerNumber);
-      } else {
-        console.log('Customer number already set, not overwriting');
+        setCustomerNumber(customerDetails.customerNumbers[involvedCountry] || "");
       }
     } else {
-      console.log('Clearing customer number - missing data');
       setCustomerNumber("");
     }
   }, [customerId, involvedCountry, customerDetails, customerNumber]);
@@ -253,10 +241,7 @@ const NewQuoteRequestPage = () => {
       setJobsiteContactId(template.templateData.defaultJobsiteContactId);
     }
     if (template.templateData.defaultCustomerNumber) {
-      console.log('Setting customerNumber from template:', template.templateData.defaultCustomerNumber);
       setCustomerNumber(template.templateData.defaultCustomerNumber);
-    } else {
-      console.log('No defaultCustomerNumber in template data');
     }
     if (template.templateData.defaultNotes) {
       setNotes(template.templateData.defaultNotes);

@@ -427,10 +427,25 @@ export default function TemplatesPage() {
                     </label>
                     <select
                       value={newTemplate.templateData.involvedCountry || ''}
-                      onChange={(e) => setNewTemplate(prev => ({
-                        ...prev,
-                        templateData: { ...prev.templateData, involvedCountry: e.target.value }
-                      }))}
+                      onChange={(e) => {
+                        const involvedCountry = e.target.value;
+                        setNewTemplate(prev => {
+                          const updatedTemplate = {
+                            ...prev,
+                            templateData: { ...prev.templateData, involvedCountry }
+                          };
+                          
+                          // Auto-populate customer number if customer is selected
+                          if (prev.templateData.customerId && involvedCountry) {
+                            const customer = customers.find(c => c.id === prev.templateData.customerId);
+                            if (customer?.customerNumbers?.[involvedCountry]) {
+                              updatedTemplate.templateData.defaultCustomerNumber = customer.customerNumbers[involvedCountry];
+                            }
+                          }
+                          
+                          return updatedTemplate;
+                        });
+                      }}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
                       <option value="">Select country...</option>
@@ -624,20 +639,32 @@ export default function TemplatesPage() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Default Customer
                   </label>
-                  <select
-                    value={newTemplate.templateData.customerId || ''}
-                    onChange={(e) => {
-                      const customerId = e.target.value;
-                      setNewTemplate(prev => ({
-                        ...prev,
-                        templateData: { ...prev.templateData, customerId }
-                      }));
-                      if (customerId) {
-                        fetchCustomerContacts(customerId);
-                      }
-                    }}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
+                    <select
+                      value={newTemplate.templateData.customerId || ''}
+                      onChange={(e) => {
+                        const customerId = e.target.value;
+                        setNewTemplate(prev => {
+                          const updatedTemplate = {
+                            ...prev,
+                            templateData: { ...prev.templateData, customerId }
+                          };
+                          
+                          // Auto-populate customer number if involved country is selected
+                          if (customerId && prev.templateData.involvedCountry) {
+                            const customer = customers.find(c => c.id === customerId);
+                            if (customer?.customerNumbers?.[prev.templateData.involvedCountry]) {
+                              updatedTemplate.templateData.defaultCustomerNumber = customer.customerNumbers[prev.templateData.involvedCountry];
+                            }
+                          }
+                          
+                          return updatedTemplate;
+                        });
+                        if (customerId) {
+                          fetchCustomerContacts(customerId);
+                        }
+                      }}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
                     <option value="">Select customer...</option>
                     {userCustomers.map(customer => (
                       <option key={customer.id} value={customer.id}>{customer.name}</option>
