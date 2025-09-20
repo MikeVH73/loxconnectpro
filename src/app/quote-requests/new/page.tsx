@@ -83,7 +83,7 @@ const NewQuoteRequestPage = () => {
   const router = useRouter();
   const { userProfile, user } = useAuth();
   const { customers } = useCustomers();
-  const { templates, incrementUsageCount } = useTemplates();
+  const { templates, incrementUsageCount } = useTemplates(userProfile?.businessUnit || userProfile?.countries?.[0]);
   // Jobsites integration permanently disabled due to persistent loading issues
   // const { jobsites, loading: jobsitesLoading, createJobsite } = useJobsites(
   //   customerId && customerId.trim() !== '' ? customerId : undefined

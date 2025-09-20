@@ -3,7 +3,7 @@ import { collection, getDocs, addDoc, doc, updateDoc, query, where } from 'fireb
 import { db } from '../../firebaseClient';
 import { QuoteRequestTemplate } from '../../types';
 
-export function useTemplates() {
+export function useTemplates(userCountry?: string) {
   const [templates, setTemplates] = useState<QuoteRequestTemplate[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -15,7 +15,7 @@ export function useTemplates() {
 
     const fetchTemplates = async () => {
       try {
-        // Fetch all active templates
+        // Fetch templates filtered by country
         const templatesQuery = collection(db, 'quoteRequestTemplates');
         const snapshot = await getDocs(templatesQuery);
         
@@ -26,6 +26,13 @@ export function useTemplates() {
         
         // Filter for active templates only
         templatesData = templatesData.filter(template => template.isActive === true);
+        
+        // Filter by country: only show templates from user's country
+        if (userCountry) {
+          templatesData = templatesData.filter(template => 
+            template.createdByCountry === userCountry
+          );
+        }
         
         // Sort by usage count (most used first), then by name
         templatesData.sort((a, b) => {
@@ -44,7 +51,7 @@ export function useTemplates() {
     };
 
     fetchTemplates();
-  }, []);
+  }, [userCountry]);
 
   const createTemplate = async (templateData: Omit<QuoteRequestTemplate, 'id' | 'createdAt' | 'updatedAt' | 'usageCount'>) => {
     if (!db) throw new Error('Database not available');

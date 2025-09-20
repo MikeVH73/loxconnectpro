@@ -10,7 +10,8 @@ import { db } from '../../firebaseClient';
 
 export default function TemplatesPage() {
   const { userProfile } = useAuth();
-  const { templates, loading, createTemplate, updateTemplate, deleteTemplate } = useTemplates();
+  const userCountry = userProfile?.businessUnit || userProfile?.countries?.[0] || 'Unknown';
+  const { templates, loading, createTemplate, updateTemplate, deleteTemplate } = useTemplates(userCountry);
   const { customers } = useCustomers();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -143,7 +144,6 @@ export default function TemplatesPage() {
     setNewTemplate({
       name: template.name,
       description: template.description,
-      category: template.category,
       templateData: template.templateData,
       isPublic: template.isPublic
     });
@@ -151,8 +151,8 @@ export default function TemplatesPage() {
   };
 
   const handleUpdateTemplate = async () => {
-    if (!editingTemplate || !newTemplate.name || !newTemplate.category) {
-      alert('Please fill in template name and category');
+    if (!editingTemplate || !newTemplate.name) {
+      alert('Please fill in template name');
       return;
     }
 
@@ -160,13 +160,27 @@ export default function TemplatesPage() {
       await updateTemplate(editingTemplate.id, {
         name: newTemplate.name,
         description: newTemplate.description,
-        category: newTemplate.category,
         templateData: newTemplate.templateData,
         isPublic: newTemplate.isPublic
       });
 
       setShowEditModal(false);
       setEditingTemplate(null);
+      setNewTemplate({
+        name: '',
+        description: '',
+        templateData: {
+          title: '',
+          description: '',
+          customerId: '',
+          involvedCountry: '',
+          defaultJobsiteAddress: '',
+          defaultCoordinates: '',
+          defaultJobsiteContactId: '',
+          defaultNotes: ''
+        },
+        isPublic: false
+      });
     } catch (error) {
       console.error('Error updating template:', error);
       alert('Failed to update template. Please try again.');
