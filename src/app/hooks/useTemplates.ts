@@ -27,7 +27,8 @@ export function useTemplates(userCountry?: string) {
         // Filter for active templates only
         templatesData = templatesData.filter(template => template.isActive === true);
         
-        // Filter by country: only show templates from user's country
+        // Filter by country: show templates created by user's country
+        // Templates are created by users from their country for various involved countries
         if (userCountry) {
           templatesData = templatesData.filter(template => 
             template.createdByCountry === userCountry

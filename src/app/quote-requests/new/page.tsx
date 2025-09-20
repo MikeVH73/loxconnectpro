@@ -166,11 +166,14 @@ const NewQuoteRequestPage = () => {
   // Update customer number when involved country changes
   useEffect(() => {
     if (customerId && involvedCountry && customerDetails?.customerNumbers) {
-      setCustomerNumber(customerDetails.customerNumbers[involvedCountry] || "");
-          } else {
+      // Only set customer number if it's not already set from template
+      if (!customerNumber) {
+        setCustomerNumber(customerDetails.customerNumbers[involvedCountry] || "");
+      }
+    } else {
       setCustomerNumber("");
     }
-  }, [customerId, involvedCountry, customerDetails]);
+  }, [customerId, involvedCountry, customerDetails, customerNumber]);
 
   // Handle jobsite selection - Permanently disabled
   const handleJobsiteChange = (jobsiteId: string) => {
@@ -208,6 +211,7 @@ const NewQuoteRequestPage = () => {
     const template = templates.find(t => t.id === templateId);
     if (!template) return;
 
+    console.log('Applying template:', template);
     setSelectedTemplateId(templateId);
 
     // Apply template data to form
@@ -245,6 +249,8 @@ const NewQuoteRequestPage = () => {
     if (template.templateData.defaultNotes) {
       setNotes(template.templateData.defaultNotes);
     }
+
+    console.log('Template applied successfully');
 
     // Increment usage count
     try {
