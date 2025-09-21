@@ -8,7 +8,7 @@ import { useAuth } from "../../AuthProvider";
 import dynamic from 'next/dynamic';
 import { Fragment } from "react";
 import dayjs from "dayjs";
-import { getProductByCode } from "../../utils/products";
+import { getProductByCode, normalizeCode } from "../../utils/products";
 
 // Dynamically import components with proper loading states
 const CountrySelect = dynamic(() => import("../../components/CountrySelect"), {

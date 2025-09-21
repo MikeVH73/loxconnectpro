@@ -1570,35 +1570,35 @@ export default function EditQuoteRequest() {
                 </div>
 
                 {/* Coordinates */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">Latitude</label>
-                    <input
-                      type="number"
-                      step="0.000001"
-                      min="-90"
-                      max="90"
-                      value={quoteRequest.latitude || ''}
-                      onChange={(e) => handleInputChange("latitude", e.target.value)}
-                      placeholder="e.g., 51.9244"
-                      className="w-full p-2 border border-gray-300 rounded-md"
-                      disabled={isReadOnly}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">Longitude</label>
-                    <input
-                      type="number"
-                      step="0.000001"
-                      min="-180"
-                      max="180"
-                      value={quoteRequest.longitude || ''}
-                      onChange={(e) => handleInputChange("longitude", e.target.value)}
-                      placeholder="e.g., 4.4777"
-                      className="w-full p-2 border border-gray-300 rounded-md"
-                      disabled={isReadOnly}
-                    />
-                  </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Coordinates</label>
+                  <input
+                    type="text"
+                    value={quoteRequest.latitude && quoteRequest.longitude ? `${quoteRequest.latitude}, ${quoteRequest.longitude}` : ''}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (value.includes(',')) {
+                        const parts = value.split(',').map(p => p.trim());
+                        if (parts.length === 2) {
+                          const lat = parseFloat(parts[0]);
+                          const lng = parseFloat(parts[1]);
+                          if (!isNaN(lat) && !isNaN(lng)) {
+                            handleInputChange("latitude", lat.toString());
+                            handleInputChange("longitude", lng.toString());
+                          }
+                        }
+                      } else {
+                        const lat = parseFloat(value);
+                        if (!isNaN(lat)) {
+                          handleInputChange("latitude", lat.toString());
+                        }
+                      }
+                    }}
+                    placeholder="e.g., 51.9244, 4.4777"
+                    className="w-full p-2 border border-gray-300 rounded-md"
+                    disabled={isReadOnly}
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Enter coordinates separated by comma (e.g., 51.9244, 4.4777)</p>
                 </div>
 
                 {/* Jobsite Contact */}
