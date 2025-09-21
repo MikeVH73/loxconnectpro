@@ -1283,7 +1283,7 @@ export default function EditQuoteRequest() {
       <div className="flex-1 flex overflow-hidden">
         {/* Form Content - Scrollable */}
         <div className="flex-1 overflow-y-auto p-6">
-          <div className="max-w-5xl mx-auto text-sm">
+          <div className="w-full text-sm">
             {/* Header */}
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center space-x-4">
@@ -1812,7 +1812,7 @@ export default function EditQuoteRequest() {
         </div>
 
         {/* Right Panel - Fixed width */}
-        <div className="w-[360px] min-w-[360px] border-l border-gray-200 bg-white">
+        <div className="w-[384px] min-w-[384px] border-l border-gray-200 bg-white">
             <MessagingPanel
             messages={messages || []}
               currentUser={user?.email || ''}
