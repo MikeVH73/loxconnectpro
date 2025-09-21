@@ -1583,14 +1583,19 @@ export default function EditQuoteRequest() {
                           const lat = parseFloat(parts[0]);
                           const lng = parseFloat(parts[1]);
                           if (!isNaN(lat) && !isNaN(lng)) {
-                            handleInputChange("latitude", lat.toString());
-                            handleInputChange("longitude", lng.toString());
+                            // Round to 5 decimal places for cleaner display
+                            const roundedLat = Math.round(lat * 100000) / 100000;
+                            const roundedLng = Math.round(lng * 100000) / 100000;
+                            handleInputChange("latitude", roundedLat.toString());
+                            handleInputChange("longitude", roundedLng.toString());
                           }
                         }
                       } else {
                         const lat = parseFloat(value);
                         if (!isNaN(lat)) {
-                          handleInputChange("latitude", lat.toString());
+                          // Round to 5 decimal places for cleaner display
+                          const roundedLat = Math.round(lat * 100000) / 100000;
+                          handleInputChange("latitude", roundedLat.toString());
                         }
                       }
                     }}

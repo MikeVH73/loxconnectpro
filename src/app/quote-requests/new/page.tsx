@@ -243,9 +243,10 @@ const NewQuoteRequestPage = () => {
       // Parse coordinates from "lat, lng" format
       const coords = template.templateData.defaultCoordinates.split(',').map(c => parseFloat(c.trim()));
       if (coords.length === 2 && !isNaN(coords[0]) && !isNaN(coords[1])) {
+        // Round to 5 decimal places for cleaner display
         setJobsiteCoords({
-          lat: coords[0],
-          lng: coords[1]
+          lat: Math.round(coords[0] * 100000) / 100000,
+          lng: Math.round(coords[1] * 100000) / 100000
         });
       }
     }
@@ -784,14 +785,18 @@ const NewQuoteRequestPage = () => {
                     const lat = parseFloat(parts[0]);
                     const lng = parseFloat(parts[1]);
                     if (!isNaN(lat) && !isNaN(lng)) {
-                      setJobsiteCoords({ lat, lng });
+                      // Round to 5 decimal places for cleaner display
+                      setJobsiteCoords({ 
+                        lat: Math.round(lat * 100000) / 100000, 
+                        lng: Math.round(lng * 100000) / 100000 
+                      });
                     }
                   }
                 } else {
                   const lat = parseFloat(value);
                   if (!isNaN(lat)) {
                     setJobsiteCoords(prev => ({
-                      lat,
+                      lat: Math.round(lat * 100000) / 100000,
                       lng: prev?.lng || 0
                     }));
                   }

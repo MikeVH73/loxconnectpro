@@ -482,10 +482,30 @@ export default function TemplatesPage() {
                     <input
                       type="text"
                       value={newTemplate.templateData.defaultCoordinates || ''}
-                      onChange={(e) => setNewTemplate(prev => ({
-                        ...prev,
-                        templateData: { ...prev.templateData, defaultCoordinates: e.target.value }
-                      }))}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        let normalizedValue = value;
+                        
+                        // Normalize coordinates if they contain comma
+                        if (value.includes(',')) {
+                          const parts = value.split(',').map(p => p.trim());
+                          if (parts.length === 2) {
+                            const lat = parseFloat(parts[0]);
+                            const lng = parseFloat(parts[1]);
+                            if (!isNaN(lat) && !isNaN(lng)) {
+                              // Round to 5 decimal places for cleaner display
+                              const roundedLat = Math.round(lat * 100000) / 100000;
+                              const roundedLng = Math.round(lng * 100000) / 100000;
+                              normalizedValue = `${roundedLat}, ${roundedLng}`;
+                            }
+                          }
+                        }
+                        
+                        setNewTemplate(prev => ({
+                          ...prev,
+                          templateData: { ...prev.templateData, defaultCoordinates: normalizedValue }
+                        }));
+                      }}
                       placeholder="e.g., 51.9244, 4.4777"
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
@@ -717,10 +737,30 @@ export default function TemplatesPage() {
                   <input
                     type="text"
                     value={newTemplate.templateData.defaultCoordinates || ''}
-                    onChange={(e) => setNewTemplate(prev => ({
-                      ...prev,
-                      templateData: { ...prev.templateData, defaultCoordinates: e.target.value }
-                    }))}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      let normalizedValue = value;
+                      
+                      // Normalize coordinates if they contain comma
+                      if (value.includes(',')) {
+                        const parts = value.split(',').map(p => p.trim());
+                        if (parts.length === 2) {
+                          const lat = parseFloat(parts[0]);
+                          const lng = parseFloat(parts[1]);
+                          if (!isNaN(lat) && !isNaN(lng)) {
+                            // Round to 5 decimal places for cleaner display
+                            const roundedLat = Math.round(lat * 100000) / 100000;
+                            const roundedLng = Math.round(lng * 100000) / 100000;
+                            normalizedValue = `${roundedLat}, ${roundedLng}`;
+                          }
+                        }
+                      }
+                      
+                      setNewTemplate(prev => ({
+                        ...prev,
+                        templateData: { ...prev.templateData, defaultCoordinates: normalizedValue }
+                      }));
+                    }}
                     placeholder="e.g., 51.9244, 4.4777"
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
