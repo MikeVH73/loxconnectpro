@@ -8,6 +8,7 @@ import { useAuth } from "../../AuthProvider";
 import dynamic from 'next/dynamic';
 import { Fragment } from "react";
 import dayjs from "dayjs";
+import { getProductByCode } from "../../utils/products";
 
 // Dynamically import components with proper loading states
 const CountrySelect = dynamic(() => import("../../components/CountrySelect"), {
@@ -166,14 +167,25 @@ const NewQuoteRequestPage = () => {
   // Update customer number when involved country changes
   useEffect(() => {
     if (customerId && involvedCountry && customerDetails?.customerNumbers) {
-      // Only set customer number if it's not already set from template
-      if (!customerNumber) {
-        setCustomerNumber(customerDetails.customerNumbers[involvedCountry] || "");
+      // Set customer number from customer data if:
+      // 1. No customer number is currently set, OR
+      // 2. Customer number is empty string (template didn't provide one)
+      if (!customerNumber || customerNumber === "") {
+        const newCustomerNumber = customerDetails.customerNumbers[involvedCountry] || "";
+        console.log('Setting customer number from customer data:', newCustomerNumber);
+        setCustomerNumber(newCustomerNumber);
       }
     } else {
       setCustomerNumber("");
     }
   }, [customerId, involvedCountry, customerDetails, customerNumber]);
+
+  // Load customer details when customerId changes (e.g., from template)
+  useEffect(() => {
+    if (customerId && customerId !== "") {
+      loadCustomerData(customerId);
+    }
+  }, [customerId]);
 
   // Handle jobsite selection - Permanently disabled
   const handleJobsiteChange = (jobsiteId: string) => {
@@ -247,15 +259,6 @@ const NewQuoteRequestPage = () => {
       setNotes(template.templateData.defaultNotes);
     }
 
-    // Fallback: If template doesn't have customer number but we have customer and country,
-    // try to get it from customer data
-    if (!template.templateData.defaultCustomerNumber && 
-        template.templateData.customerId && 
-        template.templateData.involvedCountry) {
-      // This will be handled by the useEffect when customerDetails loads
-      console.log('Template missing customer number, will try to get from customer data');
-    }
-
     console.log('Template applied successfully');
 
     // Increment usage count
@@ -267,14 +270,7 @@ const NewQuoteRequestPage = () => {
   };
 
   // Handle customer selection
-  const handleCustomerChange = async (selectedCustomerId: string) => {
-    setCustomerId(selectedCustomerId);
-    setJobsiteContactId("");
-    setContacts([]);
-    setSelectedJobsiteId("");
-    setJobsiteAddress("");
-    setJobsiteCoords(null);
-
+  const loadCustomerData = async (selectedCustomerId: string) => {
     if (!selectedCustomerId || !db) return;
 
     try {
@@ -307,6 +303,7 @@ const NewQuoteRequestPage = () => {
         
         allContacts = [...allContacts, ...jobsiteContacts];
         setContacts(allContacts);
+        setCustomerContacts(allContacts);
         
         if (jobsiteContacts.length > 0) {
           setJobsiteContactId(jobsiteContacts[0].id);
@@ -318,6 +315,17 @@ const NewQuoteRequestPage = () => {
       console.error("Error fetching customer details:", err);
       setError("Failed to fetch customer details");
     }
+  };
+
+  const handleCustomerChange = async (selectedCustomerId: string) => {
+    setCustomerId(selectedCustomerId);
+    setJobsiteContactId("");
+    setContacts([]);
+    setSelectedJobsiteId("");
+    setJobsiteAddress("");
+    setJobsiteCoords(null);
+
+    await loadCustomerData(selectedCustomerId);
   };
 
   // Handle new contact creation
